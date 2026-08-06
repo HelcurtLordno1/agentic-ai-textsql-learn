@@ -13,6 +13,7 @@ version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "httpx" },
+    { name = "jinja2" },
     { name = "pydantic" },
     { name = "pydantic-settings" },
     { name = "pyyaml" },
@@ -45,6 +46,7 @@ dev = [
 requires-dist = [
     { name = "fastapi", marker = "extra == 'ui'", specifier = ">=0.115,<1" },
     { name = "httpx", specifier = ">=0.27,<1" },
+    { name = "jinja2", specifier = ">=3.1,<4" },
     { name = "pandas", marker = "extra == 'ui'", specifier = ">=2.2,<4" },
     { name = "plotly", marker = "extra == 'ui'", specifier = ">=5.24,<7" },
     { name = "pydantic", specifier = ">=2.9,<3" },

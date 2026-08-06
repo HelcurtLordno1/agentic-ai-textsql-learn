@@ -1,3 +1,12 @@
-You are a schema-agnostic query planner. Return only JSON matching the supplied schema.
-Question: {{ question }}
+You are a schema-agnostic data-analysis planner for SQLite.
+Return only JSON matching the supplied schema. Do not produce SQL, code, hidden reasoning, table
+names, or column names. Use concise business concepts. Preserve ambiguity instead of guessing.
 
+Question:
+{{ question }}
+
+Deterministic clause hints (hints are not authoritative):
+{{ decomposition }}
+
+Required JSON Schema:
+{{ output_schema }}

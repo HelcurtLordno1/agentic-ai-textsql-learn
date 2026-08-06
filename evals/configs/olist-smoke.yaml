@@ -1,3 +1,8 @@
 evaluation_id: olist-smoke
-status: phase_2_pending
-
+status: phase_2_direct_baseline
+cases: evals/configs/olist-smoke-20.jsonl
+inference_mode: full_schema_direct
+model: qwen3:14b-q4_K_M
+max_candidates: 1
+correction_enabled: false
+gold_visible_to_runtime: false

@@ -16,6 +16,7 @@ uv run text2sql ollama-smoke
 uv run text2sql data download olist
 uv run text2sql data build olist
 uv run text2sql data validate olist
+uv run python scripts/run_smoke.py
 ```
 
 The ordinary CI suite uses fake transports and a deterministic synthetic database; it does not
@@ -34,4 +35,10 @@ generated databases, indexes, and run artifacts are intentionally excluded from 
 [`data/README.md`](data/README.md) and [`docs/data/license_and_attribution.md`](docs/data/license_and_attribution.md).
 
 Gate evidence: [`docs/evidence/p0_gate.md`](docs/evidence/p0_gate.md) and
-[`docs/evidence/p1_gate.md`](docs/evidence/p1_gate.md).
+[`docs/evidence/p1_gate.md`](docs/evidence/p1_gate.md), then
+[`docs/evidence/p2_gate.md`](docs/evidence/p2_gate.md).
+
+The verified Phase 2 direct baseline routes unsupported/write intents before model calls, creates a
+schema-agnostic structured plan, generates one SQL candidate from the full Olist schema, and sends
+every candidate through the Phase 1 policy/executor. Gold SQL is loaded only by the evaluator after
+inference. This baseline deliberately has no retrieval and no correction yet.

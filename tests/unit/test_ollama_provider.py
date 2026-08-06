@@ -25,6 +25,7 @@ def test_structured_generation_sends_json_schema_and_validates() -> None:
     def respond(request: httpx.Request) -> httpx.Response:
         body = json.loads(request.content)
         assert body["model"] == "local:model"
+        assert body["think"] is False
         assert body["format"]["additionalProperties"] is False
         assert "pattern" not in body["format"]["properties"]["sql"]
         return httpx.Response(

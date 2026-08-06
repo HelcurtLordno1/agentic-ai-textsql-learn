@@ -1,4 +1,19 @@
 # Error analysis
 
-No application failures have been collected before the first vertical slice.
+## Phase 2 direct full-schema baseline
 
+The first verified live baseline scored 14/18 exact-result query cases (77.78%). All 20 cases ended
+with typed terminal states. Remaining failures are retained rather than corrected inside this
+baseline:
+
+- `olist_vi_007` customer identity: semantically correct count but emitted an extra duplicate count
+  column, so strict result shape failed.
+- `olist_vi_009` delivery population: generated SQL restricted `order_status='delivered'` and
+  returned 7,826 instead of the canonical non-null delivered-timestamp population's 7,827.
+- `olist_en_010` review grain/schema: referenced `review_score` on `order_review_summary`; policy
+  blocked the unknown column before execution.
+- `olist_vi_013` state join: omitted the customer join and referenced `customer_state` on orders;
+  policy blocked it before execution.
+
+These cases become inputs for retrieval and correction analysis in later gates. Gold results were
+not used to trigger retries.

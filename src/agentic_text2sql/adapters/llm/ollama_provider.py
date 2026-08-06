@@ -108,6 +108,7 @@ class OllamaProvider:
                     "model": chosen_model,
                     "messages": messages,
                     "stream": False,
+                    "think": False,
                     "format": _ollama_compatible_schema(response_model.model_json_schema()),
                     "options": {"temperature": 0, "num_ctx": 4096},
                 },

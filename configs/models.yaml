@@ -4,19 +4,21 @@ planner:
   digest: bdbd181c33f2ed1b31c972991882db3cf4d192569092138a7d29e973cd9debe8
   temperature: 0.0
   context_tokens: 4096
+  think: false
 generator:
   provider: ollama
   model: qwen3:14b-q4_K_M
   digest: bdbd181c33f2ed1b31c972991882db3cf4d192569092138a7d29e973cd9debe8
   temperature: 0.0
   context_tokens: 4096
+  think: false
 corrector:
   provider: ollama
   model: qwen3:14b-q4_K_M
   digest: bdbd181c33f2ed1b31c972991882db3cf4d192569092138a7d29e973cd9debe8
   temperature: 0.0
   context_tokens: 4096
+  think: false
 embedding:
   provider: ollama
   model: bge-m3:latest
-
