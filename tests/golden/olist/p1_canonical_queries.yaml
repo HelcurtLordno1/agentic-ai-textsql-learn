@@ -1,0 +1,39 @@
+queries:
+  - id: order_count
+    sql: SELECT COUNT(*) AS order_count FROM olist_orders_dataset
+    expected: [[99441]]
+  - id: item_totals
+    sql: SELECT SUM(price_cents), SUM(freight_value_cents) FROM olist_order_items_dataset
+    expected: [[1359164370, 225190954]]
+  - id: payment_total
+    sql: SELECT SUM(payment_value_cents) FROM olist_order_payments_dataset
+    expected: [[1600887212]]
+  - id: delivered_orders
+    sql: SELECT COUNT(*) FROM olist_orders_dataset WHERE order_status = 'delivered'
+    expected: [[96478]]
+  - id: multi_payment_methods
+    sql: SELECT COUNT(*) FROM order_payment_totals WHERE distinct_payment_type_count > 1
+    expected: [[2246]]
+  - id: repeat_customers
+    sql: SELECT COUNT(*) FROM customer_order_facts WHERE order_count > 1
+    expected: [[2997]]
+  - id: late_delivery
+    sql: SELECT COUNT(*), SUM(is_late_delivered) FROM order_delivery_facts WHERE is_late_delivered IS NOT NULL
+    expected: [[96476, 7827]]
+  - id: top_category
+    sql: >-
+      SELECT COALESCE(t.product_category_name_english, p.product_category_name, 'unknown'),
+      SUM(i.price_cents) AS revenue_cents
+      FROM olist_order_items_dataset AS i
+      JOIN olist_products_dataset AS p ON p.product_id = i.product_id
+      LEFT JOIN product_category_name_translation AS t
+        ON t.product_category_name = p.product_category_name
+      GROUP BY 1 ORDER BY revenue_cents DESC, 1 ASC LIMIT 1
+    expected: [[health_beauty, 125868134]]
+  - id: review_summary
+    sql: SELECT COUNT(DISTINCT order_id), ROUND(AVG(review_score), 6) FROM olist_order_reviews_dataset
+    expected: [[98673, 4.086421]]
+  - id: geo_centroids
+    sql: SELECT COUNT(*) FROM geo_zip_centroids
+    expected: [[19010]]
+

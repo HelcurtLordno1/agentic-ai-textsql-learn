@@ -1,0 +1,14 @@
+CREATE INDEX idx_orders_customer ON olist_orders_dataset(customer_id);
+CREATE INDEX idx_orders_purchase ON olist_orders_dataset(order_purchase_timestamp);
+CREATE INDEX idx_orders_status ON olist_orders_dataset(order_status);
+CREATE INDEX idx_customers_unique ON olist_customers_dataset(customer_unique_id);
+CREATE INDEX idx_customers_state ON olist_customers_dataset(customer_state);
+CREATE INDEX idx_customers_zip ON olist_customers_dataset(customer_zip_code_prefix);
+CREATE INDEX idx_items_product ON olist_order_items_dataset(product_id);
+CREATE INDEX idx_items_seller ON olist_order_items_dataset(seller_id);
+CREATE INDEX idx_payments_order ON olist_order_payments_dataset(order_id);
+CREATE INDEX idx_reviews_order ON olist_order_reviews_dataset(order_id);
+CREATE INDEX idx_reviews_review_id ON olist_order_reviews_dataset(review_id);
+CREATE INDEX idx_sellers_state ON olist_sellers_dataset(seller_state);
+CREATE INDEX idx_sellers_zip ON olist_sellers_dataset(seller_zip_code_prefix);
+CREATE INDEX idx_geo_zip ON olist_geolocation_dataset(geolocation_zip_code_prefix);

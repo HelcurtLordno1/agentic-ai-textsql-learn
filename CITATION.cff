@@ -1,0 +1,10 @@
+cff-version: 1.2.0
+message: "If you use this learning project, please cite it using this metadata."
+title: "Agentic Text-to-SQL"
+type: software
+version: 0.1.0
+date-released: 2026-08-06
+license: MIT
+authors:
+  - name: "Agentic Text-to-SQL contributors"
+

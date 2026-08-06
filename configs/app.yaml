@@ -1,0 +1,5 @@
+app_name: agentic-text2sql
+environment: local
+log_level: INFO
+dialect: sqlite
+

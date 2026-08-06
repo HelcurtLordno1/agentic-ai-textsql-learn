@@ -1,0 +1,17 @@
+dataset_id: olist
+version: 1
+invariants:
+  - id: item_revenue_preserved
+    description: Order-level pre-aggregation preserves raw item revenue.
+  - id: freight_preserved
+    description: Order-level pre-aggregation preserves raw freight.
+  - id: payment_preserved
+    description: Order-level payment pre-aggregation preserves raw payment value.
+  - id: no_geolocation_fanout
+    description: Geo centroid has at most one row per zip prefix.
+  - id: repeat_customer_uses_unique_id
+    description: Repeat-customer semantics use customer_unique_id rather than customer_id.
+  - id: delivery_null_population_explicit
+    description: Late-delivery metrics exclude rows without delivered timestamps.
+  - id: no_returns_claim
+    description: Olist has no returns or refunds facts.

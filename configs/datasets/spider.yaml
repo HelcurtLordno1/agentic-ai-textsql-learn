@@ -1,0 +1,5 @@
+dataset_id: spider
+raw_dir: data/raw/spider
+pin: datasets/spider/pinned_revision.yaml
+committed_to_git: false
+

@@ -1,0 +1,6 @@
+dataset_id: olist
+manifest: datasets/olist/source_manifest.yaml
+raw_dir: data/raw/olist
+database: data/processed/olist.sqlite
+committed_to_git: false
+

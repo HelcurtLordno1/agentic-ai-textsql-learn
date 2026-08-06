@@ -1,0 +1,1 @@
+"""Deterministic CI fixture generator."""

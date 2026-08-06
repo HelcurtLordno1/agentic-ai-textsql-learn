@@ -1,0 +1,7 @@
+dialect: sqlite
+allowed_roots: [select, union, with]
+denied_operations: [insert, update, delete, merge, drop, alter, create, attach, detach, pragma]
+deny_multiple_statements: true
+deny_sqlite_internal_tables: true
+default_result_limit: 200
+

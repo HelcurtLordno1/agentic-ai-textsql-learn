@@ -1,0 +1,27 @@
+dataset_id: olist
+version: 1
+timezone: unknown
+unsupported_concepts: [returns, refunds]
+concepts:
+  product_revenue:
+    definition: Sum item price at order-item grain for the population/status requested.
+    canonical_expression: SUM(olist_order_items_dataset.price_cents)
+    excludes: [freight, payment_value]
+  freight:
+    definition: Sum item freight, reported separately from product revenue unless GMV is requested.
+    canonical_expression: SUM(olist_order_items_dataset.freight_value_cents)
+  paid_value:
+    definition: Sum payments pre-aggregated by order before joining order items.
+    canonical_expression: order_payment_totals.paid_value_cents
+  repeat_customer:
+    definition: More than one distinct order for one customer_unique_id.
+    identity_column: olist_customers_dataset.customer_unique_id
+  multi_payment_method:
+    definition: More than one distinct payment_type for an order.
+    canonical_expression: order_payment_totals.distinct_payment_type_count > 1
+  late_delivered:
+    definition: Delivered timestamp is later than estimated delivery date; null deliveries excluded.
+  cancellation_rate:
+    definition: Canceled orders divided by an explicitly stated order population; not return rate.
+  review_score:
+    definition: Review aggregate after reducing review rows to order grain.

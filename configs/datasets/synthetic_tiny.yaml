@@ -1,0 +1,6 @@
+dataset_id: synthetic_commerce_tiny
+generator: datasets/synthetic_commerce/generator.py
+seed: datasets/synthetic_commerce/seed.yaml
+database: data/samples/synthetic_commerce_tiny.sqlite
+committed_to_git: true
+

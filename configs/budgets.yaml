@@ -1,0 +1,13 @@
+max_llm_calls: 5
+max_candidates: 3
+max_repairs: 2
+max_schema_documents: 40
+max_schema_context_tokens: 2200
+model_context_tokens: 4096
+query_timeout_seconds: 10
+run_deadline_seconds: 60
+max_result_rows: 200
+max_result_bytes: 2000000
+max_concurrent_llm_runs: 1
+trace_retention_days: 30
+
