@@ -6,6 +6,7 @@ import math
 import re
 import unicodedata
 from collections import Counter
+from typing import Any
 
 from agentic_text2sql.contracts.retrieval import CatalogDocument
 
@@ -54,3 +55,15 @@ class KeywordIndex:
         return sorted(scores, key=lambda item: (-item[1], self.documents[item[0]].document_id))[
             :top_k
         ]
+
+    def artifact_payload(self) -> dict[str, Any]:
+        return {
+            "version": 1,
+            "document_ids": [document.document_id for document in self.documents],
+            "tokens": self.tokens,
+            "parameters": {"k1": 1.5, "b": 0.75, "exact_identifier_boost": 4.0},
+        }
+
+    def validate_payload(self, payload: object) -> None:
+        if not isinstance(payload, dict) or payload != self.artifact_payload():
+            raise ValueError("keyword index artifact does not match catalog documents")

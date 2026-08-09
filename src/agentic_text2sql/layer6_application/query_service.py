@@ -13,6 +13,7 @@ from agentic_text2sql.exceptions import StructuredOutputError, Text2SQLError
 from agentic_text2sql.layer1_reasoning.decomposer import Decomposer
 from agentic_text2sql.layer1_reasoning.planner import PLANNER_PROMPT_VERSION, PlannerAgent
 from agentic_text2sql.layer1_reasoning.router import QueryRouter
+from agentic_text2sql.layer2_grounding.service import GroundingService
 from agentic_text2sql.layer3_generation.prompt_builder import GENERATOR_PROMPT_VERSION
 from agentic_text2sql.layer3_generation.service import GenerationService
 from agentic_text2sql.layer4_validation.error_normalizer import normalize_error
@@ -33,6 +34,7 @@ class DirectBaselineService:
         generation: GenerationService,
         policy: SQLSafetyPolicy,
         executor: ReadOnlySQLiteExecutor,
+        grounding: GroundingService | None = None,
     ) -> None:
         self.router = router
         self.decomposer = decomposer
@@ -40,6 +42,7 @@ class DirectBaselineService:
         self.generation = generation
         self.policy = policy
         self.executor = executor
+        self.grounding = grounding
 
     def run(self, question: str, database: Path, catalog: CatalogSnapshot) -> DirectRunResult:
         run_id = str(uuid.uuid4())
@@ -90,9 +93,29 @@ class DirectBaselineService:
             )
         timings["planning"] = (time.monotonic() - planning_started) * 1000
 
+        schema_context = None
+        if self.grounding is not None:
+            grounding_started = time.monotonic()
+            try:
+                schema_context = self.grounding.ground(question, plan)
+            except (ValueError, Text2SQLError) as exc:
+                timings["grounding"] = (time.monotonic() - grounding_started) * 1000
+                finish_timings()
+                return DirectRunResult(
+                    run_id=run_id,
+                    question=question,
+                    status=DirectStatus.GROUNDING_ERROR,
+                    route_reason=route.reason,
+                    prompt_versions=versions,
+                    plan=plan.model_dump(mode="json"),
+                    safe_message=str(exc),
+                    latency_ms=timings,
+                )
+            timings["grounding"] = (time.monotonic() - grounding_started) * 1000
+
         generation_started = time.monotonic()
         try:
-            candidate = self.generation.run(question, plan, catalog)
+            candidate = self.generation.run(question, plan, catalog, schema_context)
         except SQLParseError as exc:
             timings["generation"] = (time.monotonic() - generation_started) * 1000
             finish_timings()
@@ -103,6 +126,7 @@ class DirectBaselineService:
                 route_reason=route.reason,
                 prompt_versions=versions,
                 plan=plan.model_dump(mode="json"),
+                schema_context=(schema_context.model_dump(mode="json") if schema_context else None),
                 safe_message=str(exc),
                 latency_ms=timings,
             )
@@ -116,6 +140,7 @@ class DirectBaselineService:
                 route_reason=route.reason,
                 prompt_versions=versions,
                 plan=plan.model_dump(mode="json"),
+                schema_context=(schema_context.model_dump(mode="json") if schema_context else None),
                 safe_message=str(exc),
                 latency_ms=timings,
             )
@@ -133,6 +158,7 @@ class DirectBaselineService:
                 route_reason=route.reason,
                 prompt_versions=versions,
                 plan=plan.model_dump(mode="json"),
+                schema_context=(schema_context.model_dump(mode="json") if schema_context else None),
                 candidate=candidate,
                 error_class=decision.error_class.value if decision.error_class else None,
                 safe_message=decision.safe_message,
@@ -153,6 +179,7 @@ class DirectBaselineService:
                 route_reason=route.reason,
                 prompt_versions=versions,
                 plan=plan.model_dump(mode="json"),
+                schema_context=(schema_context.model_dump(mode="json") if schema_context else None),
                 candidate=candidate,
                 error_class=report.error_class.value if report.error_class else None,
                 safe_message=report.safe_message,
@@ -167,6 +194,7 @@ class DirectBaselineService:
             route_reason=route.reason,
             prompt_versions=versions,
             plan=plan.model_dump(mode="json"),
+            schema_context=(schema_context.model_dump(mode="json") if schema_context else None),
             candidate=candidate,
             result_columns=result.columns,
             result_rows=result.rows,

@@ -3,14 +3,23 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
+from typing import Any
 
 import httpx
 
 
 class OllamaEmbeddingClient:
-    def __init__(self, base_url: str, model: str, timeout_seconds: float = 120.0) -> None:
+    def __init__(
+        self,
+        base_url: str,
+        model: str,
+        timeout_seconds: float = 120.0,
+        client: httpx.Client | None = None,
+    ) -> None:
         self.model = model
-        self._client = httpx.Client(base_url=base_url.rstrip("/"), timeout=timeout_seconds)
+        self._client = client or httpx.Client(
+            base_url=base_url.rstrip("/"), timeout=timeout_seconds
+        )
 
     def embed(self, texts: Sequence[str], batch_size: int = 32) -> list[list[float]]:
         if not 1 <= batch_size <= 128:
@@ -32,6 +41,20 @@ class OllamaEmbeddingClient:
         ):
             raise ValueError("Ollama returned an inconsistent embedding matrix")
         return vectors
+
+    def model_digest(self) -> str:
+        response = self._client.get("/api/tags")
+        response.raise_for_status()
+        payload: Any = response.json()
+        models = payload.get("models") if isinstance(payload, dict) else None
+        if not isinstance(models, list):
+            raise ValueError("Ollama returned an invalid model-list payload")
+        for item in models:
+            if isinstance(item, dict) and item.get("name") == self.model:
+                digest = item.get("digest")
+                if isinstance(digest, str) and len(digest) == 64:
+                    return digest
+        raise ValueError(f"Ollama model is not installed: {self.model}")
 
     def close(self) -> None:
         self._client.close()

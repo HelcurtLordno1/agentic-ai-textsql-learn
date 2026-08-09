@@ -21,6 +21,7 @@ class CandidateNormalizer:
         model_name: str,
         prompt_version: str,
         catalog_hash: str,
+        prompt_estimated_tokens: int = 0,
     ) -> CandidateRecord:
         sql = candidate.sql.strip()
         match = FENCE.fullmatch(sql)
@@ -40,4 +41,5 @@ class CandidateNormalizer:
             model_name=model_name,
             prompt_version=prompt_version,
             catalog_hash=catalog_hash,
+            prompt_estimated_tokens=prompt_estimated_tokens,
         )

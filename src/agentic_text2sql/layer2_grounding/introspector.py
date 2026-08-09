@@ -93,3 +93,20 @@ class SQLiteIntrospector:
             foreign_keys=tuple(foreign_keys),
             indexes=tuple(sorted(indexes, key=lambda item: item.name)),
         )
+
+
+def catalog_subset(catalog: CatalogSnapshot, *, kinds: set[str]) -> CatalogSnapshot:
+    """Create a hash-correct catalog subset, used by explicit raw/semantic ablations."""
+    tables = tuple(table for table in catalog.tables if table.kind in kinds)
+    canonical = json.dumps(
+        [table.model_dump(mode="json") for table in tables],
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+    return CatalogSnapshot(
+        db_id=catalog.db_id,
+        dialect=catalog.dialect,
+        tables=tables,
+        catalog_hash=hashlib.sha256(canonical.encode()).hexdigest(),
+    )

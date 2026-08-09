@@ -47,6 +47,22 @@ class RetrievalResult(BaseModel):
     candidates: tuple[RankedDocument, ...]
     estimated_tokens: int = Field(ge=0)
     catalog_hash: str
+    latency_ms: dict[str, float] = Field(default_factory=dict)
+
+
+class IndexManifest(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+    version: int = 2
+    version_id: str = Field(pattern=r"^[0-9a-f]{16}$")
+    db_id: str
+    catalog_hash: str
+    model_id: str
+    model_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+    document_template: str
+    document_count: int = Field(gt=0)
+    embedding_dimension: int = Field(gt=0)
+    files: dict[str, str]
+    cold_build_seconds: float = Field(ge=0)
 
 
 class SchemaContext(BaseModel):
@@ -57,3 +73,5 @@ class SchemaContext(BaseModel):
     joins: list[str]
     evidence: list[EvidenceItem]
     catalog_hash: str
+    rendered_context: str = ""
+    estimated_tokens: int = Field(default=0, ge=0)

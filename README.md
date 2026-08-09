@@ -36,9 +36,16 @@ generated databases, indexes, and run artifacts are intentionally excluded from 
 
 Gate evidence: [`docs/evidence/p0_gate.md`](docs/evidence/p0_gate.md) and
 [`docs/evidence/p1_gate.md`](docs/evidence/p1_gate.md), then
-[`docs/evidence/p2_gate.md`](docs/evidence/p2_gate.md).
+[`docs/evidence/p2_gate.md`](docs/evidence/p2_gate.md) and the current hardened
+[`docs/evidence/p3_1_gate.md`](docs/evidence/p3_1_gate.md).
 
 The verified Phase 2 direct baseline routes unsupported/write intents before model calls, creates a
 schema-agnostic structured plan, generates one SQL candidate from the full Olist schema, and sends
 every candidate through the Phase 1 policy/executor. Gold SQL is loaded only by the evaluator after
 inference. This baseline deliberately has no retrieval and no correction yet.
+
+P3.1 adds pinned BGE-M3/FAISS + BM25 retrieval, immutable checksum-verified index versions,
+plan-aware minimal FK closure and budgeted grounded prompts. Qualified retrieval is validated on
+100 Spider regression cases plus a disjoint 100-case holdout. Grounded Olist generation matches the
+full-schema 14/18 baseline while reducing estimated prompt tokens by 41.96%; its extra local
+embedding latency is reported rather than hidden. Correction remains outside the current gate.

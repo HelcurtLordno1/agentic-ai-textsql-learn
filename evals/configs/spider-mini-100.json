@@ -1,0 +1,609 @@
+{
+  "version": 1,
+  "dataset": "spider-dev",
+  "dev_sha256": "30d64a3fccde493226df79687aed9e4a1c0129525baf44f29c0573d914d758a4",
+  "selection": "domain-balanced deterministic AST-complexity quantiles",
+  "case_count": 100,
+  "cases": [
+    {
+      "dev_index": 501,
+      "db_id": "battle_death",
+      "case_hash": "2b95b2485ee8bfd90ed697ab6b032d9dc1f0fcf54545ad9defd0c388be39c916",
+      "complexity": "easy"
+    },
+    {
+      "dev_index": 506,
+      "db_id": "battle_death",
+      "case_hash": "7425001eca523462db9fcbe2177060fb59dc1f2dca846785b1d1a05072907dab",
+      "complexity": "easy"
+    },
+    {
+      "dev_index": 492,
+      "db_id": "battle_death",
+      "case_hash": "e2f4205baaf3fc0fddadae89d0fdb34d649d5b558aeae5a8a4f995f843876efd",
+      "complexity": "easy"
+    },
+    {
+      "dev_index": 500,
+      "db_id": "battle_death",
+      "case_hash": "abcb37ae9fdd2e241e8f808fa0582d566d95d4d2a1ab8e20ba9ae17de4a8ceac",
+      "complexity": "medium"
+    },
+    {
+      "dev_index": 504,
+      "db_id": "battle_death",
+      "case_hash": "6216e232e8b3f4f163e4a3e7dc0c84c2bdf5e499b35da1dec7d0c7d10c4cf91a",
+      "complexity": "extra"
+    },
+    {
+      "dev_index": 139,
+      "db_id": "car_1",
+      "case_hash": "54df27d01eb86a4aa07d50604a24988e72f5e0a94a92968dbcf1160f27a0327d",
+      "complexity": "easy"
+    },
+    {
+      "dev_index": 145,
+      "db_id": "car_1",
+      "case_hash": "dd6104ca5879738277d3fed1e5bd81080083260552504f1a9e57d97ea8b51839",
+      "complexity": "easy"
+    },
+    {
+      "dev_index": 107,
+      "db_id": "car_1",
+      "case_hash": "83865bea3a0f4b7bbaef1538fda740dcbdab3d25cd4e1b745c85def9c707a507",
+      "complexity": "medium"
+    },
+    {
+      "dev_index": 102,
+      "db_id": "car_1",
+      "case_hash": "386965fbe7c0197bfa0372d4df7024e3b5c2d565a012d8b2d2ffd53a32beed3c",
+      "complexity": "hard"
+    },
+    {
+      "dev_index": 175,
+      "db_id": "car_1",
+      "case_hash": "46b2a8d58fc058b457722174e5d01b635bde35d76f4b706491ba05de1d3e7ee6",
+      "complexity": "extra"
+    },
+    {
+      "dev_index": 9,
+      "db_id": "concert_singer",
+      "case_hash": "44c52582c9be0ba7c9aa9261361722343932737a3ac12e1a01d75c47224625f0",
+      "complexity": "easy"
+    },
+    {
+      "dev_index": 21,
+      "db_id": "concert_singer",
+      "case_hash": "a4d7148478be089dcdf8c8aaf7ed89c818158e34718c482740b557e09107aabb",
+      "complexity": "easy"
+    },
+    {
+      "dev_index": 10,
+      "db_id": "concert_singer",
+      "case_hash": "f71005e2760ef3cbb5fee12957afc073ae1b2a4228ec8b1276ebe62bb0b62c22",
+      "complexity": "easy"
+    },
+    {
+      "dev_index": 33,
+      "db_id": "concert_singer",
+      "case_hash": "718dce46720469ce5e74dc8f3ce43bd81293d1d71e859219d8d4c5f5f697e45e",
+      "complexity": "medium"
+    },
+    {
+      "dev_index": 38,
+      "db_id": "concert_singer",
+      "case_hash": "c89ed264c80442c37e82857d1ee1bdf2846021af4e8d5a67f6e3963ba79f9e47",
+      "complexity": "hard"
+    },
+    {
+      "dev_index": 385,
+      "db_id": "course_teach",
+      "case_hash": "3be50d8d356bede6cd6e23aa758c054ae8df83ee9346a2b5a91d516378cfbef5",
+      "complexity": "easy"
+    },
+    {
+      "dev_index": 387,
+      "db_id": "course_teach",
+      "case_hash": "a1c16573adf8dc37efc329e6ff7e4ae1442a076dafebd3a24fdf3385b0fb1a05",
+      "complexity": "easy"
+    },
+    {
+      "dev_index": 393,
+      "db_id": "course_teach",
+      "case_hash": "f55bc856cdc43fab92f64aeea02b0b3e04a08b537c3cd6c20dfaf93176f083ff",
+      "complexity": "easy"
+    },
+    {
+      "dev_index": 397,
+      "db_id": "course_teach",
+      "case_hash": "ed2008ab442be0de3803c94c2d8c1f20b01d3c3e93824bc696efb7cd105e2b54",
+      "complexity": "medium"
+    },
+    {
+      "dev_index": 401,
+      "db_id": "course_teach",
+      "case_hash": "d0a4855389463a37e550e4bb42d074ff624c8902729be8dad8f327e9ac04f411",
+      "complexity": "hard"
+    },
+    {
+      "dev_index": 327,
+      "db_id": "cre_Doc_Template_Mgt",
+      "case_hash": "160052082e49447ca5330179be46703bcf617127abfe549ab40e21704b5dfbd3",
+      "complexity": "easy"
+    },
+    {
+      "dev_index": 318,
+      "db_id": "cre_Doc_Template_Mgt",
+      "case_hash": "750abbc7982b67e4ca504f9fa551822003a4a9586d043d33dbbd4e2e0c383957",
+      "complexity": "easy"
+    },
+    {
+      "dev_index": 302,
+      "db_id": "cre_Doc_Template_Mgt",
+      "case_hash": "dc83e0057c52980546b3e2ee3e00c1527ceee3e7ccc79b94c301b77dfc5285cf",
+      "complexity": "easy"
+    },
+    {
+      "dev_index": 339,
+      "db_id": "cre_Doc_Template_Mgt",
+      "case_hash": "7804aad1b9a024466633894404304dc2c615ce525e75687c6fd977f8d3de39ad",
+      "complexity": "medium"
+    },
+    {
+      "dev_index": 308,
+      "db_id": "cre_Doc_Template_Mgt",
+      "case_hash": "e760ade5428ca578fc58f3f3115c10ff36727e2fa1f60acc54b34fb4f5819666",
+      "complexity": "medium"
+    },
+    {
+      "dev_index": 962,
+      "db_id": "dog_kennels",
+      "case_hash": "53988f7276b90a58b06103e509e25d6ce05d869a3427c6908c51fd1a830631e9",
+      "complexity": "easy"
+    },
+    {
+      "dev_index": 973,
+      "db_id": "dog_kennels",
+      "case_hash": "e350e72ed6c912410d7dd222c9bf2e95f33f7e305048eace2577c237d423f269",
+      "complexity": "easy"
+    },
+    {
+      "dev_index": 951,
+      "db_id": "dog_kennels",
+      "case_hash": "64facee91b0c272277d9b63a5a6ec3f3b0db26855b7bcc4680d8d839d2dc6025",
+      "complexity": "medium"
+    },
+    {
+      "dev_index": 944,
+      "db_id": "dog_kennels",
+      "case_hash": "1de1808f96acc7b0695f8a42d5deecda6d21038ec3ed5fffb32793dd1104fe3d",
+      "complexity": "hard"
+    },
+    {
+      "dev_index": 961,
+      "db_id": "dog_kennels",
+      "case_hash": "f32c9b6c41043de57c2b8a6f2ddc603589a590bbd774810b709f9ee54a7d3372",
+      "complexity": "hard"
+    },
+    {
+      "dev_index": 296,
+      "db_id": "employee_hire_evaluation",
+      "case_hash": "1f3fa2422be2317952f684e88dfd7109f30c913ca5c6eb0b9de6f56e4f407faa",
+      "complexity": "easy"
+    },
+    {
+      "dev_index": 260,
+      "db_id": "employee_hire_evaluation",
+      "case_hash": "83b5bb32d2c1ffa26ffe85a64a684635779f19c9dc71f4b64e168624b32f701a",
+      "complexity": "easy"
+    },
+    {
+      "dev_index": 269,
+      "db_id": "employee_hire_evaluation",
+      "case_hash": "f45cce060f82740449a019d6a061c54b71fb7323a5b9debea104a5c5af34b794",
+      "complexity": "easy"
+    },
+    {
+      "dev_index": 281,
+      "db_id": "employee_hire_evaluation",
+      "case_hash": "7d5991b07847fa23b5110265b9944050ac39fc39672809ef0bf302616f2015e1",
+      "complexity": "medium"
+    },
+    {
+      "dev_index": 284,
+      "db_id": "employee_hire_evaluation",
+      "case_hash": "ee3cc79e6724dfc4c1d41ca7656bae102b9d6e78ab77798a650f58efb28b9e9f",
+      "complexity": "medium"
+    },
+    {
+      "dev_index": 250,
+      "db_id": "flight_2",
+      "case_hash": "51957099f781136afb826ac5b0c830c52c621706e5d8f7a49d9fc72d0b8d7b10",
+      "complexity": "easy"
+    },
+    {
+      "dev_index": 202,
+      "db_id": "flight_2",
+      "case_hash": "b25d8c5d9a40c03a7a5fb6c3f17dbc3d3791c71a020811eb15964c43596471cc",
+      "complexity": "easy"
+    },
+    {
+      "dev_index": 254,
+      "db_id": "flight_2",
+      "case_hash": "53560e0cc6b9c88b991261941661c4db1f46f3573468c22a56118b90961e6349",
+      "complexity": "medium"
+    },
+    {
+      "dev_index": 236,
+      "db_id": "flight_2",
+      "case_hash": "cb7933b1d547047c12208141b74a6d7eac81b356b99c358dcf845cafeb730780",
+      "complexity": "medium"
+    },
+    {
+      "dev_index": 241,
+      "db_id": "flight_2",
+      "case_hash": "a125553d4a89603824395e3e2628c791b736357e049e793251e5546c1ddc8c27",
+      "complexity": "hard"
+    },
+    {
+      "dev_index": 416,
+      "db_id": "museum_visit",
+      "case_hash": "24725992cafa10e72210b5148f9d934e653530c220ee5071d25c47bd67f64eff",
+      "complexity": "easy"
+    },
+    {
+      "dev_index": 412,
+      "db_id": "museum_visit",
+      "case_hash": "ae0bfbcdc0a4865bef845eb6a334b63dfc6b2f15288c0cc3bc92cdb965962497",
+      "complexity": "easy"
+    },
+    {
+      "dev_index": 420,
+      "db_id": "museum_visit",
+      "case_hash": "1f4eeb0fbc27b1a951db374ebaaca7718ee56a13c86b3a04bf0f1a0c5d195f8b",
+      "complexity": "medium"
+    },
+    {
+      "dev_index": 425,
+      "db_id": "museum_visit",
+      "case_hash": "7a5c27ebf5ad6c798eb3a0da52afdf7112dddf4f155c7c69e5044d6c30979f3d",
+      "complexity": "medium"
+    },
+    {
+      "dev_index": 427,
+      "db_id": "museum_visit",
+      "case_hash": "972e7bd1e7cf2ebd00bd455f384f74f93a92d01e523904bd25cad52fcafed6cf",
+      "complexity": "hard"
+    },
+    {
+      "dev_index": 876,
+      "db_id": "network_1",
+      "case_hash": "1d83db16d1708db8c6f5dfb36f589d169900f8519c01e3fd6707914dfdae7c35",
+      "complexity": "easy"
+    },
+    {
+      "dev_index": 903,
+      "db_id": "network_1",
+      "case_hash": "aeb9ad7e76b5e471637e4548397e164f180d194095130337bce097510572346b",
+      "complexity": "easy"
+    },
+    {
+      "dev_index": 881,
+      "db_id": "network_1",
+      "case_hash": "5f4f537d8716238f397f141ea08b27b67c8f049d598e0c6f0a6a4d77a39805fa",
+      "complexity": "medium"
+    },
+    {
+      "dev_index": 898,
+      "db_id": "network_1",
+      "case_hash": "692217be2bf9395dedad5666d7511ce714502c97ee6faab0fd605b6a6f5ad5df",
+      "complexity": "hard"
+    },
+    {
+      "dev_index": 916,
+      "db_id": "network_1",
+      "case_hash": "fa5b3f3ab55c051b4b56e6c208bbcc624d449d242075e39773164b5ed0a9857a",
+      "complexity": "hard"
+    },
+    {
+      "dev_index": 839,
+      "db_id": "orchestra",
+      "case_hash": "283d9443e89a219110c16ee86a0d9aeb519cbee98787fa6e494b4a7c8aeded86",
+      "complexity": "easy"
+    },
+    {
+      "dev_index": 850,
+      "db_id": "orchestra",
+      "case_hash": "6a68b72b1ba8a2a60129ac50823c8efb123aa7dfa83083850b3f1b5a0b03a79b",
+      "complexity": "easy"
+    },
+    {
+      "dev_index": 831,
+      "db_id": "orchestra",
+      "case_hash": "9ec2aff980f18cea0d887cd714a5fb422d790c2e63c1e68747f260865418046e",
+      "complexity": "easy"
+    },
+    {
+      "dev_index": 844,
+      "db_id": "orchestra",
+      "case_hash": "5d2964ea5a669cb9e26d0c5ff194f14609c01fc501d24b7a0eaa30e8698b10b8",
+      "complexity": "medium"
+    },
+    {
+      "dev_index": 861,
+      "db_id": "orchestra",
+      "case_hash": "3589ddd9e244ffda98454acf15b71be8d02f4700407fa7e61769210d9ab79c10",
+      "complexity": "hard"
+    },
+    {
+      "dev_index": 67,
+      "db_id": "pets_1",
+      "case_hash": "4be698e7dbc6bfedecb4c4974ad89f1a47e949b66e05f74592a3d6dbaa1c534e",
+      "complexity": "easy"
+    },
+    {
+      "dev_index": 68,
+      "db_id": "pets_1",
+      "case_hash": "c0c264213b4609f12265c422fcbe83b746bfd4e537bafd82bb7ab49a6326e922",
+      "complexity": "easy"
+    },
+    {
+      "dev_index": 51,
+      "db_id": "pets_1",
+      "case_hash": "a382cd7d0de4c93589dbc0f10bba1477fb5881558f9acc358cfeda483a66a971",
+      "complexity": "medium"
+    },
+    {
+      "dev_index": 84,
+      "db_id": "pets_1",
+      "case_hash": "71ca114ed0f97f36cf065daee2e943486fa2c7f24f58d9ccfaabba368993966e",
+      "complexity": "hard"
+    },
+    {
+      "dev_index": 59,
+      "db_id": "pets_1",
+      "case_hash": "9398e4f1edae7eee827934b3978173d0be1e3e0dd6d6e8c24dc1130810987c96",
+      "complexity": "extra"
+    },
+    {
+      "dev_index": 651,
+      "db_id": "poker_player",
+      "case_hash": "54763211b775ffd45d749a72520edf38dc25a1673bae69385993008727bc93f4",
+      "complexity": "easy"
+    },
+    {
+      "dev_index": 679,
+      "db_id": "poker_player",
+      "case_hash": "979706da04e8be6bc2bf04b29dc1b84aaa664d551979594ad84f5c482ef9547c",
+      "complexity": "easy"
+    },
+    {
+      "dev_index": 682,
+      "db_id": "poker_player",
+      "case_hash": "f540fb0359e62624c9b44efde47b4bcec34ba5ee50255288323e6a74b6a0cda3",
+      "complexity": "easy"
+    },
+    {
+      "dev_index": 683,
+      "db_id": "poker_player",
+      "case_hash": "563c9787d7b3ab697165fa0ba1205571a3750c1b493a6b2c9a8088f70e7d7635",
+      "complexity": "medium"
+    },
+    {
+      "dev_index": 661,
+      "db_id": "poker_player",
+      "case_hash": "cbba8fd28c51caabe28bde661704fce4d2f9a5bfb55c4bfb2b5d8c9ea4d44f8d",
+      "complexity": "medium"
+    },
+    {
+      "dev_index": 1030,
+      "db_id": "real_estate_properties",
+      "case_hash": "b571632927e5ceb4723979d421bf8bff659c4ca18c6827f91af24aab7622ba84",
+      "complexity": "easy"
+    },
+    {
+      "dev_index": 1032,
+      "db_id": "real_estate_properties",
+      "case_hash": "7b2a07d331efd3768e012057796cb7f10cdb3a7898d9ed61364db89ef61c056d",
+      "complexity": "medium"
+    },
+    {
+      "dev_index": 1031,
+      "db_id": "real_estate_properties",
+      "case_hash": "bf79257e9657623c4d7667108ea6c7f12bb633cf21143928cca3c575618d14aa",
+      "complexity": "medium"
+    },
+    {
+      "dev_index": 1033,
+      "db_id": "real_estate_properties",
+      "case_hash": "3e9b64be948fb66072dd51b8f039812f08ff9c7112646bcb9ca2b40c04f006ce",
+      "complexity": "hard"
+    },
+    {
+      "dev_index": 1008,
+      "db_id": "singer",
+      "case_hash": "3c7f2139a2b283395f21b8e178f10a5924a1f6d14ba05acf3866e1993aeb89e5",
+      "complexity": "easy"
+    },
+    {
+      "dev_index": 1012,
+      "db_id": "singer",
+      "case_hash": "8ec706e5663f9c5fe9f4d55b99011e1225d6c8b5946335508e070dcaeb019e6e",
+      "complexity": "easy"
+    },
+    {
+      "dev_index": 1007,
+      "db_id": "singer",
+      "case_hash": "bd0301a31d3a19729969370f3380eb62a80c9627c3fc917486abb16e1ce99f54",
+      "complexity": "easy"
+    },
+    {
+      "dev_index": 1019,
+      "db_id": "singer",
+      "case_hash": "cbb7a0599772126c1022134677b8e3a1abbce4cf3513407e12c13cb15f72c607",
+      "complexity": "medium"
+    },
+    {
+      "dev_index": 1029,
+      "db_id": "singer",
+      "case_hash": "884c0114a9ff042dd642d1ad33abcb78e59dfd54282d55cd0dc4be5c5ec2877f",
+      "complexity": "hard"
+    },
+    {
+      "dev_index": 580,
+      "db_id": "student_transcripts_tracking",
+      "case_hash": "3dc8c29ef7733743518897aad26f7f30a6d928cf0fb7c022da2c1464bbe0bc20",
+      "complexity": "easy"
+    },
+    {
+      "dev_index": 578,
+      "db_id": "student_transcripts_tracking",
+      "case_hash": "a73ff3d76b54697420ef02caaebc6303b40e3e4663663c6517e58592a1604602",
+      "complexity": "easy"
+    },
+    {
+      "dev_index": 558,
+      "db_id": "student_transcripts_tracking",
+      "case_hash": "f71c61d658cfc507b27c8c389a8cc87a524af326d90361f8b431047db126f7c3",
+      "complexity": "easy"
+    },
+    {
+      "dev_index": 562,
+      "db_id": "student_transcripts_tracking",
+      "case_hash": "8c41cf351272a808628416167b2ea58e8b07f6a2d300e8c4f8fa1090373d6e1f",
+      "complexity": "medium"
+    },
+    {
+      "dev_index": 534,
+      "db_id": "student_transcripts_tracking",
+      "case_hash": "6c37b4b30ef76d1b7a7734e92ca5028d09adf30b90fd2d69abd4287852bc2460",
+      "complexity": "hard"
+    },
+    {
+      "dev_index": 627,
+      "db_id": "tvshow",
+      "case_hash": "2cebefebc6b4be35ea803bf4fb3c520e90d1c44250a89e5590a61de038204a06",
+      "complexity": "easy"
+    },
+    {
+      "dev_index": 594,
+      "db_id": "tvshow",
+      "case_hash": "717e90b2ebe9b90fc243ef573b17141f83df542d4ca67b25374ef4fba28e8da3",
+      "complexity": "easy"
+    },
+    {
+      "dev_index": 590,
+      "db_id": "tvshow",
+      "case_hash": "d58aec81a53c5e9f55ddeed9e6e412db916cf2a20db70f3368f35a2e1fbcb765",
+      "complexity": "easy"
+    },
+    {
+      "dev_index": 642,
+      "db_id": "tvshow",
+      "case_hash": "1c4efe34e82b6d9baf28d7755c6d4b125d09030b7b559b78149255bff3abef7a",
+      "complexity": "medium"
+    },
+    {
+      "dev_index": 623,
+      "db_id": "tvshow",
+      "case_hash": "fc6a11007f8b44a0f3a5d1dde52a89564670efb2f28d366028282158c52b0762",
+      "complexity": "medium"
+    },
+    {
+      "dev_index": 689,
+      "db_id": "voter_1",
+      "case_hash": "18f2597a0694e558835ef1b3f52e856bf01b53f0421bc3724e2663f549b495b6",
+      "complexity": "easy"
+    },
+    {
+      "dev_index": 692,
+      "db_id": "voter_1",
+      "case_hash": "5c598642ad035e80fbff1ce930a2770f532cef39063a52bc4a1fd50c5e2b9504",
+      "complexity": "easy"
+    },
+    {
+      "dev_index": 691,
+      "db_id": "voter_1",
+      "case_hash": "cca238acb13b9856d89b38028da482c850031e6fc2b7eeb2bb22e0703d97b71b",
+      "complexity": "easy"
+    },
+    {
+      "dev_index": 699,
+      "db_id": "voter_1",
+      "case_hash": "8d30816a52e7e14eb1ee2b9281cff62ecda8da84dd7fef429da8a094f7e10c76",
+      "complexity": "medium"
+    },
+    {
+      "dev_index": 694,
+      "db_id": "voter_1",
+      "case_hash": "011f8aa34d2532b9df7c368ecff79bb754c36a2663cdf7c7e771ca310b247443",
+      "complexity": "hard"
+    },
+    {
+      "dev_index": 763,
+      "db_id": "world_1",
+      "case_hash": "4d531efdd01c4607a3f48d8631a4043701d4836a6421899fbfecb305b2848e3e",
+      "complexity": "easy"
+    },
+    {
+      "dev_index": 707,
+      "db_id": "world_1",
+      "case_hash": "8c32d62c042e446b410cdc8ba1b2273691b2745a5f08e1d30274c1cb5954806d",
+      "complexity": "easy"
+    },
+    {
+      "dev_index": 715,
+      "db_id": "world_1",
+      "case_hash": "ceb93a1fcec740cea818faac4c2dcf1841224f0ac303bae34bd98d1031a1921e",
+      "complexity": "easy"
+    },
+    {
+      "dev_index": 773,
+      "db_id": "world_1",
+      "case_hash": "66bff8905610f5c686d1c639a631edf5b1fa05b446ba69c71521f9f1f94cc034",
+      "complexity": "medium"
+    },
+    {
+      "dev_index": 798,
+      "db_id": "world_1",
+      "case_hash": "e85f1bd41d5444cc33a172314cb83d9e0836ca0407af31c230e64f5045755623",
+      "complexity": "medium"
+    },
+    {
+      "dev_index": 755,
+      "db_id": "world_1",
+      "case_hash": "399f19c7a5ac6ab49fe1534876aa9e7991e440690691edbe33492ca3ff00ffc2",
+      "complexity": "extra"
+    },
+    {
+      "dev_index": 484,
+      "db_id": "wta_1",
+      "case_hash": "30801399d6a57da4295dcb7380cb5e747dbba027b113920dbddb8f8293efb69e",
+      "complexity": "easy"
+    },
+    {
+      "dev_index": 441,
+      "db_id": "wta_1",
+      "case_hash": "58f8fb28f300c71164c5afae0be7c680b6f976b0e7c9445a0a59f7fe893c06f0",
+      "complexity": "easy"
+    },
+    {
+      "dev_index": 431,
+      "db_id": "wta_1",
+      "case_hash": "ae7b1b69cc611ecfaf8c802fe4b5fa5084ae70ea4891953cbd70d53b7162a08d",
+      "complexity": "easy"
+    },
+    {
+      "dev_index": 466,
+      "db_id": "wta_1",
+      "case_hash": "eda098de88d0f784bbb6c606b3c174784b65ce515bcefd2b14b592db126f1679",
+      "complexity": "easy"
+    },
+    {
+      "dev_index": 487,
+      "db_id": "wta_1",
+      "case_hash": "abbed3b179eb2117bbc4b4c4be3a93aec7ee634527809835fc6443d6b9d0e5bd",
+      "complexity": "medium"
+    }
+  ]
+}

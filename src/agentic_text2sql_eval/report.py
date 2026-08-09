@@ -30,6 +30,7 @@ def evaluate_predictions(
     predictions: list[SmokePrediction],
     database: Path,
     report_path: Path,
+    evaluation_id: str = "olist-direct-p2-v1",
 ) -> dict[str, Any]:
     by_id = {prediction.case_id: prediction for prediction in predictions}
     details = []
@@ -39,6 +40,7 @@ def evaluate_predictions(
     expected_status_correct = 0
     latencies = []
     semantic_failures: dict[str, int] = {}
+    prompt_tokens: list[int] = []
     connection = sqlite3.connect(f"file:{database}?mode=ro", uri=True)
     try:
         for case in cases:
@@ -64,6 +66,8 @@ def evaluate_predictions(
                         semantic_failures[tag] = semantic_failures.get(tag, 0) + 1
             total_latency = result.latency_ms.get("total", sum(result.latency_ms.values()))
             latencies.append(total_latency)
+            if result.candidate is not None:
+                prompt_tokens.append(result.candidate.prompt_estimated_tokens)
             details.append(
                 {
                     "id": case.id,
@@ -85,7 +89,7 @@ def evaluate_predictions(
     finally:
         connection.close()
     report: dict[str, Any] = {
-        "evaluation_id": "olist-direct-p2-v1",
+        "evaluation_id": evaluation_id,
         "case_count": len(cases),
         "typed_terminal_count": completed,
         "workflow_completion_rate": completed / len(cases),
@@ -97,6 +101,10 @@ def evaluate_predictions(
         "latency_ms": {
             "p50": _percentile(latencies, 0.50),
             "p95": _percentile(latencies, 0.95),
+        },
+        "prompt_estimated_tokens": {
+            "average": sum(prompt_tokens) / len(prompt_tokens) if prompt_tokens else 0.0,
+            "maximum": max(prompt_tokens, default=0),
         },
         "semantic_failures": semantic_failures,
         "details": details,

@@ -1,5 +1,9 @@
 # Gate P3 evidence — 2026-08-09
 
+> Historical evidence only. A later audit found duplicate-subset, unqualified-metric, FK-denominator
+> and latency-boundary defects. Corrected implementation and current numbers are in
+> `docs/evidence/p3_1_gate.md`; do not use the P3 figures below as current benchmark claims.
+
 ## Implemented Layer 2
 
 Gate P3 implements stable catalog documents, identifier-aware BM25, BGE-M3 embeddings through the

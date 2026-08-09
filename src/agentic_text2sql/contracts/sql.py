@@ -23,6 +23,7 @@ class CandidateRecord(BaseModel):
     model_name: str
     prompt_version: str
     catalog_hash: str
+    prompt_estimated_tokens: int = Field(default=0, ge=0)
 
 
 class DirectStatus(StrEnum):
@@ -31,6 +32,7 @@ class DirectStatus(StrEnum):
     UNSUPPORTED = "UNSUPPORTED"
     WRITE_BLOCKED = "WRITE_BLOCKED"
     MODEL_ERROR = "MODEL_ERROR"
+    GROUNDING_ERROR = "GROUNDING_ERROR"
     INVALID_SQL = "INVALID_SQL"
     POLICY_BLOCKED = "POLICY_BLOCKED"
     EXECUTION_ERROR = "EXECUTION_ERROR"
@@ -44,6 +46,7 @@ class DirectRunResult(BaseModel):
     route_reason: str
     prompt_versions: dict[str, str]
     plan: dict[str, Any] | None = None
+    schema_context: dict[str, Any] | None = None
     candidate: CandidateRecord | None = None
     result_columns: list[str] = Field(default_factory=list)
     result_rows: list[list[Any]] = Field(default_factory=list)

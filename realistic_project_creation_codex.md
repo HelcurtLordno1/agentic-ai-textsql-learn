@@ -335,9 +335,14 @@ columns.jsonl
 relationships.jsonl
 documents.jsonl
 faiss.index
-bm25.pkl
+bm25.json
 manifest.json
 ```
+
+P3.1 lưu bundle bất biến dưới `db_id/versions/<version_id>/` và publish `active.json` bằng
+`os.replace`. Không deserialize pickle. Manifest pin catalog hash, document template, model tag,
+Ollama model digest, embedding dimension, document count và SHA-256 từng artifact. Embedding cache
+dùng SQLite transaction; build lỗi không thay active bundle trước đó.
 
 Một document không chỉ là tên cột:
 
@@ -369,7 +374,7 @@ Tạo metadata tùy chọn: row count xấp xỉ, null rate, min/max và top val
 
 #### `L2-M3` Embedding Indexer
 
-- Model: `bge-m3:latest` qua Ollama embeddings API.
+- Model: `bge-m3:latest` qua Ollama embeddings API, pin cả model digest.
 - Dense index: FAISS CPU.
 - Embedding cache theo hash của document + model ID.
 - Rebuild khi catalog/model/document template thay đổi.
@@ -386,8 +391,8 @@ Tạo metadata tùy chọn: row count xấp xỉ, null rate, min/max và top val
 2. retrieve top-k dense;
 3. fuse bằng Reciprocal Rank Fusion;
 4. filter đúng `db_id`;
-5. expand table/column theo FK graph 1–2 hops;
-6. pack context theo budget.
+5. schema linker tìm minimal FK closure tối đa 2 hops;
+6. serialize context cuối cùng rồi enforce token budget trên đúng context đưa vào generator.
 
 #### `L2-M6` Schema Linker
 
@@ -396,14 +401,18 @@ Output: `SchemaContext` gồm selected tables, columns, joins và evidence IDs.
 
 Optional LLM rerank chỉ nhận top candidates, không nhận toàn bộ database.
 
+Từ P3.1, linker bắt buộc dùng `LogicalPlan`, thêm join columns, ưu tiên evidence theo plan terms,
+không expand toàn bộ one-hop neighbors và trả `rendered_context` cùng `estimated_tokens`.
+
 ### 6.4 Evaluation Layer 2
 
-- `table_recall@k`
-- `column_recall@k`
+- qualified `table_recall@k`, `column_recall@k` tại k=5/10/20;
 - `foreign_key_recall`
+- `join_edge_recall` tách khỏi declared-FK recall;
 - `context_precision`
 - average context tokens
-- indexing time và retrieval latency
+- cold/warm indexing, query embedding, lookup/linking và end-to-end latency tách riêng;
+- macro/micro và số case có gold column/join/FK.
 
 Gold schema được suy ra từ gold SQL chỉ trong offline evaluator. Gold schema tuyệt đối không được đưa vào inference state.
 
@@ -415,6 +424,10 @@ Gold schema được suy ra từ gold SQL chỉ trong offline evaluator. Gold sc
 - Không retrieve document của database khác.
 - Hybrid schema recall tốt hơn hoặc bằng best single retriever trên mini set; nếu không, giữ kết quả trung thực và điều chỉnh fusion.
 - Context pack không vượt token budget.
+- Mini manifest có đúng 100 unique IDs/hash; tuning/regression set không được gọi là untouched
+  holdout. P3.1 có thêm 100-row disjoint holdout chỉ chạy sau khi code/fusion freeze.
+- Grounded generation phải được so với full-schema cùng prompt/model version; giữ làm default chỉ
+  khi không regression accuracy và trade-off token/latency được report.
 
 ---
 
@@ -1413,6 +1426,29 @@ Gate P3:
 - Olist retrieval report và Spider mini-100 schema recall report;
 - hybrid được giữ chỉ khi có evidence.
 
+P3 ban đầu hoàn thành implementation nhưng audit sau gate phát hiện mini có 99 unique rows,
+unqualified column matching, no-join cases được tính FK recall=1 và latency loại query embedding.
+`docs/evidence/p3_gate.md` được giữ làm lịch sử; các số P3 đó đã bị supersede, không dùng làm current
+benchmark.
+
+### Phase 3.1 — Retrieval hardening và grounded-generation integration
+
+Tasks:
+
+- Pin mini-100 manifest đúng 100 unique rows và tạo disjoint untouched holdout-100.
+- Qualified SQLGlot scope metrics, declared-FK/join-edge metrics, macro/micro và k=5/10/20.
+- Immutable versioned indexes, atomic active pointer, digest pin, SQLite cache, no pickle.
+- Plan-aware minimal join closure và budget trên serialized context cuối.
+- Nối grounding vào Generator; chạy full-schema/grounded Olist cùng prompt/model version.
+
+Gate P3.1:
+
+- mini và holdout đều 100/100 unique, overlap 0;
+- corruption/cross-db/dimension/rollback/budget tests pass;
+- hybrid chỉ được giữ nếu ít nhất bằng dense trên disjoint holdout;
+- grounded Olist không giảm result accuracy, prompt token và latency được báo trung thực;
+- `make check` pass và evidence nằm tại `docs/evidence/p3_1_gate.md`.
+
 ### Phase 4 — Layer 5 correction
 
 Tasks:
@@ -1555,11 +1591,11 @@ Mỗi bug quan trọng cần:
 | L1-M3 | Planner Agent | Yes | L1-M2 | VERIFIED | JSON Schema live plans, typed malformed path, prompt version evidence |
 | L2-M1 | SQLite Introspector | Yes | P0-M3 | VERIFIED | stable catalog hash/composite FK/view/index tests; Olist + synthetic introspection |
 | L2-M2 | Safe Profiler | No | L2-M1 | NOT_STARTED | — |
-| L2-M3 | Embedding Indexer | Yes | L2-M1, P0-M2 | VERIFIED | BGE-M3 cache + FAISS/checksum reload; `docs/evidence/p3_gate.md` |
-| L2-M4 | Keyword Indexer | Yes | L2-M1 | VERIFIED | identifier/Vietnamese BM25 and exact boost tests; P3 ablation |
-| L2-M5 | Hybrid Retriever | Yes | L2-M3, L2-M4 | VERIFIED | db isolation, RRF evidence, FK/budget tests; Spider mini-100 report |
-| L2-M6 | Schema Linker | Yes | L1-M3, L2-M5 | VERIFIED | typed evidence context and bounded FK expansion |
-| L3-M1 | Prompt Builder | Yes | L1-M3, L2-M6 | VERIFIED | P2 full-schema baseline prompt contract/snapshot tests; retrieval subset deferred to P3 |
+| L2-M3 | Embedding Indexer | Yes | L2-M1, P0-M2 | VERIFIED | immutable FAISS bundles, digest/cache/shape/checksum/rollback; `docs/evidence/p3_1_gate.md` |
+| L2-M4 | Keyword Indexer | Yes | L2-M1 | VERIFIED | JSON artifact, identifier/Vietnamese BM25 and exact boost tests |
+| L2-M5 | Hybrid Retriever | Yes | L2-M3, L2-M4 | VERIFIED | equal-weight RRF wins qualified column recall on disjoint holdout; db isolation |
+| L2-M6 | Schema Linker | Yes | L1-M3, L2-M5 | VERIFIED | plan-aware minimal FK closure, join columns, final serialized budget |
+| L3-M1 | Prompt Builder | Yes | L1-M3, L2-M6 | VERIFIED | full/grounded prompt v2; live no-regression Olist ablation |
 | L3-M2 | Generator Agent | Yes | L3-M1, P0-M2 | VERIFIED | 20-case live typed baseline, one candidate budget; `docs/evidence/p2_gate.md` |
 | L3-M3 | Candidate Normalizer | Yes | L3-M2 | VERIFIED | fence/semicolon/multi-statement/non-query/fingerprint tests |
 | L3-M4 | Candidate Selector | No | baseline complete | NOT_STARTED | — |
@@ -1584,15 +1620,15 @@ Mỗi bug quan trọng cần:
 | E-M2 | Spider smoke-20 | Yes | L1–L6 | NOT_STARTED | — |
 | E-M3 | Spider mini-100 | Yes | E-M2 | NOT_STARTED | — |
 | E-M4 | Full Spider dev report | Yes | E-M3 | NOT_STARTED | — |
-| E-M5 | Retrieval ablation | Yes | L2 | VERIFIED | Olist raw/semantic + Spider BM25/dense/hybrid; `docs/evidence/p3_gate.md` |
+| E-M5 | Retrieval ablation | Yes | L2 | VERIFIED | qualified k=5/10/20, raw/semantic, mini + disjoint holdout; `docs/evidence/p3_1_gate.md` |
 | E-M6 | Correction ablation | Yes | L5 | NOT_STARTED | — |
 | E-M7 | BIRD Mini-Dev | No | core complete | NOT_STARTED | — |
 | X-M1 | PostgreSQL adapter | No | core complete | NOT_STARTED | — |
 
-Overall project status tại thời điểm cập nhật master plan: `GATE_P3_VERIFIED`. P0 environment, P1
-Olist/Layer 4 safety foundation, P2 direct Generator vertical slice và P3 Layer 2 retrieval đã có
-evidence trong `docs/evidence/p0_gate.md` đến `docs/evidence/p3_gate.md`. Correction và application
-layers vẫn chưa được triển khai.
+Overall project status tại thời điểm cập nhật master plan: `GATE_P3_1_HARDENED_VERIFIED`. P0
+environment, P1 data/safety, P2 direct baseline và P3.1 grounded
+retrieval có evidence từ `docs/evidence/p0_gate.md` đến `docs/evidence/p3_1_gate.md`. P3.1
+supersede số benchmark P3 cũ. Correction P4 và application layers chưa được triển khai.
 
 ---
 

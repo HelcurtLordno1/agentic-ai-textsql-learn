@@ -9,9 +9,10 @@ from jinja2 import Environment, StrictUndefined
 
 from agentic_text2sql.contracts.catalog import CatalogSnapshot
 from agentic_text2sql.contracts.planning import LogicalPlan
+from agentic_text2sql.contracts.retrieval import SchemaContext
 from agentic_text2sql.contracts.sql import SqlCandidate
 
-GENERATOR_PROMPT_VERSION = "generator_v1"
+GENERATOR_PROMPT_VERSION = "generator_v2_grounded"
 
 
 def catalog_as_sqlite_context(catalog: CatalogSnapshot) -> str:
@@ -31,14 +32,29 @@ class PromptBuilder:
         self.template_path = template_path
         self.glossary_path = glossary_path
 
-    def build(self, question: str, plan: LogicalPlan, catalog: CatalogSnapshot) -> str:
+    def build(
+        self,
+        question: str,
+        plan: LogicalPlan,
+        catalog: CatalogSnapshot,
+        schema_context: SchemaContext | None = None,
+    ) -> str:
         template = Environment(undefined=StrictUndefined, autoescape=False).from_string(
             self.template_path.read_text(encoding="utf-8")
         )
         return template.render(
             question=question,
             logical_plan=plan.model_dump_json(indent=2),
-            schema_context=catalog_as_sqlite_context(catalog),
+            schema_context=(
+                schema_context.rendered_context
+                if schema_context is not None
+                else catalog_as_sqlite_context(catalog)
+            ),
+            schema_mode=(
+                "Retrieved schema context with evidence"
+                if schema_context is not None
+                else "Full schema baseline"
+            ),
             business_glossary=self.glossary_path.read_text(encoding="utf-8"),
             output_schema=json.dumps(SqlCandidate.model_json_schema(), ensure_ascii=False),
             catalog_hash=catalog.catalog_hash,

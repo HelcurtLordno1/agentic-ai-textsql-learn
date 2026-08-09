@@ -1,3 +1,4 @@
 evaluation_id: spider-mini-100
-status: phase_3_pending
-
+status: p3_1_hardened_manifest
+manifest: evals/configs/spider-mini-100.json
+unique_cases: 100

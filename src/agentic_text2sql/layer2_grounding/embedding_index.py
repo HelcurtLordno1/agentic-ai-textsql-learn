@@ -39,6 +39,10 @@ class DenseIndex:
     def save(self, path: Path) -> None:
         faiss.write_index(self._index, str(path))
 
+    @property
+    def count(self) -> int:
+        return int(self._index.ntotal)
+
     def search(self, vector: list[float], top_k: int) -> list[tuple[int, float]]:
         query = normalized_matrix([vector])
         scores, indices = self._index.search(query, min(top_k, self._index.ntotal))
