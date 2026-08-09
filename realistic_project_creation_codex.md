@@ -1555,10 +1555,10 @@ Mỗi bug quan trọng cần:
 | L1-M3 | Planner Agent | Yes | L1-M2 | VERIFIED | JSON Schema live plans, typed malformed path, prompt version evidence |
 | L2-M1 | SQLite Introspector | Yes | P0-M3 | VERIFIED | stable catalog hash/composite FK/view/index tests; Olist + synthetic introspection |
 | L2-M2 | Safe Profiler | No | L2-M1 | NOT_STARTED | — |
-| L2-M3 | Embedding Indexer | Yes | L2-M1, P0-M2 | NOT_STARTED | — |
-| L2-M4 | Keyword Indexer | Yes | L2-M1 | NOT_STARTED | — |
-| L2-M5 | Hybrid Retriever | Yes | L2-M3, L2-M4 | NOT_STARTED | — |
-| L2-M6 | Schema Linker | Yes | L1-M3, L2-M5 | NOT_STARTED | — |
+| L2-M3 | Embedding Indexer | Yes | L2-M1, P0-M2 | VERIFIED | BGE-M3 cache + FAISS/checksum reload; `docs/evidence/p3_gate.md` |
+| L2-M4 | Keyword Indexer | Yes | L2-M1 | VERIFIED | identifier/Vietnamese BM25 and exact boost tests; P3 ablation |
+| L2-M5 | Hybrid Retriever | Yes | L2-M3, L2-M4 | VERIFIED | db isolation, RRF evidence, FK/budget tests; Spider mini-100 report |
+| L2-M6 | Schema Linker | Yes | L1-M3, L2-M5 | VERIFIED | typed evidence context and bounded FK expansion |
 | L3-M1 | Prompt Builder | Yes | L1-M3, L2-M6 | VERIFIED | P2 full-schema baseline prompt contract/snapshot tests; retrieval subset deferred to P3 |
 | L3-M2 | Generator Agent | Yes | L3-M1, P0-M2 | VERIFIED | 20-case live typed baseline, one candidate budget; `docs/evidence/p2_gate.md` |
 | L3-M3 | Candidate Normalizer | Yes | L3-M2 | VERIFIED | fence/semicolon/multi-statement/non-query/fingerprint tests |
@@ -1584,15 +1584,15 @@ Mỗi bug quan trọng cần:
 | E-M2 | Spider smoke-20 | Yes | L1–L6 | NOT_STARTED | — |
 | E-M3 | Spider mini-100 | Yes | E-M2 | NOT_STARTED | — |
 | E-M4 | Full Spider dev report | Yes | E-M3 | NOT_STARTED | — |
-| E-M5 | Retrieval ablation | Yes | L2 | NOT_STARTED | — |
+| E-M5 | Retrieval ablation | Yes | L2 | VERIFIED | Olist raw/semantic + Spider BM25/dense/hybrid; `docs/evidence/p3_gate.md` |
 | E-M6 | Correction ablation | Yes | L5 | NOT_STARTED | — |
 | E-M7 | BIRD Mini-Dev | No | core complete | NOT_STARTED | — |
 | X-M1 | PostgreSQL adapter | No | core complete | NOT_STARTED | — |
 
-Overall project status tại thời điểm cập nhật master plan: `GATE_P2_VERIFIED`. P0 environment, P1
-Olist/Layer 4 safety foundation và P2 Router→Planner→direct Generator vertical slice đã có evidence
-trong `docs/evidence/p0_gate.md`, `docs/evidence/p1_gate.md` và `docs/evidence/p2_gate.md`. Phase 3
-retrieval/generalization, correction và application layers vẫn chưa được triển khai.
+Overall project status tại thời điểm cập nhật master plan: `GATE_P3_VERIFIED`. P0 environment, P1
+Olist/Layer 4 safety foundation, P2 direct Generator vertical slice và P3 Layer 2 retrieval đã có
+evidence trong `docs/evidence/p0_gate.md` đến `docs/evidence/p3_gate.md`. Correction và application
+layers vẫn chưa được triển khai.
 
 ---
 

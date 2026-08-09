@@ -1,4 +1,7 @@
 repository: https://github.com/taoyds/spider
-revision: null
-status: pin_during_phase_3
-
+official_page: https://yale-lily.github.io/spider
+download_file_id: 1403EGqzIDoHMdQF4c9Bkyl7dZLZ5Wt6J
+archive_sha256: 00636695dabed6b5f4b8328a16b13e069a2f16591d5efcce57660669c85b121b
+development_examples: 1034
+license: CC-BY-SA-4.0
+status: pinned_phase_3
