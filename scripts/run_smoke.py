@@ -54,10 +54,10 @@ def main() -> None:
         catalog = SQLiteIntrospector().inspect(database, "olist")
         embedding: OllamaEmbeddingClient | None = None
         with OllamaProvider(settings) as provider:
-            planner = PlannerAgent(provider, root / "configs/prompts/planner_v1.j2")
+            planner = PlannerAgent(provider, root / "configs/prompts/planner_v2.j2")
             generation = GenerationService(
                 PromptBuilder(
-                    root / "configs/prompts/generator_v2_grounded.j2",
+                    root / "configs/prompts/generator_v3_grounded.j2",
                     root / "datasets/olist/business_glossary.yaml",
                 ),
                 GeneratorAgent(provider),

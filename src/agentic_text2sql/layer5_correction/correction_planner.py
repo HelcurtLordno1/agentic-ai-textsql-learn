@@ -44,6 +44,28 @@ SIGNAL_GUIDANCE = {
     ),
     "TOP_K_MISSING_ORDER": "Add deterministic ORDER BY matching the ranking intent.",
     "TOP_K_MISSING_LIMIT": "Add the requested LIMIT.",
+    "RANKING_ORDER_MISSING": "Order the requested aggregate metric descending.",
+    "RANKING_PRIMARY_NOT_DESC": "Use DESC for the primary ranking metric.",
+    "RANKING_LIMIT_MISMATCH": "Use the exact top-k LIMIT requested; use LIMIT 1 for 'most'.",
+    "ALPHABETICAL_TIE_BREAK_MISSING": (
+        "After the descending metric, add the requested name/dimension ASC tie-break."
+    ),
+    "SCALAR_MAXIMUM_AGGREGATE_MISSING": "Return one scalar MAX(...) value, not the winning row.",
+    "RECORD_COUNT_MUST_NOT_BE_DISTINCT": (
+        "The question explicitly counts records/rows; use COUNT(*) rather than DISTINCT identity."
+    ),
+    "FREIGHT_PER_ORDER_GRAIN_MISMATCH": (
+        "Average freight at order grain using order_item_totals.freight_cents."
+    ),
+    "MULTIPLE_REVIEW_ROWS_RULE_MISSING": (
+        "Count orders from order_review_summary where review_row_count > 1."
+    ),
+    "PRODUCT_PHOTO_QUANTITY_FILTER_MISSING": (
+        "Count products where olist_products_dataset.product_photos_qty > 1."
+    ),
+    "YEAR_MONTH_CONTEXT_LOST": (
+        "Preserve year-month (YYYY-MM) when grouping timestamps; do not collapse all years by %m."
+    ),
 }
 
 

@@ -8,80 +8,17 @@ import os
 import signal
 import subprocess
 import time
-from dataclasses import dataclass
 from pathlib import Path
 
 import httpx
 
-GIB = 1024**3
-
-
-@dataclass(frozen=True)
-class Sample:
-    available_ram_gib: float
-    swap_used_gib: float
-    gpu_memory_mib: int
-    gpu_temperature_c: int
-    gpu_power_w: float
-    gpu_utilization_pct: int
-
-
-def _memory() -> tuple[float, float]:
-    values: dict[str, int] = {}
-    for line in Path("/proc/meminfo").read_text(encoding="utf-8").splitlines():
-        key, value = line.split(":", maxsplit=1)
-        values[key] = int(value.split()[0]) * 1024
-    return values["MemAvailable"] / GIB, (values["SwapTotal"] - values["SwapFree"]) / GIB
-
-
-def sample() -> Sample:
-    available, swap_used = _memory()
-    output = subprocess.check_output(
-        [
-            "nvidia-smi",
-            "--query-gpu=memory.used,temperature.gpu,power.draw,utilization.gpu",
-            "--format=csv,noheader,nounits",
-        ],
-        text=True,
-        timeout=5,
-    ).strip()
-    memory, temperature, power, utilization = [item.strip() for item in output.split(",")]
-    return Sample(
-        available_ram_gib=available,
-        swap_used_gib=swap_used,
-        gpu_memory_mib=int(memory),
-        gpu_temperature_c=int(temperature),
-        gpu_power_w=float(power),
-        gpu_utilization_pct=int(utilization),
-    )
-
-
-def unsafe_reason(
-    current: Sample,
-    *,
-    minimum_available_ram_gib: float,
-    maximum_swap_used_gib: float,
-    maximum_gpu_memory_mib: int,
-    maximum_gpu_temperature_c: int,
-    maximum_gpu_power_w: float,
-) -> str | None:
-    checks = (
-        (
-            current.available_ram_gib < minimum_available_ram_gib,
-            f"available RAM {current.available_ram_gib:.1f} GiB",
-        ),
-        (current.swap_used_gib >= maximum_swap_used_gib, f"swap {current.swap_used_gib:.1f} GiB"),
-        (
-            current.gpu_memory_mib >= maximum_gpu_memory_mib,
-            f"VRAM {current.gpu_memory_mib} MiB",
-        ),
-        (
-            current.gpu_temperature_c >= maximum_gpu_temperature_c,
-            f"GPU temperature {current.gpu_temperature_c} C",
-        ),
-        (current.gpu_power_w >= maximum_gpu_power_w, f"GPU power {current.gpu_power_w:.1f} W"),
-    )
-    return next((message for failed, message in checks if failed), None)
+from agentic_text2sql.hardware import (
+    GIB,
+    PROFILES,
+    ProfileName,
+    sample_resources,
+    unsafe_reason,
+)
 
 
 def unload_models(base_url: str) -> None:
@@ -103,18 +40,21 @@ def count_predictions(path: Path) -> int:
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--batch-size", type=int, default=2)
-    parser.add_argument("--cooldown-seconds", type=int, default=45)
-    parser.add_argument("--minimum-available-ram-gib", type=float, default=10)
-    parser.add_argument("--maximum-swap-used-gib", type=float, default=1)
-    parser.add_argument("--maximum-gpu-memory-mib", type=int, default=11776)
-    parser.add_argument("--maximum-gpu-temperature-c", type=int, default=76)
-    parser.add_argument("--maximum-gpu-power-w", type=float, default=95)
-    parser.add_argument("--ollama-num-gpu", type=int, default=20)
+    parser.add_argument(
+        "--profile", choices=[item.value for item in ProfileName], default=ProfileName.ACCEPTANCE
+    )
+    parser.add_argument("--batch-size", type=int)
+    parser.add_argument("--cooldown-seconds", type=int)
     parser.add_argument("--max-batches", type=int)
     args = parser.parse_args()
-    if args.batch_size not in {1, 2, 3}:
+    profile = PROFILES[ProfileName(args.profile)]
+    batch_size = args.batch_size if args.batch_size is not None else profile.batch_size
+    cooldown_seconds = (
+        args.cooldown_seconds if args.cooldown_seconds is not None else profile.cooldown_seconds
+    )
+    if batch_size not in {1, 2, 3}:
         raise SystemExit("batch-size must be between 1 and 3")
+    limits = profile.limits
 
     root = Path(__file__).resolve().parents[1]
     predictions = root / "evals/predictions/olist-p5-60.jsonl"
@@ -122,8 +62,8 @@ def main() -> None:
     environment = {
         **os.environ,
         "OLLAMA_BASE_URL": base_url,
-        "TEXT2SQL_OLLAMA_NUM_GPU": str(args.ollama_num_gpu),
         "TEXT2SQL_REQUEST_TIMEOUT_SECONDS": "240",
+        **profile.ollama_environment(),
     }
     retry_counts: dict[int, int] = {}
     peak: dict[str, float] = {
@@ -145,7 +85,7 @@ def main() -> None:
             "--correction",
             "--resume",
             "--max-new-cases",
-            str(args.batch_size),
+            str(batch_size),
         ]
         retrying = False
         if predictions.is_file() and retry_counts.get(before, 0) < 1:
@@ -167,7 +107,7 @@ def main() -> None:
         reason: str | None = None
         while process.poll() is None:
             try:
-                current = sample()
+                current = sample_resources()
             except (OSError, subprocess.SubprocessError, ValueError) as exc:
                 reason = f"monitor failure: {type(exc).__name__}"
                 break
@@ -177,14 +117,7 @@ def main() -> None:
             peak["gpu_memory_mib"] = max(peak["gpu_memory_mib"], current.gpu_memory_mib)
             peak["gpu_temperature_c"] = max(peak["gpu_temperature_c"], current.gpu_temperature_c)
             peak["gpu_power_w"] = max(peak["gpu_power_w"], current.gpu_power_w)
-            reason = unsafe_reason(
-                current,
-                minimum_available_ram_gib=args.minimum_available_ram_gib,
-                maximum_swap_used_gib=args.maximum_swap_used_gib,
-                maximum_gpu_memory_mib=args.maximum_gpu_memory_mib,
-                maximum_gpu_temperature_c=args.maximum_gpu_temperature_c,
-                maximum_gpu_power_w=args.maximum_gpu_power_w,
-            )
+            reason = unsafe_reason(current, limits)
             if reason:
                 break
             time.sleep(2)
@@ -210,14 +143,14 @@ def main() -> None:
         unload_models(base_url)
         batches += 1
         print(
-            f"guarded batch complete: {after}/60; cooling {args.cooldown_seconds}s; "
+            f"guarded batch complete: {after}/60; cooling {cooldown_seconds}s; "
             f"observed_peak={json.dumps(peak, sort_keys=True)}"
         )
         if args.max_batches is not None and batches >= args.max_batches:
             print(json.dumps({"status": "pilot_complete", "checkpoint": after, "peak": peak}))
             return
         if after < 60:
-            time.sleep(args.cooldown_seconds)
+            time.sleep(cooldown_seconds)
 
     print(json.dumps({"status": "complete", "cases": 60, "observed_peak": peak}, indent=2))
 

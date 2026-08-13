@@ -100,10 +100,10 @@ class RuntimeBundle(AbstractContextManager["RuntimeBundle"]):
         self.service = DirectBaselineService(
             router=QueryRouter(),
             decomposer=Decomposer(),
-            planner=PlannerAgent(self.provider, root / "configs/prompts/planner_v1.j2"),
+            planner=PlannerAgent(self.provider, root / "configs/prompts/planner_v2.j2"),
             generation=GenerationService(
                 PromptBuilder(
-                    root / "configs/prompts/generator_v2_grounded.j2",
+                    root / "configs/prompts/generator_v3_grounded.j2",
                     root / "datasets/olist/business_glossary.yaml",
                 ),
                 GeneratorAgent(self.provider),
@@ -114,6 +114,7 @@ class RuntimeBundle(AbstractContextManager["RuntimeBundle"]):
             executor=executor,
             grounding=grounding,
             correction=correction,
+            run_deadline_seconds=settings.run_deadline_seconds,
         )
 
     def _embed_many(self, texts: list[str]) -> list[list[float]]:
@@ -122,7 +123,21 @@ class RuntimeBundle(AbstractContextManager["RuntimeBundle"]):
         return self.embedding.embed(texts, batch_size=32)
 
     def run(self, question: str, database: Path, catalog: CatalogSnapshot) -> DirectRunResult:
-        return self.service.run(question, database, catalog)
+        provider_before = self.provider.telemetry.milliseconds()
+        embedding_before = dict(self.embedding.telemetry) if self.embedding is not None else {}
+        result = self.service.run(question, database, catalog)
+        telemetry = {
+            key: value - provider_before.get(key, 0)
+            for key, value in self.provider.telemetry.milliseconds().items()
+        }
+        if self.embedding is not None:
+            telemetry.update(
+                {
+                    key: value - embedding_before.get(key, 0)
+                    for key, value in self.embedding.telemetry.items()
+                }
+            )
+        return result.model_copy(update={"latency_ms": {**result.latency_ms, **telemetry}})
 
     def __enter__(self) -> RuntimeBundle:
         return self

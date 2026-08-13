@@ -31,6 +31,9 @@ class Settings(BaseSettings):
     request_timeout_seconds: float = Field(
         default=120.0, alias="TEXT2SQL_REQUEST_TIMEOUT_SECONDS", gt=0
     )
+    run_deadline_seconds: float = Field(
+        default=120.0, alias="TEXT2SQL_RUN_DEADLINE_SECONDS", ge=30, le=180
+    )
 
     @field_validator("ollama_base_url")
     @classmethod

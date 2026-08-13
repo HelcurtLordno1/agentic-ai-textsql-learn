@@ -1500,6 +1500,38 @@ Gate P5:
 - restart app vẫn đọc được previous run;
 - UI không bypass safety policy.
 
+### Phase 5.1 — Laptop stability, observability và semantic reliability hardening
+
+Phase này harden P5 trước khi mở benchmark P6; không thay thế hoặc làm yếu gate P5 đã VERIFIED.
+
+Tasks:
+
+- Typed hardware profiles dùng chung cho CLI, Ollama server và acceptance runner: interactive
+  balanced, acceptance safe và CPU fallback.
+- Fail-closed Ollama supervisor theo dõi độc lập mỗi 0.5–2 giây; khóa parallelism, CPU affinity,
+  priority, context, model residency, Flash Attention, KV cache và partial GPU offload.
+- Tách BGE query embedding sang CPU để cân bằng tải; ghi Ollama load/eval/token telemetry theo từng
+  query thay vì chỉ wall-clock tổng.
+- Planner v2 giữ cứng scalar/ranking/limit/tie-break song ngữ; Generator v3 ép column ownership và
+  minimal query shape.
+- Gold-blind semantic validator và bounded correction guidance cho ranking, customer identity,
+  late delivery population, aggregate grain, record count, review/photo business rules và
+  year-month context.
+- Chỉ tuning trên dev/regression failures; P5 holdout cũ chỉ dùng làm historical score và không
+  được gọi là fresh holdout sau khi đã phân tích lỗi. Fresh external holdout thuộc P6.
+
+Gate P5.1:
+
+- `make check` pass;
+- frozen P5 replay bắt 13/13 historical wrong outputs và 0/47 false positives trên historical
+  correct outputs; đây là detection evidence, không được ghi thành accuracy mới;
+- guarded dev/regression failure rerun có typed terminal 11/11 và target result accuracy >=90%;
+- không có resource breach ở production 8-layer profile; mọi profile nhanh hơn chỉ được giữ nếu
+  independent monitor không chạm RAM/swap/VRAM/temperature/power threshold (power stop 105 W dựa
+  trên hardware max 100 W + 5% instantaneous telemetry margin, không chỉnh device power limit);
+- telemetry phân tách model load, prompt evaluation, decode và query embedding;
+- evidence nằm tại `docs/evidence/p5_1_gate.md`; không bắt đầu P6 trước khi gate này được duyệt.
+
 ### Phase 6 — Full evaluation và portfolio completion
 
 Tasks:
@@ -1609,21 +1641,21 @@ Mỗi bug quan trọng cần:
 | D-M6 | Olist acceptance set ≥60 reviewed cases | Yes | D-M4 | VERIFIED | 60 unique reviewed questions/gold SQL, 30/15/15 partitions; `docs/evidence/p5_gate.md` |
 | L1-M1 | Query Router | Yes | P0-M2 | VERIFIED | 30+ bilingual fixtures, write/returns regression; `docs/evidence/p2_gate.md` |
 | L1-M2 | Decomposer | Yes | L1-M1 | VERIFIED | clause-hint unit tests, no SQL/CoT output; `docs/evidence/p2_gate.md` |
-| L1-M3 | Planner Agent | Yes | L1-M2 | VERIFIED | JSON Schema live plans, typed malformed path, prompt version evidence |
+| L1-M3 | Planner Agent | Yes | L1-M2 | VERIFIED | planner v2 JSON Schema + deterministic scalar/ranking/limit alignment; P5.1 evidence |
 | L2-M1 | SQLite Introspector | Yes | P0-M3 | VERIFIED | stable catalog hash/composite FK/view/index tests; Olist + synthetic introspection |
 | L2-M2 | Safe Profiler | No | L2-M1 | NOT_STARTED | — |
 | L2-M3 | Embedding Indexer | Yes | L2-M1, P0-M2 | VERIFIED | immutable FAISS bundles, digest/cache/shape/checksum/rollback; `docs/evidence/p3_1_gate.md` |
 | L2-M4 | Keyword Indexer | Yes | L2-M1 | VERIFIED | JSON artifact, identifier/Vietnamese BM25 and exact boost tests |
 | L2-M5 | Hybrid Retriever | Yes | L2-M3, L2-M4 | VERIFIED | equal-weight RRF wins qualified column recall on disjoint holdout; db isolation |
 | L2-M6 | Schema Linker | Yes | L1-M3, L2-M5 | VERIFIED | plan-aware minimal FK closure, join columns, final serialized budget |
-| L3-M1 | Prompt Builder | Yes | L1-M3, L2-M6 | VERIFIED | full/grounded prompt v2; live no-regression Olist ablation |
+| L3-M1 | Prompt Builder | Yes | L1-M3, L2-M6 | VERIFIED | grounded prompt v3 validates column ownership/minimal shape; P5.1 evidence |
 | L3-M2 | Generator Agent | Yes | L3-M1, P0-M2 | VERIFIED | 20-case live typed baseline, one candidate budget; `docs/evidence/p2_gate.md` |
 | L3-M3 | Candidate Normalizer | Yes | L3-M2 | VERIFIED | fence/semicolon/multi-statement/non-query/fingerprint tests |
 | L3-M4 | Candidate Selector | No | baseline complete | NOT_STARTED | — |
 | L4-M1 | Parser + Safety Policy | Yes | P0-M3 | VERIFIED | `tests/unit/layer4/test_policy.py`, `tests/safety/test_sql_safety.py` |
 | L4-M2 | Read-only Executor | Yes | L4-M1 | VERIFIED | RO URI/query_only/authorizer, timeout/caps/checksum tests; canonical Olist queries |
 | L4-M3 | Execution Validator | Yes | L4-M2 | VERIFIED | typed shape/warning reports; `tests/unit/layer4/test_semantic_validation.py`; `docs/evidence/p4_gate.md` |
-| L4-M4 | Semantic Validator | Yes | L4-M3 | VERIFIED | gold-blind intent/shape/business signals; P4 Olist ablation |
+| L4-M4 | Semantic Validator | Yes | L4-M3 | VERIFIED | gold-blind intent/shape/business signals; frozen P5 replay + P5.1 rerun |
 | L4-M5 | Error Normalizer | Yes | L4-M1 | VERIFIED | `tests/unit/layer4/test_error_normalizer.py` |
 | L5-M1 | Error Classifier | Yes | L4-M5 | VERIFIED | rule-first eligibility; policy/timeout no-repair tests |
 | L5-M2 | Correction Planner | Yes | L5-M1 | VERIFIED | typed plan and signal-specific deterministic guidance |
@@ -1632,7 +1664,7 @@ Mỗi bug quan trọng cần:
 | L6-M1 | Query State/short memory | Yes | L1–L5 contracts | VERIFIED | typed persistent run/config state + restart recovery; P5 unit/integration tests |
 | L6-M2 | Verified Example Store | No | baseline complete | NOT_STARTED | — |
 | L6-M3 | Trace Store | Yes | L6-M1 | VERIFIED | WAL SQLite layer 0–6 trace, SSE replay, restart persistence; `docs/evidence/p5_gate.md` |
-| L6-M4 | Benchmark Harness | Yes | L4, L6-M3 | VERIFIED | gold-blind inference/checkpoints then tolerant evaluator; Olist-60 report |
+| L6-M4 | Benchmark Harness | Yes | L4, L6-M3 | VERIFIED | filtered/resumable gold-blind inference, checkpoint then evaluator; P5/P5.1 reports |
 | L6-M5 | CLI | Yes | workflow | VERIFIED | ingest/ask/trace/serve commands + CLI integration test |
 | L6-M6 | FastAPI | Yes | L6-M5 | VERIFIED | registered-db API, one-worker queue, SSE/trace/report/feedback; API restart test |
 | L6-M7 | Streamlit UI | Yes | L6-M6 | VERIFIED | five-workspace SQL Observatory, drag/keyboard UX, AppTest/live health evidence |
@@ -1646,11 +1678,12 @@ Mỗi bug quan trọng cần:
 | E-M7 | BIRD Mini-Dev | No | core complete | NOT_STARTED | — |
 | X-M1 | PostgreSQL adapter | No | core complete | NOT_STARTED | — |
 
-Overall project status tại thời điểm cập nhật master plan: `GATE_P5_VERIFIED`. P0
+Overall project status tại thời điểm cập nhật master plan: `GATE_P5_1_VERIFIED`. P0
 environment, P1 data/safety, P2 direct baseline, P3.1 grounded retrieval và P4 bounded correction
 có evidence từ `docs/evidence/p0_gate.md` đến `docs/evidence/p4_gate.md`. P4 correction tăng frozen
 Olist run từ 14/18 lên 17/18 nhưng vẫn opt-in vì diagnostic rerun cho thấy model variance.
-Application layers chưa được triển khai.
+Application layers đã được triển khai và P5 đã VERIFIED; P5.1 đã harden accuracy, telemetry và
+laptop resource governance trước P6 với evidence tại `docs/evidence/p5_1_gate.md`.
 
 ---
 

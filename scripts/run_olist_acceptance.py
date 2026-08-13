@@ -28,6 +28,7 @@ def main() -> None:
     parser.add_argument("--resume", action=argparse.BooleanOptionalAction, default=True)
     parser.add_argument("--max-new-cases", type=int)
     parser.add_argument("--retry-last-infrastructure-error", action="store_true")
+    parser.add_argument("--only-case-id", action="append", default=[])
     args = parser.parse_args()
     settings = Settings()
     root = settings.project_root
@@ -35,6 +36,14 @@ def main() -> None:
     predictions_path = args.predictions or root / "evals/predictions/olist-p5-60.jsonl"
     report_path = args.report or root / "evals/reports/olist-p5-60.json"
     acceptance = load_olist_acceptance(cases_path)
+    if args.only_case_id:
+        if args.predictions is None or args.report is None:
+            raise SystemExit("filtered runs require explicit --predictions and --report paths")
+        selected = set(args.only_case_id)
+        known = {case.id for case in acceptance}
+        if unknown := selected - known:
+            raise SystemExit(f"unknown case IDs: {', '.join(sorted(unknown))}")
+        acceptance = [case for case in acceptance if case.id in selected]
     blind_cases = [
         SmokeCase(
             id=case.id,

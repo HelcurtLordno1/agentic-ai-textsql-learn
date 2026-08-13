@@ -18,7 +18,7 @@ def test_prompt_contains_contract_catalog_glossary_and_version_inputs() -> None:
         required_concepts=["orders"],
     )
     prompt = PromptBuilder(
-        ROOT / "configs/prompts/generator_v2_grounded.j2",
+        ROOT / "configs/prompts/generator_v3_grounded.j2",
         ROOT / "datasets/olist/business_glossary.yaml",
     ).build("How many orders?", plan, catalog)
     assert "TABLE orders(" in prompt
@@ -43,7 +43,7 @@ def test_prompt_uses_budgeted_grounded_context_instead_of_full_catalog() -> None
         estimated_tokens=10,
     )
     prompt = PromptBuilder(
-        ROOT / "configs/prompts/generator_v2_grounded.j2",
+        ROOT / "configs/prompts/generator_v3_grounded.j2",
         ROOT / "datasets/olist/business_glossary.yaml",
     ).build("Find orders", plan, catalog, context)
     assert "Retrieved schema context with evidence" in prompt

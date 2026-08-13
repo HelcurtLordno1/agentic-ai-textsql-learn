@@ -284,3 +284,33 @@ def test_ollama_embedding_model_digest() -> None:
         assert client.model_digest() == digest
     finally:
         client.close()
+
+
+def test_ollama_embedding_telemetry_is_observed() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.path == "/api/embed"
+        assert json.loads(request.content)["options"] == {"num_gpu": 0}
+        return httpx.Response(
+            200,
+            json={
+                "embeddings": [[0.1, 0.2]],
+                "total_duration": 7_000_000,
+                "load_duration": 2_000_000,
+                "prompt_eval_count": 3,
+            },
+        )
+
+    http_client = httpx.Client(
+        transport=httpx.MockTransport(handler), base_url="http://ollama.test"
+    )
+    client = OllamaEmbeddingClient("http://ollama.test", "bge-m3:latest", client=http_client)
+    try:
+        assert client.embed(["orders"]) == [[0.1, 0.2]]
+        assert client.telemetry == {
+            "embedding_total": 7.0,
+            "embedding_load": 2.0,
+            "embedding_prompt_tokens": 3,
+            "embedding_calls": 1,
+        }
+    finally:
+        client.close()

@@ -1,0 +1,24 @@
+You generate exactly one SQLite read-only query for an Olist analytics database.
+Return only JSON matching the required schema. Never emit markdown outside JSON. The `sql` field
+must contain one SELECT/WITH/UNION statement. Never use DML, DDL, PRAGMA, ATTACH, or invented schema.
+Use integer-cent columns for exact money. Follow the glossary, preserve the requested population,
+pre-aggregate before joins that would multiply items/payments/reviews, and use deterministic
+tie-breakers for top-k queries.
+
+Question:
+{{ question }}
+
+Logical plan:
+{{ logical_plan }}
+
+{{ schema_mode }} (catalog {{ catalog_hash }}):
+{{ schema_context }}
+
+Every qualified column must belong to its displayed TABLE or VIEW. Prefer the shortest query that
+answers the request; do not add an unused CTE, join, or subquery.
+
+Business glossary:
+{{ business_glossary }}
+
+Required JSON Schema:
+{{ output_schema }}

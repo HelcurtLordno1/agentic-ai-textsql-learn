@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from dataclasses import dataclass
 from typing import Any, TypeVar
 
 import httpx
@@ -12,6 +13,43 @@ from agentic_text2sql.exceptions import ProviderUnavailableError, StructuredOutp
 from agentic_text2sql.settings import Settings
 
 StructuredModel = TypeVar("StructuredModel", bound=BaseModel)
+
+
+@dataclass
+class OllamaTelemetry:
+    calls: int = 0
+    total_duration_ns: int = 0
+    load_duration_ns: int = 0
+    prompt_eval_duration_ns: int = 0
+    eval_duration_ns: int = 0
+    prompt_eval_count: int = 0
+    eval_count: int = 0
+
+    def observe(self, payload: dict[str, Any]) -> None:
+        self.calls += 1
+        for field in (
+            "total_duration_ns",
+            "load_duration_ns",
+            "prompt_eval_duration_ns",
+            "eval_duration_ns",
+            "prompt_eval_count",
+            "eval_count",
+        ):
+            source = field.removesuffix("_ns")
+            value = payload.get(source)
+            if isinstance(value, int) and value >= 0:
+                setattr(self, field, getattr(self, field) + value)
+
+    def milliseconds(self) -> dict[str, float]:
+        return {
+            "llm_total": self.total_duration_ns / 1_000_000,
+            "llm_load": self.load_duration_ns / 1_000_000,
+            "llm_prompt_eval": self.prompt_eval_duration_ns / 1_000_000,
+            "llm_eval": self.eval_duration_ns / 1_000_000,
+            "llm_calls": float(self.calls),
+            "llm_prompt_tokens": float(self.prompt_eval_count),
+            "llm_output_tokens": float(self.eval_count),
+        }
 
 
 def _ollama_compatible_schema(schema: dict[str, Any]) -> dict[str, Any]:
@@ -55,6 +93,7 @@ class OllamaProvider:
             timeout=self.settings.request_timeout_seconds,
         )
         self.malformed_retries = malformed_retries
+        self.telemetry = OllamaTelemetry()
 
     def close(self) -> None:
         if self._owns_client:
@@ -116,6 +155,7 @@ class OllamaProvider:
                     "options": options,
                 },
             )
+            self.telemetry.observe(payload)
             try:
                 content = payload["message"]["content"]
                 if not isinstance(content, str):

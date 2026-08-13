@@ -15,8 +15,18 @@ class OllamaEmbeddingClient:
         model: str,
         timeout_seconds: float = 120.0,
         client: httpx.Client | None = None,
+        num_gpu: int = 0,
     ) -> None:
+        if num_gpu < 0:
+            raise ValueError("num_gpu must be non-negative")
         self.model = model
+        self.num_gpu = num_gpu
+        self.telemetry: dict[str, float] = {
+            "embedding_total": 0,
+            "embedding_load": 0,
+            "embedding_prompt_tokens": 0,
+            "embedding_calls": 0,
+        }
         self._client = client or httpx.Client(
             base_url=base_url.rstrip("/"), timeout=timeout_seconds
         )
@@ -28,10 +38,25 @@ class OllamaEmbeddingClient:
         for offset in range(0, len(texts), batch_size):
             response = self._client.post(
                 "/api/embed",
-                json={"model": self.model, "input": list(texts[offset : offset + batch_size])},
+                json={
+                    "model": self.model,
+                    "input": list(texts[offset : offset + batch_size]),
+                    "options": {"num_gpu": self.num_gpu},
+                },
             )
             response.raise_for_status()
             payload = response.json()
+            self.telemetry["embedding_calls"] += 1
+            for source, target in (
+                ("total_duration", "embedding_total"),
+                ("load_duration", "embedding_load"),
+            ):
+                value = payload.get(source)
+                if isinstance(value, int) and value >= 0:
+                    self.telemetry[target] += value / 1_000_000
+            token_count = payload.get("prompt_eval_count")
+            if isinstance(token_count, int) and token_count >= 0:
+                self.telemetry["embedding_prompt_tokens"] += token_count
             batch = payload.get("embeddings")
             if not isinstance(batch, list) or not all(isinstance(row, list) for row in batch):
                 raise ValueError("Ollama returned an invalid embeddings payload")

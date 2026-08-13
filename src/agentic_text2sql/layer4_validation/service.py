@@ -48,6 +48,13 @@ class ValidationService:
             return normalize_error(exc), None
         result_report = validate_result(result, plan)
         if not result_report.accepted:
+            if question is not None and plan is not None:
+                semantic_report = validate_semantics(question, plan, decision.normalized_sql)
+                result_report.signals.extend(
+                    signal
+                    for signal in semantic_report.signals
+                    if signal not in result_report.signals
+                )
             return result_report, result
         if question is not None and plan is not None:
             semantic_report = validate_semantics(question, plan, decision.normalized_sql)

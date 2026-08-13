@@ -61,7 +61,7 @@ class ApplicationQueryService:
                 "max_correction_llm_calls": 1,
                 "executor_timeout_seconds": 10,
                 "max_result_rows": 200,
-                "run_deadline_seconds": 60,
+                "run_deadline_seconds": self.settings.run_deadline_seconds,
             },
         )
 

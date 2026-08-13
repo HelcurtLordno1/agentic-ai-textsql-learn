@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import subprocess
 from pathlib import Path
 from typing import Annotated
 
@@ -20,6 +21,7 @@ from agentic_text2sql.data.olist import (
 )
 from agentic_text2sql.doctor import run_doctor
 from agentic_text2sql.exceptions import Text2SQLError
+from agentic_text2sql.hardware import PROFILES, ProfileName, sample_resources, unsafe_reason
 from agentic_text2sql.layer6_application.catalog_registry import CatalogRegistry
 from agentic_text2sql.layer6_application.run_store import SQLiteRunStore
 from agentic_text2sql.layer6_application.service import ApplicationQueryService
@@ -59,6 +61,40 @@ def doctor(json_output: Annotated[bool, typer.Option("--json")] = False) -> None
             typer.echo(f"{check.status.value:4} {check.name}: {check.detail}")
     if not report.passed:
         raise typer.Exit(code=1)
+
+
+@app.command("hardware-plan")
+def hardware_plan(
+    profile_name: Annotated[ProfileName, typer.Option("--profile")] = ProfileName.INTERACTIVE,
+) -> None:
+    """Show one reproducible laptop profile without changing the host."""
+    profile = PROFILES[profile_name]
+    typer.echo(profile.model_dump_json(indent=2))
+
+
+@app.command("hardware-health")
+def hardware_health(
+    profile_name: Annotated[ProfileName, typer.Option("--profile")] = ProfileName.INTERACTIVE,
+) -> None:
+    """Sample RAM, swap, VRAM, temperature, and power against a profile."""
+    try:
+        current = sample_resources()
+    except (OSError, subprocess.SubprocessError, ValueError) as exc:
+        typer.echo(f"FAIL hardware monitor: {type(exc).__name__}", err=True)
+        raise typer.Exit(code=1) from exc
+    reason = unsafe_reason(current, PROFILES[profile_name].limits)
+    typer.echo(
+        json.dumps(
+            {
+                "safe": reason is None,
+                "reason": reason,
+                "sample": current.__dict__,
+            },
+            indent=2,
+        )
+    )
+    if reason:
+        raise typer.Exit(code=75)
 
 
 @app.command("ollama-smoke")

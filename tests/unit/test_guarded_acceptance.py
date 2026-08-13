@@ -1,18 +1,29 @@
-from scripts.run_guarded_acceptance import Sample, unsafe_reason
+from agentic_text2sql.hardware import (
+    PROFILES,
+    ProfileName,
+    ResourceLimits,
+    ResourceSample,
+    unsafe_reason,
+)
 
 
 def test_resource_guard_fails_closed_for_each_threshold() -> None:
-    safe = Sample(15, 0, 7000, 60, 50, 100)
-    thresholds = {
-        "minimum_available_ram_gib": 10,
-        "maximum_swap_used_gib": 1,
-        "maximum_gpu_memory_mib": 11776,
-        "maximum_gpu_temperature_c": 76,
-        "maximum_gpu_power_w": 95,
-    }
-    assert unsafe_reason(safe, **thresholds) is None
-    assert "available RAM" in str(unsafe_reason(Sample(9, 0, 7000, 60, 50, 100), **thresholds))
-    assert "swap" in str(unsafe_reason(Sample(15, 1, 7000, 60, 50, 100), **thresholds))
-    assert "VRAM" in str(unsafe_reason(Sample(15, 0, 12000, 60, 50, 100), **thresholds))
-    assert "temperature" in str(unsafe_reason(Sample(15, 0, 7000, 76, 50, 100), **thresholds))
-    assert "power" in str(unsafe_reason(Sample(15, 0, 7000, 60, 95, 100), **thresholds))
+    safe = ResourceSample(15, 0, 7000, 60, 50, 100)
+    limits = ResourceLimits()
+    assert unsafe_reason(safe, limits) is None
+    assert "available RAM" in str(unsafe_reason(ResourceSample(9, 0, 7000, 60, 50, 100), limits))
+    assert "swap" in str(unsafe_reason(ResourceSample(15, 1, 7000, 60, 50, 100), limits))
+    assert "VRAM" in str(unsafe_reason(ResourceSample(15, 0, 12000, 60, 50, 100), limits))
+    assert "temperature" in str(unsafe_reason(ResourceSample(15, 0, 7000, 76, 50, 100), limits))
+    assert "power" in str(unsafe_reason(ResourceSample(15, 0, 7000, 60, 105, 100), limits))
+
+
+def test_profiles_bound_parallelism_and_long_run_unloads() -> None:
+    interactive = PROFILES[ProfileName.INTERACTIVE]
+    acceptance = PROFILES[ProfileName.ACCEPTANCE]
+    assert interactive.ollama_environment()["OLLAMA_NUM_PARALLEL"] == "1"
+    assert interactive.max_loaded_models == 2
+    assert interactive.ollama_num_gpu == 8
+    assert acceptance.batch_size == 1
+    assert acceptance.keep_alive == "0"
+    assert acceptance.cooldown_seconds == 20

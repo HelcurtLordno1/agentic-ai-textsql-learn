@@ -12,7 +12,7 @@ from agentic_text2sql.contracts.planning import LogicalPlan
 from agentic_text2sql.contracts.retrieval import SchemaContext
 from agentic_text2sql.contracts.sql import SqlCandidate
 
-GENERATOR_PROMPT_VERSION = "generator_v2_grounded"
+GENERATOR_PROMPT_VERSION = "generator_v3_grounded"
 
 
 def catalog_as_sqlite_context(catalog: CatalogSnapshot) -> str:

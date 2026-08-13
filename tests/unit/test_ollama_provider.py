@@ -30,12 +30,29 @@ def test_structured_generation_sends_json_schema_and_validates() -> None:
         assert "pattern" not in body["format"]["properties"]["sql"]
         return httpx.Response(
             200,
-            json={"message": {"content": '{"sql":"SELECT 1","read_only":true}'}},
+            json={
+                "message": {"content": '{"sql":"SELECT 1","read_only":true}'},
+                "total_duration": 8_000_000,
+                "load_duration": 2_000_000,
+                "prompt_eval_duration": 3_000_000,
+                "eval_duration": 3_000_000,
+                "prompt_eval_count": 40,
+                "eval_count": 10,
+            },
         )
 
     provider = make_provider(httpx.MockTransport(respond))
     answer = provider.generate_structured(prompt="query", response_model=Answer)
     assert answer == Answer(sql="SELECT 1", read_only=True)
+    assert provider.telemetry.milliseconds() == {
+        "llm_total": 8.0,
+        "llm_load": 2.0,
+        "llm_prompt_eval": 3.0,
+        "llm_eval": 3.0,
+        "llm_calls": 1.0,
+        "llm_prompt_tokens": 40.0,
+        "llm_output_tokens": 10.0,
+    }
 
 
 def test_malformed_output_retries_once_then_raises() -> None:
