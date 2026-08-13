@@ -17,6 +17,11 @@ uv run text2sql data download olist
 uv run text2sql data build olist
 uv run text2sql data validate olist
 uv run python scripts/run_smoke.py
+uv sync --frozen --extra ui --group dev
+uv run text2sql ingest --db data/processed/olist.sqlite --db-id olist
+uv run text2sql serve
+# In a second terminal:
+uv run streamlit run apps/streamlit_app.py
 ```
 
 The ordinary CI suite uses fake transports and a deterministic synthetic database; it does not
@@ -34,18 +39,16 @@ Project source code is MIT licensed. Dataset and model licenses are separate. Ol
 generated databases, indexes, and run artifacts are intentionally excluded from Git. See
 [`data/README.md`](data/README.md) and [`docs/data/license_and_attribution.md`](docs/data/license_and_attribution.md).
 
-Gate evidence: [`docs/evidence/p0_gate.md`](docs/evidence/p0_gate.md) and
-[`docs/evidence/p1_gate.md`](docs/evidence/p1_gate.md), then
-[`docs/evidence/p2_gate.md`](docs/evidence/p2_gate.md) and the current hardened
-[`docs/evidence/p3_1_gate.md`](docs/evidence/p3_1_gate.md).
+Gate evidence is recorded under [`docs/evidence`](docs/evidence), including the current
+[`P5 application gate`](docs/evidence/p5_gate.md).
 
-The verified Phase 2 direct baseline routes unsupported/write intents before model calls, creates a
-schema-agnostic structured plan, generates one SQL candidate from the full Olist schema, and sends
-every candidate through the Phase 1 policy/executor. Gold SQL is loaded only by the evaluator after
-inference. This baseline deliberately has no retrieval and no correction yet.
+The application routes unsupported/write intents before model calls, creates a schema-agnostic
+structured plan, grounds it against a pinned local index, generates one candidate, and sends every
+candidate—including repairs—through the same read-only policy/executor. Correction is bounded to
+one repair and remains opt-in. Gold SQL is loaded only by the evaluator after inference closes.
 
-P3.1 adds pinned BGE-M3/FAISS + BM25 retrieval, immutable checksum-verified index versions,
-plan-aware minimal FK closure and budgeted grounded prompts. Qualified retrieval is validated on
-100 Spider regression cases plus a disjoint 100-case holdout. Grounded Olist generation matches the
-full-schema 14/18 baseline while reducing estimated prompt tokens by 41.96%; its extra local
-embedding latency is reported rather than hidden. Correction remains outside the current gate.
+P5 adds one shared runtime path for CLI, FastAPI and Streamlit; a persistent SQLite run/trace/
+feedback/catalog ledger; restart-safe SSE; and a five-workspace local SQL Observatory. Query
+starters support smooth drag reordering with a keyboard-accessible fallback, while Run Inspector,
+History, Benchmark Lab and System Center expose evidence without allowing browser-side SQL
+execution or arbitrary database paths.

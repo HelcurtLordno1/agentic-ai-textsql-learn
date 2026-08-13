@@ -9,7 +9,7 @@ from typing import Any
 from pydantic import BaseModel
 
 from agentic_text2sql.contracts.planning import LogicalPlan
-from agentic_text2sql.contracts.sql import SqlCandidate
+from agentic_text2sql.contracts.sql import CandidateRecord, SqlCandidate
 from agentic_text2sql.contracts.validation import ErrorClass, ValidationReport
 from agentic_text2sql.layer2_grounding.introspector import SQLiteIntrospector
 from agentic_text2sql.layer3_generation.normalizer import CandidateNormalizer
@@ -67,7 +67,7 @@ def make_service(tmp_path: Path, provider: FakeProvider, **budgets: Any) -> Corr
     return CorrectionService(corrector=corrector, validation=validation, **budgets)
 
 
-def initial_candidate(sql: str, catalog_hash: str):
+def initial_candidate(sql: str, catalog_hash: str) -> CandidateRecord:
     return CandidateNormalizer().normalize(
         SqlCandidate(sql=sql, confidence=0.5),
         model_name="test",

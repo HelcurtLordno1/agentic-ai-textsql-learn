@@ -27,7 +27,10 @@ class Settings(BaseSettings):
     artifact_dir: Path | None = Field(default=None, alias="TEXT2SQL_ARTIFACT_DIR")
     ollama_base_url: str = Field(default="http://127.0.0.1:11434", alias="OLLAMA_BASE_URL")
     ollama_model: str = Field(default="qwen3:14b-q4_K_M", alias="TEXT2SQL_OLLAMA_MODEL")
-    request_timeout_seconds: float = Field(default=120.0, gt=0)
+    ollama_num_gpu: int | None = Field(default=None, alias="TEXT2SQL_OLLAMA_NUM_GPU", ge=0)
+    request_timeout_seconds: float = Field(
+        default=120.0, alias="TEXT2SQL_REQUEST_TIMEOUT_SECONDS", gt=0
+    )
 
     @field_validator("ollama_base_url")
     @classmethod

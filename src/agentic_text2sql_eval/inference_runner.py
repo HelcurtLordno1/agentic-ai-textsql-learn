@@ -42,11 +42,21 @@ def run_inference(
     database: Path,
     catalog: CatalogSnapshot,
     prediction_path: Path,
+    initial_predictions: list[SmokePrediction] | None = None,
+    max_new_cases: int | None = None,
 ) -> list[SmokePrediction]:
     """Pass only question text to runtime; gold fields remain outside its state."""
-    predictions: list[SmokePrediction] = []
+    predictions = list(initial_predictions or [])
+    expected_prefix = [case.id for case in cases[: len(predictions)]]
+    if [prediction.case_id for prediction in predictions] != expected_prefix:
+        raise ValueError("Existing predictions are not a valid manifest prefix")
     prediction_path.parent.mkdir(parents=True, exist_ok=True)
-    for index, case in enumerate(cases, start=1):
+    remaining = cases[len(predictions) :]
+    if max_new_cases is not None:
+        if max_new_cases < 1:
+            raise ValueError("max_new_cases must be positive")
+        remaining = remaining[:max_new_cases]
+    for index, case in enumerate(remaining, start=len(predictions) + 1):
         prediction = SmokePrediction(
             case_id=case.id,
             result=service.run(case.question, database, catalog),

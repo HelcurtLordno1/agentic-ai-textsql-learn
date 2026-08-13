@@ -101,6 +101,9 @@ class OllamaProvider:
                         ),
                     }
                 )
+            options = {"temperature": 0, "num_ctx": 4096}
+            if self.settings.ollama_num_gpu is not None:
+                options["num_gpu"] = self.settings.ollama_num_gpu
             payload = self._request_json(
                 "POST",
                 "/api/chat",
@@ -110,7 +113,7 @@ class OllamaProvider:
                     "stream": False,
                     "think": False,
                     "format": _ollama_compatible_schema(response_model.model_json_schema()),
-                    "options": {"temperature": 0, "num_ctx": 4096},
+                    "options": options,
                 },
             )
             try:

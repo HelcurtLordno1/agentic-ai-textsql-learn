@@ -682,7 +682,9 @@ Tạo incorrect candidates có chủ ý:
 
 #### `L6-M1` Run State và Short-term Memory
 
-LangGraph `QueryState` giữ:
+P5 dùng typed Pydantic `RunRecord` + các cross-layer contract hiện có làm state envelope. Không thêm
+LangGraph chỉ để bọc một workflow tuyến tính đã có budget/stop condition rõ; graph orchestration chỉ
+được xem xét lại khi Phase 7 chứng minh có branch/concurrency cần nó. State tương đương giữ:
 
 ```python
 class QueryState(TypedDict):
@@ -700,6 +702,8 @@ class QueryState(TypedDict):
 ```
 
 Short-term memory chỉ trong một run/conversation. Không tự động biến chat cũ thành knowledge.
+Run config lưu model tag/digest, Ollama options, catalog/index identity, correction flag và resource
+caps; process restart chuyển run đang dở sang typed failed terminal thay vì để `RUNNING` vĩnh viễn.
 
 #### `L6-M2` Verified Example Store
 
@@ -788,6 +792,21 @@ UI tối thiểu:
 - xem latency/module trace;
 - nút feedback đúng/sai;
 - trang benchmark/report.
+
+Kiến trúc UI P5 được nâng thành **Local SQL Observatory** với năm workspace:
+
+- **Query Studio**: bilingual starters kéo-thả để ưu tiên, keyboard select fallback, advanced bounded
+  correction opt-in và kết quả dạng KPI/table/chart được chọn deterministic, không thêm LLM call;
+- **Run Inspector**: replay trace layer 0–6, plan, schema evidence, SQL, correction và sanitized trace;
+- **History**: search/reopen run sau restart;
+- **Benchmark Lab**: tách Olist application fitness khỏi Spider generalization, luôn hiện sample size;
+- **System Center**: catalog/model/service health và safety posture.
+
+Visual system dùng nền navy, violet/cyan cho reasoning, emerald cho safe success và amber cho
+correction. Sidebar có thể drag-resize, card có transition nhẹ và layout responsive. Streamlit chỉ
+gọi FastAPI qua HTTP; không import SQLite, không nhận filesystem path, không thực thi SQL chỉnh tay,
+vì vậy browser không có đường bypass safety policy. Feedback đúng/sai + taxonomy được lưu local và
+gắn immutable run ID.
 
 #### `L6-M8` Documentation và Portfolio
 
@@ -1587,7 +1606,7 @@ Mỗi bug quan trọng cần:
 | D-M3 | Olist integrity/data-contract validator | Yes | D-M2 | VERIFIED | 20/20 full-data checks; `data validate olist`; `docs/evidence/p1_gate.md` |
 | D-M4 | Olist glossary/semantic views/invariants | Yes | D-M3 | VERIFIED | canonical queries + semantic regression tests; `docs/evidence/p1_gate.md` |
 | D-M5 | Synthetic Commerce Tiny generator | Yes | P0-M3 | VERIFIED | `tests/unit/test_synthetic_generator.py`; logical hash in `docs/evidence/p0_gate.md` |
-| D-M6 | Olist acceptance set ≥60 reviewed cases | Yes | D-M4 | NOT_STARTED | — |
+| D-M6 | Olist acceptance set ≥60 reviewed cases | Yes | D-M4 | VERIFIED | 60 unique reviewed questions/gold SQL, 30/15/15 partitions; `docs/evidence/p5_gate.md` |
 | L1-M1 | Query Router | Yes | P0-M2 | VERIFIED | 30+ bilingual fixtures, write/returns regression; `docs/evidence/p2_gate.md` |
 | L1-M2 | Decomposer | Yes | L1-M1 | VERIFIED | clause-hint unit tests, no SQL/CoT output; `docs/evidence/p2_gate.md` |
 | L1-M3 | Planner Agent | Yes | L1-M2 | VERIFIED | JSON Schema live plans, typed malformed path, prompt version evidence |
@@ -1610,15 +1629,15 @@ Mỗi bug quan trọng cần:
 | L5-M2 | Correction Planner | Yes | L5-M1 | VERIFIED | typed plan and signal-specific deterministic guidance |
 | L5-M3 | Corrector Agent | Yes | L5-M2, P0-M2 | VERIFIED | structured full-candidate local repair; gold separation test |
 | L5-M4 | Feedback Loop Controller | Yes | L5-M3, L4 | VERIFIED | call/repair/deadline/fingerprint stops; full L4 revalidation |
-| L6-M1 | Query State/short memory | Yes | L1–L5 contracts | NOT_STARTED | — |
+| L6-M1 | Query State/short memory | Yes | L1–L5 contracts | VERIFIED | typed persistent run/config state + restart recovery; P5 unit/integration tests |
 | L6-M2 | Verified Example Store | No | baseline complete | NOT_STARTED | — |
-| L6-M3 | Trace Store | Yes | L6-M1 | NOT_STARTED | — |
-| L6-M4 | Benchmark Harness | Yes | L4, L6-M3 | NOT_STARTED | — |
-| L6-M5 | CLI | Yes | workflow | NOT_STARTED | — |
-| L6-M6 | FastAPI | Yes | L6-M5 | NOT_STARTED | — |
-| L6-M7 | Streamlit UI | Yes | L6-M6 | NOT_STARTED | — |
-| L6-M8 | Documentation/portfolio | Yes | reports/demo | NOT_STARTED | — |
-| E-M1 | Olist smoke/UAT report | Yes | D-M6, L1–L6 | NOT_STARTED | — |
+| L6-M3 | Trace Store | Yes | L6-M1 | VERIFIED | WAL SQLite layer 0–6 trace, SSE replay, restart persistence; `docs/evidence/p5_gate.md` |
+| L6-M4 | Benchmark Harness | Yes | L4, L6-M3 | VERIFIED | gold-blind inference/checkpoints then tolerant evaluator; Olist-60 report |
+| L6-M5 | CLI | Yes | workflow | VERIFIED | ingest/ask/trace/serve commands + CLI integration test |
+| L6-M6 | FastAPI | Yes | L6-M5 | VERIFIED | registered-db API, one-worker queue, SSE/trace/report/feedback; API restart test |
+| L6-M7 | Streamlit UI | Yes | L6-M6 | VERIFIED | five-workspace SQL Observatory, drag/keyboard UX, AppTest/live health evidence |
+| L6-M8 | Documentation/portfolio | Yes | reports/demo | IN_PROGRESS | README, architecture, runbook, demo script and P5 evidence ready; screenshots/GIF/CV bullet remain P6 |
+| E-M1 | Olist smoke/UAT report | Yes | D-M6, L1–L6 | VERIFIED | Olist-60: 47/60 result correct, 60/60 typed terminal; `docs/evidence/p5_gate.md` |
 | E-M2 | Spider smoke-20 | Yes | L1–L6 | NOT_STARTED | — |
 | E-M3 | Spider mini-100 | Yes | E-M2 | NOT_STARTED | — |
 | E-M4 | Full Spider dev report | Yes | E-M3 | NOT_STARTED | — |
@@ -1627,7 +1646,7 @@ Mỗi bug quan trọng cần:
 | E-M7 | BIRD Mini-Dev | No | core complete | NOT_STARTED | — |
 | X-M1 | PostgreSQL adapter | No | core complete | NOT_STARTED | — |
 
-Overall project status tại thời điểm cập nhật master plan: `GATE_P4_VERIFIED_FEATURE_FLAGGED`. P0
+Overall project status tại thời điểm cập nhật master plan: `GATE_P5_VERIFIED`. P0
 environment, P1 data/safety, P2 direct baseline, P3.1 grounded retrieval và P4 bounded correction
 có evidence từ `docs/evidence/p0_gate.md` đến `docs/evidence/p4_gate.md`. P4 correction tăng frozen
 Olist run từ 14/18 lên 17/18 nhưng vẫn opt-in vì diagnostic rerun cho thấy model variance.

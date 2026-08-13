@@ -4,7 +4,7 @@ from typing import Any
 from pydantic import BaseModel
 
 from agentic_text2sql.contracts.planning import LogicalPlan
-from agentic_text2sql.contracts.sql import DirectStatus, SqlCandidate
+from agentic_text2sql.contracts.sql import DirectRunResult, DirectStatus, SqlCandidate
 from agentic_text2sql.exceptions import StructuredOutputError
 from agentic_text2sql.layer1_reasoning.decomposer import Decomposer
 from agentic_text2sql.layer1_reasoning.planner import PlannerAgent
@@ -66,7 +66,7 @@ def service(provider: QueueProvider) -> DirectBaselineService:
     )
 
 
-def run(provider: QueueProvider, question: str = "How many orders?"):
+def run(provider: QueueProvider, question: str = "How many orders?") -> DirectRunResult:
     catalog = SQLiteIntrospector().inspect(DATABASE, "synthetic")
     return service(provider).run(question, DATABASE, catalog)
 
