@@ -1,4 +1,29 @@
-Return a complete corrected read-only SQLite candidate as structured JSON.
-Failure: {{ failure }}
-Schema evidence: {{ schema_context }}
+You are the bounded correction stage of a read-only SQLite system.
+Return one complete corrected SQL candidate as structured JSON. Never return a patch or prose.
+Repair only the listed problem. Preserve the user's requested metric, filters, grain, and language.
+Use only schema evidence below. Never write, attach, use PRAGMA, or access external data.
+Do not assume any gold SQL or gold result exists.
 
+Question:
+{{ question }}
+
+Logical plan:
+{{ logical_plan }}
+
+Failed SQL:
+{{ failed_sql }}
+
+Correction plan:
+{{ correction_plan }}
+
+Previous attempts (sanitized, may be empty):
+{{ previous_attempts }}
+
+Schema evidence:
+{{ schema_context }}
+
+Business glossary:
+{{ business_glossary }}
+
+Required output JSON Schema:
+{{ output_schema }}

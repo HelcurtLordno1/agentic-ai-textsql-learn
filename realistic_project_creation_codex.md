@@ -1462,6 +1462,8 @@ Gate P4:
 - no budget overflow;
 - recovery report theo category;
 - gold leakage test pass.
+- correction mặc định feature-flagged cho tới khi multi-run/Olist-60 chứng minh ổn định;
+- evidence tại `docs/evidence/p4_gate.md`.
 
 ### Phase 5 — Layer 6 application
 
@@ -1601,13 +1603,13 @@ Mỗi bug quan trọng cần:
 | L3-M4 | Candidate Selector | No | baseline complete | NOT_STARTED | — |
 | L4-M1 | Parser + Safety Policy | Yes | P0-M3 | VERIFIED | `tests/unit/layer4/test_policy.py`, `tests/safety/test_sql_safety.py` |
 | L4-M2 | Read-only Executor | Yes | L4-M1 | VERIFIED | RO URI/query_only/authorizer, timeout/caps/checksum tests; canonical Olist queries |
-| L4-M3 | Execution Validator | Yes | L4-M2 | NOT_STARTED | — |
-| L4-M4 | Semantic Validator | Yes | L4-M3 | NOT_STARTED | — |
+| L4-M3 | Execution Validator | Yes | L4-M2 | VERIFIED | typed shape/warning reports; `tests/unit/layer4/test_semantic_validation.py`; `docs/evidence/p4_gate.md` |
+| L4-M4 | Semantic Validator | Yes | L4-M3 | VERIFIED | gold-blind intent/shape/business signals; P4 Olist ablation |
 | L4-M5 | Error Normalizer | Yes | L4-M1 | VERIFIED | `tests/unit/layer4/test_error_normalizer.py` |
-| L5-M1 | Error Classifier | Yes | L4-M5 | NOT_STARTED | — |
-| L5-M2 | Correction Planner | Yes | L5-M1 | NOT_STARTED | — |
-| L5-M3 | Corrector Agent | Yes | L5-M2, P0-M2 | NOT_STARTED | — |
-| L5-M4 | Feedback Loop Controller | Yes | L5-M3, L4 | NOT_STARTED | — |
+| L5-M1 | Error Classifier | Yes | L4-M5 | VERIFIED | rule-first eligibility; policy/timeout no-repair tests |
+| L5-M2 | Correction Planner | Yes | L5-M1 | VERIFIED | typed plan and signal-specific deterministic guidance |
+| L5-M3 | Corrector Agent | Yes | L5-M2, P0-M2 | VERIFIED | structured full-candidate local repair; gold separation test |
+| L5-M4 | Feedback Loop Controller | Yes | L5-M3, L4 | VERIFIED | call/repair/deadline/fingerprint stops; full L4 revalidation |
 | L6-M1 | Query State/short memory | Yes | L1–L5 contracts | NOT_STARTED | — |
 | L6-M2 | Verified Example Store | No | baseline complete | NOT_STARTED | — |
 | L6-M3 | Trace Store | Yes | L6-M1 | NOT_STARTED | — |
@@ -1621,14 +1623,15 @@ Mỗi bug quan trọng cần:
 | E-M3 | Spider mini-100 | Yes | E-M2 | NOT_STARTED | — |
 | E-M4 | Full Spider dev report | Yes | E-M3 | NOT_STARTED | — |
 | E-M5 | Retrieval ablation | Yes | L2 | VERIFIED | qualified k=5/10/20, raw/semantic, mini + disjoint holdout; `docs/evidence/p3_1_gate.md` |
-| E-M6 | Correction ablation | Yes | L5 | NOT_STARTED | — |
+| E-M6 | Correction ablation | Yes | L5 | VERIFIED | frozen Olist 14/18 off vs 17/18 on; `docs/evidence/p4_gate.md` |
 | E-M7 | BIRD Mini-Dev | No | core complete | NOT_STARTED | — |
 | X-M1 | PostgreSQL adapter | No | core complete | NOT_STARTED | — |
 
-Overall project status tại thời điểm cập nhật master plan: `GATE_P3_1_HARDENED_VERIFIED`. P0
-environment, P1 data/safety, P2 direct baseline và P3.1 grounded
-retrieval có evidence từ `docs/evidence/p0_gate.md` đến `docs/evidence/p3_1_gate.md`. P3.1
-supersede số benchmark P3 cũ. Correction P4 và application layers chưa được triển khai.
+Overall project status tại thời điểm cập nhật master plan: `GATE_P4_VERIFIED_FEATURE_FLAGGED`. P0
+environment, P1 data/safety, P2 direct baseline, P3.1 grounded retrieval và P4 bounded correction
+có evidence từ `docs/evidence/p0_gate.md` đến `docs/evidence/p4_gate.md`. P4 correction tăng frozen
+Olist run từ 14/18 lên 17/18 nhưng vẫn opt-in vì diagnostic rerun cho thấy model variance.
+Application layers chưa được triển khai.
 
 ---
 

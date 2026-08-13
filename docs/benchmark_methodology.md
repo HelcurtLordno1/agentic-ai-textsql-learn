@@ -25,3 +25,9 @@ Retrieval is not considered useful from recall alone. A same-version full-schema
 generation ablation must show no result-accuracy regression and report both prompt-token savings and
 latency cost. Later Spider SQL evaluation will use the pinned official test-suite evaluator; schema
 recall is not presented as execution accuracy.
+
+P4 correction ablation uses the frozen Olist smoke cases and reports trigger category, attempted and
+recovered counts, stop reason, LLM calls, repair count, correct-to-wrong regression, and end-to-end
+latency. Runtime validation is gold-blind. Because local model output varies across regenerated
+plans/candidates, a single favorable run is gate evidence for bounded behavior, not a stability
+claim; correction remains opt-in until repeated runs and the reviewed Olist-60 holdout pass.

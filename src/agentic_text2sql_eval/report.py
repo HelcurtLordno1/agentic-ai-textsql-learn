@@ -84,6 +84,7 @@ def evaluate_predictions(
                     "safe_message": result.safe_message,
                     "latency_ms": result.latency_ms,
                     "semantic_tags": case.semantic_tags,
+                    "correction": result.correction,
                 }
             )
     finally:
@@ -107,6 +108,7 @@ def evaluate_predictions(
             "maximum": max(prompt_tokens, default=0),
         },
         "semantic_failures": semantic_failures,
+        "correction": _correction_metrics(details),
         "details": details,
     }
     report_path.parent.mkdir(parents=True, exist_ok=True)
@@ -114,3 +116,28 @@ def evaluate_predictions(
         json.dumps(report, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
     )
     return report
+
+
+def _correction_metrics(details: list[dict[str, Any]]) -> dict[str, Any]:
+    outcomes = [item["correction"] for item in details if item.get("correction") is not None]
+    attempted = [item for item in outcomes if item["attempted"]]
+    recovered = [item for item in attempted if item["recovered"]]
+    categories: dict[str, dict[str, int]] = {}
+    stop_reasons: dict[str, int] = {}
+    for outcome in outcomes:
+        reason = str(outcome["stop_reason"])
+        stop_reasons[reason] = stop_reasons.get(reason, 0) + 1
+        category = outcome.get("trigger_error_class")
+        if category:
+            bucket = categories.setdefault(category, {"attempted": 0, "recovered": 0})
+            bucket["attempted"] += 1
+            bucket["recovered"] += int(bool(outcome["recovered"]))
+    return {
+        "attempted_count": len(attempted),
+        "recovered_count": len(recovered),
+        "recovery_rate": len(recovered) / len(attempted) if attempted else 0.0,
+        "total_repairs": sum(int(item["repairs"]) for item in outcomes),
+        "total_llm_calls": sum(int(item["llm_calls"]) for item in outcomes),
+        "stop_reasons": stop_reasons,
+        "by_final_category": categories,
+    }

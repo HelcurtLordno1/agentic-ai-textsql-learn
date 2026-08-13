@@ -9,6 +9,7 @@ from pathlib import Path
 from agentic_text2sql.contracts.catalog import CatalogSnapshot
 from agentic_text2sql.contracts.planning import RouteIntent
 from agentic_text2sql.contracts.sql import DirectRunResult, DirectStatus
+from agentic_text2sql.contracts.validation import ErrorClass, ValidationReport
 from agentic_text2sql.exceptions import StructuredOutputError, Text2SQLError
 from agentic_text2sql.layer1_reasoning.decomposer import Decomposer
 from agentic_text2sql.layer1_reasoning.planner import PLANNER_PROMPT_VERSION, PlannerAgent
@@ -20,6 +21,8 @@ from agentic_text2sql.layer4_validation.error_normalizer import normalize_error
 from agentic_text2sql.layer4_validation.executor import ReadOnlySQLiteExecutor
 from agentic_text2sql.layer4_validation.parser import SQLParseError
 from agentic_text2sql.layer4_validation.policy import SQLSafetyPolicy
+from agentic_text2sql.layer5_correction.corrector import CORRECTOR_PROMPT_VERSION
+from agentic_text2sql.layer5_correction.service import CorrectionService
 
 
 class DirectBaselineService:
@@ -35,6 +38,8 @@ class DirectBaselineService:
         policy: SQLSafetyPolicy,
         executor: ReadOnlySQLiteExecutor,
         grounding: GroundingService | None = None,
+        correction: CorrectionService | None = None,
+        run_deadline_seconds: float = 60.0,
     ) -> None:
         self.router = router
         self.decomposer = decomposer
@@ -43,6 +48,8 @@ class DirectBaselineService:
         self.policy = policy
         self.executor = executor
         self.grounding = grounding
+        self.correction = correction
+        self.run_deadline_seconds = run_deadline_seconds
 
     def run(self, question: str, database: Path, catalog: CatalogSnapshot) -> DirectRunResult:
         run_id = str(uuid.uuid4())
@@ -50,6 +57,8 @@ class DirectBaselineService:
             "planner": PLANNER_PROMPT_VERSION,
             "generator": GENERATOR_PROMPT_VERSION,
         }
+        if self.correction is not None:
+            versions["corrector"] = CORRECTOR_PROMPT_VERSION
         timings: dict[str, float] = {}
         started = time.monotonic()
 
@@ -146,6 +155,80 @@ class DirectBaselineService:
             )
         timings["generation"] = (time.monotonic() - generation_started) * 1000
 
+        if self.correction is not None:
+            validation_started = time.monotonic()
+            initial_report, initial_result = self.correction.validation.run(
+                database,
+                candidate.normalized_sql,
+                catalog,
+                question=question,
+                plan=plan,
+            )
+            timings["validation"] = (time.monotonic() - validation_started) * 1000
+            if initial_report.accepted and initial_result is not None:
+                finish_timings()
+                return DirectRunResult(
+                    run_id=run_id,
+                    question=question,
+                    status=DirectStatus.SUCCEEDED,
+                    route_reason=route.reason,
+                    prompt_versions=versions,
+                    plan=plan.model_dump(mode="json"),
+                    schema_context=(
+                        schema_context.model_dump(mode="json") if schema_context else None
+                    ),
+                    candidate=candidate,
+                    result_columns=initial_result.columns,
+                    result_rows=initial_result.rows,
+                    latency_ms=timings,
+                )
+            correction_started = time.monotonic()
+            outcome, final_candidate, final_report, final_result = self.correction.run(
+                question=question,
+                plan=plan,
+                catalog=catalog,
+                database=database,
+                failed_candidate=candidate,
+                initial_report=initial_report,
+                schema_context=schema_context,
+                deadline=started + self.run_deadline_seconds,
+            )
+            timings["correction"] = (time.monotonic() - correction_started) * 1000
+            finish_timings()
+            if outcome.recovered and final_result is not None:
+                return DirectRunResult(
+                    run_id=run_id,
+                    question=question,
+                    status=DirectStatus.SUCCEEDED,
+                    route_reason=route.reason,
+                    prompt_versions=versions,
+                    plan=plan.model_dump(mode="json"),
+                    schema_context=(
+                        schema_context.model_dump(mode="json") if schema_context else None
+                    ),
+                    candidate=final_candidate,
+                    result_columns=final_result.columns,
+                    result_rows=final_result.rows,
+                    latency_ms=timings,
+                    correction=outcome.model_dump(mode="json"),
+                )
+            return DirectRunResult(
+                run_id=run_id,
+                question=question,
+                status=_status_for_report(final_report),
+                route_reason=route.reason,
+                prompt_versions=versions,
+                plan=plan.model_dump(mode="json"),
+                schema_context=(schema_context.model_dump(mode="json") if schema_context else None),
+                candidate=final_candidate,
+                result_columns=final_result.columns if final_result else [],
+                result_rows=final_result.rows if final_result else [],
+                error_class=(final_report.error_class.value if final_report.error_class else None),
+                safe_message=final_report.safe_message,
+                latency_ms=timings,
+                correction=outcome.model_dump(mode="json"),
+            )
+
         policy_started = time.monotonic()
         decision = self.policy.evaluate(candidate.normalized_sql, catalog)
         timings["policy"] = (time.monotonic() - policy_started) * 1000
@@ -200,3 +283,11 @@ class DirectBaselineService:
             result_rows=result.rows,
             latency_ms=timings,
         )
+
+
+def _status_for_report(report: ValidationReport) -> DirectStatus:
+    if report.error_class is ErrorClass.POLICY_VIOLATION:
+        return DirectStatus.POLICY_BLOCKED
+    if report.error_class in {ErrorClass.RESULT_SHAPE_MISMATCH, ErrorClass.SEMANTIC_MISMATCH}:
+        return DirectStatus.VALIDATION_FAILED
+    return DirectStatus.EXECUTION_ERROR

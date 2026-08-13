@@ -21,6 +21,9 @@ from agentic_text2sql.layer3_generation.prompt_builder import PromptBuilder
 from agentic_text2sql.layer3_generation.service import GenerationService
 from agentic_text2sql.layer4_validation.executor import ReadOnlySQLiteExecutor
 from agentic_text2sql.layer4_validation.policy import SQLSafetyPolicy
+from agentic_text2sql.layer4_validation.service import ValidationService
+from agentic_text2sql.layer5_correction.corrector import CorrectorAgent
+from agentic_text2sql.layer5_correction.service import CorrectionService
 from agentic_text2sql.layer6_application.query_service import DirectBaselineService
 from agentic_text2sql.settings import Settings
 from agentic_text2sql_eval.inference_runner import load_smoke_cases, run_inference
@@ -33,11 +36,15 @@ def main() -> None:
     parser.add_argument("--predictions", type=Path)
     parser.add_argument("--report", type=Path)
     parser.add_argument("--mode", choices=("full", "grounded"), default="full")
+    parser.add_argument("--correction", choices=("off", "on"), default="off")
     args = parser.parse_args()
     settings = Settings()
     root = settings.project_root
     cases_path = args.cases or root / "evals/configs/olist-smoke-20.jsonl"
-    suffix = "grounded-p3_1" if args.mode == "grounded" else "full-p3_1"
+    if args.correction == "on":
+        suffix = f"{args.mode}-correction-p4"
+    else:
+        suffix = "grounded-p3_1" if args.mode == "grounded" else "full-p3_1"
     predictions_path = args.predictions or root / f"evals/predictions/olist-{suffix}.jsonl"
     report_path = args.report or root / f"evals/reports/olist-{suffix}.json"
     source_database = settings.resolved_data_dir / "processed/olist.sqlite"
@@ -75,14 +82,31 @@ def main() -> None:
                     top_k=20,
                     token_budget=1200,
                 )
+            policy = SQLSafetyPolicy(default_limit=200)
+            executor = ReadOnlySQLiteExecutor(timeout_seconds=10, max_rows=200)
+            correction = None
+            if args.correction == "on":
+                correction = CorrectionService(
+                    corrector=CorrectorAgent(
+                        provider,
+                        CandidateNormalizer(),
+                        root / "configs/prompts/corrector_v1.j2",
+                        root / "datasets/olist/business_glossary.yaml",
+                        settings.ollama_model,
+                    ),
+                    validation=ValidationService(policy, executor),
+                    max_repairs=1,
+                    max_llm_calls=1,
+                )
             service = DirectBaselineService(
                 router=QueryRouter(),
                 decomposer=Decomposer(),
                 planner=planner,
                 generation=generation,
-                policy=SQLSafetyPolicy(default_limit=200),
-                executor=ReadOnlySQLiteExecutor(timeout_seconds=10, max_rows=200),
+                policy=policy,
+                executor=executor,
                 grounding=grounding,
+                correction=correction,
             )
             cases = load_smoke_cases(cases_path)
             predictions = run_inference(

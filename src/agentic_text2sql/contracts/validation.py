@@ -19,7 +19,15 @@ class ErrorClass(StrEnum):
     POLICY_VIOLATION = "POLICY_VIOLATION"
     TIMEOUT = "TIMEOUT"
     EMPTY_RESULT_SUSPECTED = "EMPTY_RESULT_SUSPECTED"
+    RESULT_SHAPE_MISMATCH = "RESULT_SHAPE_MISMATCH"
+    SEMANTIC_MISMATCH = "SEMANTIC_MISMATCH"
     UNKNOWN_RUNTIME_ERROR = "UNKNOWN_RUNTIME_ERROR"
+
+
+class ValidationStatus(StrEnum):
+    VALID = "VALID"
+    SUSPICIOUS = "SUSPICIOUS"
+    FAILED = "FAILED"
 
 
 class ResultPreview(BaseModel):
@@ -33,9 +41,16 @@ class ResultPreview(BaseModel):
 class ValidationReport(BaseModel):
     model_config = ConfigDict(extra="forbid")
     accepted: bool
+    status: ValidationStatus | None = None
     error_class: ErrorClass | None = None
     safe_message: str | None = None
     warnings: list[str] = Field(default_factory=list)
+    signals: list[str] = Field(default_factory=list)
+    repair_eligible: bool = False
+
+    def model_post_init(self, __context: Any) -> None:
+        if self.status is None:
+            self.status = ValidationStatus.VALID if self.accepted else ValidationStatus.FAILED
 
 
 class PolicyDecision(BaseModel):

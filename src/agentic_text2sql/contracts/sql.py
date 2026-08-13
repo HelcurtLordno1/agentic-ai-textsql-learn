@@ -36,6 +36,7 @@ class DirectStatus(StrEnum):
     INVALID_SQL = "INVALID_SQL"
     POLICY_BLOCKED = "POLICY_BLOCKED"
     EXECUTION_ERROR = "EXECUTION_ERROR"
+    VALIDATION_FAILED = "VALIDATION_FAILED"
 
 
 class DirectRunResult(BaseModel):
@@ -53,3 +54,4 @@ class DirectRunResult(BaseModel):
     error_class: str | None = None
     safe_message: str | None = None
     latency_ms: dict[str, float] = Field(default_factory=dict)
+    correction: dict[str, Any] | None = None
