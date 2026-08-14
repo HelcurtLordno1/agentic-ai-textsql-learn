@@ -43,8 +43,8 @@ generated databases, indexes, and run artifacts are intentionally excluded from 
 
 Gate evidence is recorded under [`docs/evidence`](docs/evidence), including the
 [`P5 application gate`](docs/evidence/p5_gate.md),
-[`P5.1 laptop hardening`](docs/evidence/p5_1_gate.md), and the P6 release evidence once its guarded
-benchmark is complete.
+[`P5.1 laptop hardening`](docs/evidence/p5_1_gate.md), and the
+[`P6 laptop release`](docs/evidence/p6_gate.md).
 
 The application routes unsupported/write intents before model calls, creates a schema-agnostic
 structured plan, grounds it against a pinned local index, generates one candidate, and sends every
@@ -81,3 +81,9 @@ OLLAMA_BASE_URL=http://127.0.0.1:11434 TEXT2SQL_OLLAMA_NUM_GPU=6 \
 Benchmark Lab renders Olist and Spider in separate tabs. Spider reports execution equivalence,
 complexity slices, failure taxonomy, latency, manifest identity and explicit limitations; it is not
 presented as an official hidden-test leaderboard score.
+
+Verified P6 results on the guarded six-layer laptop profile are Spider-200 130/200 (65.00%;
+holdout 67%, regression 63%) and Olist-60 57/60 (95.00%; Vietnamese 96.67%, holdout 100%). Both
+workflows completed every case. P95 latency was 85.29 s for Spider and 91.62 s for Olist, above the
+60-second interactive target; this limitation is reported rather than hidden. Full Spider-1034 is
+still optional P6.1 and has no claimed release score.

@@ -1692,23 +1692,26 @@ Mỗi bug quan trọng cần:
 | L6-M5 | CLI | Yes | workflow | VERIFIED | ingest/ask/trace/serve commands + CLI integration test |
 | L6-M6 | FastAPI | Yes | L6-M5 | VERIFIED | registered-db API, one-worker queue, SSE/trace/report/feedback; API restart test |
 | L6-M7 | Streamlit UI | Yes | L6-M6 | VERIFIED | five-workspace SQL Observatory, drag/keyboard UX, AppTest/live health evidence |
-| L6-M8 | Documentation/portfolio | Yes | reports/demo | IN_PROGRESS | README, architecture, runbook, demo script and P5 evidence ready; screenshots/GIF/CV bullet remain P6 |
-| E-M1 | Olist smoke/UAT report | Yes | D-M6, L1–L6 | VERIFIED | Olist-60: 47/60 result correct, 60/60 typed terminal; `docs/evidence/p5_gate.md` |
-| E-M2 | Spider smoke-20 | Yes | L1–L6 | NOT_STARTED | — |
-| E-M3 | Spider mini-100 | Yes | E-M2 | NOT_STARTED | — |
-| E-M4 | Spider-200 laptop report | Yes | E-M3 | IN_PROGRESS | regression-100 + disjoint holdout-100; full-1034 moved to optional P6.1 |
+| L6-M8 | Documentation/portfolio | Yes | reports/demo | VERIFIED | README, architecture, runbook, demo script, sanitized UI artifact and `docs/evidence/p6_gate.md` |
+| E-M1 | Olist smoke/UAT report | Yes | D-M6, L1–L6 | VERIFIED | P6 Olist-60: 57/60 result correct, 60/60 typed terminal; `docs/evidence/p6_gate.md` |
+| E-M2 | Spider smoke-20 | Yes | L1–L6 | VERIFIED | subsumed by the completed deterministic Spider-200 run; exact-gold evaluator self-test 1,034/1,034 |
+| E-M3 | Spider mini-100 | Yes | E-M2 | VERIFIED | regression-100 partition completed 63/100 with no removed failures |
+| E-M4 | Spider-200 laptop report | Yes | E-M3 | VERIFIED | 130/200 overall; holdout 67/100, regression 63/100; `docs/evidence/p6_gate.md` |
 | E-M4.1 | Full Spider dev report | No | E-M4, stronger hardware | NOT_STARTED | optional P6.1 manifest/harness tracked |
 | E-M5 | Retrieval ablation | Yes | L2 | VERIFIED | qualified k=5/10/20, raw/semantic, mini + disjoint holdout; `docs/evidence/p3_1_gate.md` |
 | E-M6 | Correction ablation | Yes | L5 | VERIFIED | frozen Olist 14/18 off vs 17/18 on; `docs/evidence/p4_gate.md` |
 | E-M7 | BIRD Mini-Dev | No | core complete | NOT_STARTED | — |
 | X-M1 | PostgreSQL adapter | No | core complete | NOT_STARTED | — |
 
-Overall project status tại thời điểm cập nhật master plan: `GATE_P5_1_VERIFIED`. P0
+Overall project status tại thời điểm cập nhật master plan: `GATE_P6_VERIFIED`. P0
 environment, P1 data/safety, P2 direct baseline, P3.1 grounded retrieval và P4 bounded correction
 có evidence từ `docs/evidence/p0_gate.md` đến `docs/evidence/p4_gate.md`. P4 correction tăng frozen
 Olist run từ 14/18 lên 17/18 nhưng vẫn opt-in vì diagnostic rerun cho thấy model variance.
-Application layers đã được triển khai và P5 đã VERIFIED; P5.1 đã harden accuracy, telemetry và
-laptop resource governance trước P6 với evidence tại `docs/evidence/p5_1_gate.md`.
+Application layers đã được triển khai và P5/P5.1 đã VERIFIED. P6 hoàn tất release laptop-stratified:
+Spider-200 đạt 130/200 (65,00%; holdout 67%, regression 63%) và Olist-60 đạt 57/60 (95,00%), với
+evidence tại `docs/evidence/p6_gate.md`. Latency p95 85,29 giây (Spider) và 91,62 giây (Olist) còn
+vượt target interactive 60 giây nên được giữ như limitation. Full Spider-1.034 vẫn là P6.1 optional
+`NOT_STARTED`, không được suy diễn từ score Spider-200.
 
 ---
 
