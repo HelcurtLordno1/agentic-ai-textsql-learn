@@ -8,6 +8,7 @@ import time
 from pathlib import Path
 from urllib.parse import quote
 
+from agentic_text2sql.adapters.sqlite_text import decode_sqlite_text
 from agentic_text2sql.contracts.validation import ResultPreview
 
 
@@ -72,6 +73,7 @@ class ReadOnlySQLiteExecutor:
         deadline = started + self.timeout_seconds
         uri = f"file:{quote(str(database.resolve()))}?mode=ro"
         connection = sqlite3.connect(uri, uri=True)
+        connection.text_factory = decode_sqlite_text
         connection.execute("PRAGMA query_only=ON")
 
         def authorizer(

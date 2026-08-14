@@ -1542,6 +1542,23 @@ Tasks:
 - README, diagrams, learning notes, demo video script.
 - Fresh environment rehearsal.
 
+P6 implementation contract bổ sung:
+
+- tracked full-dev manifest gồm 1.034 case/20 database, pin `dev.json`, `tables.json`, từng SQLite
+  database và từng dev row bằng SHA-256;
+- manifest được reorder theo database chỉ để reuse catalog/index; giữ `dev_index` để audit và
+  checkpoint luôn là prefix xác định;
+- runtime prompt v4/corrector v3 không mang Olist glossary sang database khác;
+- Ollama generation dùng `seed=42`, fail-closed theo model digest pin; resume provenance khóa theo
+  clean Git commit và lưu runtime/index identity cho từng database;
+- inference checkpoint trước, evaluator mới mở gold và chỉ dùng read-only execution equivalence;
+- evaluator full-corpus self-test phải đạt 1.034/1.034 với exact-gold fixture; legacy TEXT lỗi UTF-8
+  được decode ổn định và result materialization bị cap 100.000 row để bảo vệ RAM;
+- report không blend Olist/Spider, có complexity/database slices, failure taxonomy, latency,
+  provenance, limitations và artifact hashes;
+- Benchmark Lab đọc sanitized report qua FastAPI, không đọc database/gold/details trực tiếp;
+- CI phải cài UI extra trước strict mypy vì API/UI là core từ P5.
+
 Gate P6 — Core Complete:
 
 - tất cả core module `VERIFIED`;
@@ -1648,7 +1665,7 @@ Mỗi bug quan trọng cần:
 | L2-M4 | Keyword Indexer | Yes | L2-M1 | VERIFIED | JSON artifact, identifier/Vietnamese BM25 and exact boost tests |
 | L2-M5 | Hybrid Retriever | Yes | L2-M3, L2-M4 | VERIFIED | equal-weight RRF wins qualified column recall on disjoint holdout; db isolation |
 | L2-M6 | Schema Linker | Yes | L1-M3, L2-M5 | VERIFIED | plan-aware minimal FK closure, join columns, final serialized budget |
-| L3-M1 | Prompt Builder | Yes | L1-M3, L2-M6 | VERIFIED | grounded prompt v3 validates column ownership/minimal shape; P5.1 evidence |
+| L3-M1 | Prompt Builder | Yes | L1-M3, L2-M6 | VERIFIED | cross-domain prompt v4 validates column ownership/minimal shape and prevents Olist glossary leakage |
 | L3-M2 | Generator Agent | Yes | L3-M1, P0-M2 | VERIFIED | 20-case live typed baseline, one candidate budget; `docs/evidence/p2_gate.md` |
 | L3-M3 | Candidate Normalizer | Yes | L3-M2 | VERIFIED | fence/semicolon/multi-statement/non-query/fingerprint tests |
 | L3-M4 | Candidate Selector | No | baseline complete | NOT_STARTED | — |

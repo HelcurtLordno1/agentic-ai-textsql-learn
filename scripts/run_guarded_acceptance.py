@@ -46,6 +46,9 @@ def main() -> None:
     parser.add_argument("--batch-size", type=int)
     parser.add_argument("--cooldown-seconds", type=int)
     parser.add_argument("--max-batches", type=int)
+    parser.add_argument("--predictions", type=Path)
+    parser.add_argument("--report", type=Path)
+    parser.add_argument("--evaluation-id", default="olist-acceptance-60-p5-v1")
     args = parser.parse_args()
     profile = PROFILES[ProfileName(args.profile)]
     batch_size = args.batch_size if args.batch_size is not None else profile.batch_size
@@ -57,7 +60,7 @@ def main() -> None:
     limits = profile.limits
 
     root = Path(__file__).resolve().parents[1]
-    predictions = root / "evals/predictions/olist-p5-60.jsonl"
+    predictions = args.predictions or root / "evals/predictions/olist-p5-60.jsonl"
     base_url = os.environ.get("OLLAMA_BASE_URL", "http://127.0.0.1:11434").rstrip("/")
     environment = {
         **os.environ,
@@ -86,6 +89,12 @@ def main() -> None:
             "--resume",
             "--max-new-cases",
             str(batch_size),
+            "--predictions",
+            str(predictions),
+            "--report",
+            str(args.report or root / "evals/reports/olist-p5-60.json"),
+            "--evaluation-id",
+            args.evaluation_id,
         ]
         retrying = False
         if predictions.is_file() and retry_counts.get(before, 0) < 1:

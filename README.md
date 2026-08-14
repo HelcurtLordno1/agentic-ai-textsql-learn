@@ -1,5 +1,7 @@
 # Agentic Text-to-SQL
 
+[![CI](https://github.com/HelcurtLordno1/agentic-ai-textsql-learn/actions/workflows/ci.yml/badge.svg)](https://github.com/HelcurtLordno1/agentic-ai-textsql-learn/actions/workflows/ci.yml)
+
 A fully local, free, six-layer agentic text-to-SQL learning and portfolio project.
 The canonical specification and completion ledger is
 [`realistic_project_creation_codex.md`](realistic_project_creation_codex.md).
@@ -39,8 +41,10 @@ Project source code is MIT licensed. Dataset and model licenses are separate. Ol
 generated databases, indexes, and run artifacts are intentionally excluded from Git. See
 [`data/README.md`](data/README.md) and [`docs/data/license_and_attribution.md`](docs/data/license_and_attribution.md).
 
-Gate evidence is recorded under [`docs/evidence`](docs/evidence), including the current
-[`P5 application gate`](docs/evidence/p5_gate.md).
+Gate evidence is recorded under [`docs/evidence`](docs/evidence), including the
+[`P5 application gate`](docs/evidence/p5_gate.md),
+[`P5.1 laptop hardening`](docs/evidence/p5_1_gate.md), and the P6 release evidence once its guarded
+benchmark is complete.
 
 The application routes unsupported/write intents before model calls, creates a schema-agnostic
 structured plan, grounds it against a pinned local index, generates one candidate, and sends every
@@ -52,3 +56,24 @@ feedback/catalog ledger; restart-safe SSE; and a five-workspace local SQL Observ
 starters support smooth drag reordering with a keyboard-accessible fallback, while Run Inspector,
 History, Benchmark Lab and System Center expose evidence without allowing browser-side SQL
 execution or arbitrary database paths.
+
+## Gate P6 release evaluation
+
+P6 pins every Spider dev row, `dev.json`, `tables.json`, and all 20 SQLite databases by SHA-256.
+Inference checkpoints before any gold-aware evaluation; generated predictions and detailed reports
+remain ignored. Start the bounded Ollama supervisor, then create/verify the manifest and run the
+resumable release:
+
+```bash
+uv run python scripts/serve_ollama_guarded.py --profile acceptance-safe
+uv run python scripts/run_benchmark.py --create-manifest
+OLLAMA_BASE_URL=http://127.0.0.1:11434 TEXT2SQL_OLLAMA_NUM_GPU=8 \
+  uv run python scripts/run_benchmark.py --correction --resume --max-new-cases 1
+# Remove --max-new-cases only after the pilot is healthy.
+OLLAMA_BASE_URL=http://127.0.0.1:11434 TEXT2SQL_OLLAMA_NUM_GPU=8 \
+  uv run python scripts/run_benchmark.py --correction --resume
+```
+
+Benchmark Lab renders Olist and Spider in separate tabs. Spider reports execution equivalence,
+complexity slices, failure taxonomy, latency, manifest identity and explicit limitations; it is not
+presented as an official hidden-test leaderboard score.

@@ -13,3 +13,4 @@ def test_settings_paths_are_relocatable(tmp_path: Path) -> None:
     assert settings.resolved_data_dir == (tmp_path / "external-data").resolve()
     assert settings.resolved_artifact_dir == (tmp_path / "external-data/artifacts").resolve()
     assert settings.ollama_base_url == "http://example.test:11434"
+    assert settings.ollama_seed == 42

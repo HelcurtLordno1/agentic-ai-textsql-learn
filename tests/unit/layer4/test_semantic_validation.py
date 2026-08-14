@@ -123,3 +123,13 @@ def test_record_count_rejects_distinct_and_month_keeps_year_context() -> None:
     )
     assert "RECORD_COUNT_MUST_NOT_BE_DISTINCT" in records.signals
     assert "YEAR_MONTH_CONTEXT_LOST" in month.signals
+
+
+def test_olist_business_rules_do_not_leak_into_cross_domain_database() -> None:
+    report = validate_semantics(
+        "How many products have more than one photo?",
+        aggregate_plan("product count"),
+        "SELECT COUNT(*) FROM photos WHERE photo_count > 1",
+        db_id="generic_photos",
+    )
+    assert report.accepted

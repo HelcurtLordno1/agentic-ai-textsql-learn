@@ -77,3 +77,6 @@ class LocalAPIClient:
 
     def reports(self) -> list[dict[str, Any]]:
         return cast(list[dict[str, Any]], self._request("GET", "/reports"))
+
+    def report(self, report_id: str) -> dict[str, Any]:
+        return cast(dict[str, Any], self._request("GET", f"/reports/{report_id}"))

@@ -39,3 +39,28 @@ Index publication never mutates the active bundle. A deterministic version ID ad
 immutable directory; an atomic JSON pointer activates it only after checksums and FAISS shape are
 complete. Generated indexes, caches and predictions remain ignored. The application may run fully
 offline after pinned datasets and local Ollama models are present.
+
+## Release evidence flow
+
+```mermaid
+flowchart LR
+    M[Pinned manifest + SHA-256] --> I[Gold-blind resumable inference]
+    I --> P[Atomic prediction checkpoint]
+    P --> E[Offline read-only execution evaluator]
+    E --> R[Sanitized release report]
+    R --> A[FastAPI report boundary]
+    A --> U[Benchmark Lab UI]
+    R --> D[Portfolio demo export]
+    G[Gold SQL] --> E
+    G -. never imported .-> X[Runtime package]
+```
+
+P6 groups full Spider dev by database to reuse the catalog/index while preserving a manifest prefix
+for crash-safe resume. The evaluator opens gold only after all runtime contexts close, executes both
+queries with SQLite `query_only` and a deadline, normalizes unordered result multisets and column
+permutations up to width eight, and records hashes rather than gold rows in the report.
+
+Release inference is pinned to seed 42, configured Qwen/BGE digests, and one clean Git commit.
+Resume refuses predictions from another revision; per-database index/catalog provenance is
+checkpointed atomically beside predictions. Evaluator result materialization is capped so an
+incorrect cross join cannot exhaust laptop memory.

@@ -140,7 +140,11 @@ class OllamaProvider:
                         ),
                     }
                 )
-            options = {"temperature": 0, "num_ctx": 4096}
+            options = {
+                "temperature": 0,
+                "num_ctx": 4096,
+                "seed": self.settings.ollama_seed,
+            }
             if self.settings.ollama_num_gpu is not None:
                 options["num_gpu"] = self.settings.ollama_num_gpu
             payload = self._request_json(

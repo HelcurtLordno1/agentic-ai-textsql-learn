@@ -268,6 +268,7 @@ def main() -> None:
         catalog = introspector.inspect(database, db_id)
         catalogs[db_id] = catalog
         manifests.append(service.build(catalog).model_dump(mode="json"))
+        semantic_service.build(catalog)
         retrievers[db_id] = service.load(db_id, embed_query)
     spider_report = evaluate(mini, retrievers, catalogs)
     holdout_report = evaluate(holdout, retrievers, catalogs)

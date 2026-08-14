@@ -57,7 +57,7 @@ def main() -> None:
             planner = PlannerAgent(provider, root / "configs/prompts/planner_v2.j2")
             generation = GenerationService(
                 PromptBuilder(
-                    root / "configs/prompts/generator_v3_grounded.j2",
+                    root / "configs/prompts/generator_v4_cross_domain.j2",
                     root / "datasets/olist/business_glossary.yaml",
                 ),
                 GeneratorAgent(provider),
@@ -90,7 +90,7 @@ def main() -> None:
                     corrector=CorrectorAgent(
                         provider,
                         CandidateNormalizer(),
-                        root / "configs/prompts/corrector_v1.j2",
+                        root / "configs/prompts/corrector_v3_cross_domain.j2",
                         root / "datasets/olist/business_glossary.yaml",
                         settings.ollama_model,
                     ),

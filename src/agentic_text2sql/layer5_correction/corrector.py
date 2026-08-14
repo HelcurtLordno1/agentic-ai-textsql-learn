@@ -15,9 +15,12 @@ from agentic_text2sql.contracts.retrieval import SchemaContext
 from agentic_text2sql.contracts.sql import CandidateRecord, SqlCandidate
 from agentic_text2sql.layer2_grounding.context_packer import estimate_tokens
 from agentic_text2sql.layer3_generation.normalizer import CandidateNormalizer
-from agentic_text2sql.layer3_generation.prompt_builder import catalog_as_sqlite_context
+from agentic_text2sql.layer3_generation.prompt_builder import (
+    catalog_as_sqlite_context,
+    domain_rules,
+)
 
-CORRECTOR_PROMPT_VERSION = "corrector_v2_bounded"
+CORRECTOR_PROMPT_VERSION = "corrector_v3_cross_domain"
 
 
 class CorrectorAgent:
@@ -57,7 +60,7 @@ class CorrectorAgent:
                 if schema_context is not None
                 else catalog_as_sqlite_context(catalog)
             ),
-            business_glossary=self.glossary_path.read_text(encoding="utf-8"),
+            business_glossary=domain_rules(catalog, self.glossary_path),
             failed_sql=failed_candidate.normalized_sql,
             correction_plan=correction_plan.model_dump_json(indent=2),
             previous_attempts=json.dumps(

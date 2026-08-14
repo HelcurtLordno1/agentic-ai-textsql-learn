@@ -7,6 +7,8 @@ from contextlib import AbstractContextManager
 from pathlib import Path
 from types import TracebackType
 
+import yaml
+
 from agentic_text2sql.adapters.embeddings.ollama_embeddings import OllamaEmbeddingClient
 from agentic_text2sql.adapters.llm.ollama_provider import OllamaProvider
 from agentic_text2sql.contracts.catalog import CatalogSnapshot
@@ -46,12 +48,33 @@ class RuntimeBundle(AbstractContextManager["RuntimeBundle"]):
             ),
             "unknown",
         )
+        model_config = yaml.safe_load((root / "configs/models.yaml").read_text(encoding="utf-8"))
+        expected_generation_digest = str(model_config["generator"]["digest"])
+        if generation_digest != expected_generation_digest:
+            self.provider.close()
+            raise RuntimeError(
+                "generation model digest mismatch: "
+                f"expected {expected_generation_digest}, got {generation_digest}"
+            )
         self.provenance: dict[str, object] = {
+            "generation_model": settings.ollama_model,
             "generation_model_digest": generation_digest,
             "ollama_options": {
                 "temperature": 0,
                 "num_ctx": 4096,
                 "num_gpu": settings.ollama_num_gpu,
+                "seed": settings.ollama_seed,
+            },
+            "prompt_versions": {
+                "planner": "planner_v2",
+                "generator": "generator_v4_cross_domain",
+                "corrector": "corrector_v3_cross_domain",
+            },
+            "retrieval": {"mode": "hybrid", "top_k": 20, "token_budget": 1200},
+            "correction": {
+                "enabled": correction_enabled,
+                "max_repairs": 1 if correction_enabled else 0,
+                "max_llm_calls": 1 if correction_enabled else 0,
             },
         }
         self.embedding: OllamaEmbeddingClient | None = None
@@ -89,7 +112,7 @@ class RuntimeBundle(AbstractContextManager["RuntimeBundle"]):
                 corrector=CorrectorAgent(
                     self.provider,
                     normalizer,
-                    root / "configs/prompts/corrector_v1.j2",
+                    root / "configs/prompts/corrector_v3_cross_domain.j2",
                     root / "datasets/olist/business_glossary.yaml",
                     settings.ollama_model,
                 ),
@@ -103,7 +126,7 @@ class RuntimeBundle(AbstractContextManager["RuntimeBundle"]):
             planner=PlannerAgent(self.provider, root / "configs/prompts/planner_v2.j2"),
             generation=GenerationService(
                 PromptBuilder(
-                    root / "configs/prompts/generator_v3_grounded.j2",
+                    root / "configs/prompts/generator_v4_cross_domain.j2",
                     root / "datasets/olist/business_glossary.yaml",
                 ),
                 GeneratorAgent(self.provider),

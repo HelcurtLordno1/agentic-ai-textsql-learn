@@ -18,12 +18,13 @@ def test_prompt_contains_contract_catalog_glossary_and_version_inputs() -> None:
         required_concepts=["orders"],
     )
     prompt = PromptBuilder(
-        ROOT / "configs/prompts/generator_v3_grounded.j2",
+        ROOT / "configs/prompts/generator_v4_cross_domain.j2",
         ROOT / "datasets/olist/business_glossary.yaml",
     ).build("How many orders?", plan, catalog)
     assert "TABLE orders(" in prompt
     assert catalog.catalog_hash in prompt
-    assert "product_revenue" in prompt
+    assert "product_revenue" not in prompt
+    assert "No domain-specific business rules" in prompt
     assert '"confidence"' in prompt
     assert "Never use DML" in prompt
 
@@ -43,7 +44,7 @@ def test_prompt_uses_budgeted_grounded_context_instead_of_full_catalog() -> None
         estimated_tokens=10,
     )
     prompt = PromptBuilder(
-        ROOT / "configs/prompts/generator_v3_grounded.j2",
+        ROOT / "configs/prompts/generator_v4_cross_domain.j2",
         ROOT / "datasets/olist/business_glossary.yaml",
     ).build("Find orders", plan, catalog, context)
     assert "Retrieved schema context with evidence" in prompt

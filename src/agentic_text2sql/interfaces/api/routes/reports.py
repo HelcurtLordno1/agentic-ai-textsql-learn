@@ -34,6 +34,9 @@ def list_reports(container: ContainerDep) -> list[dict[str, object]]:
                 "result_accuracy": payload.get("result_accuracy"),
                 "workflow_completion_rate": payload.get("workflow_completion_rate"),
                 "latency_ms": payload.get("latency_ms"),
+                "benchmark_kind": payload.get("benchmark_kind"),
+                "release_status": payload.get("release_status"),
+                "failure_categories": payload.get("failure_categories"),
             }
         )
     return reports
@@ -41,7 +44,7 @@ def list_reports(container: ContainerDep) -> list[dict[str, object]]:
 
 @router.get("/{report_id}")
 def get_report(report_id: str, container: ContainerDep) -> dict[str, object]:
-    if not report_id.replace("-", "_").isalnum():
+    if not report_id.replace("-", "").replace("_", "").isalnum():
         raise HTTPException(status_code=400, detail="Invalid report id")
     path = _report_root(container) / f"{report_id}.json"
     if not path.is_file():

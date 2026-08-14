@@ -17,3 +17,15 @@ baseline:
 
 These cases become inputs for retrieval and correction analysis in later gates. Gold results were
 not used to trigger retries.
+
+## Gate P6 release taxonomy
+
+The Spider release evaluator assigns every incorrect case to one auditable final category. Typed
+workflow failures retain their normalized error class (`UNKNOWN_COLUMN`, `JOIN_ERROR`, timeout,
+policy stop, and so on). A successfully executed candidate with different rows is
+`EXECUTION_MISMATCH`; an evaluator-side SQLite failure is `EVALUATOR_EXECUTION_ERROR`. No case is
+removed from the denominator.
+
+The final P6 evidence records the top categories and complexity/database slices from the complete
+1,034-case report. Until that guarded report exists, this section intentionally contains no claimed
+Spider accuracy or category counts.

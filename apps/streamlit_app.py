@@ -394,12 +394,71 @@ def benchmark_lab() -> None:
         if not selected:
             st.info("Run the Olist acceptance command to populate this page.")
     with generalization:
-        st.info(
-            "Spider schema recall is not presented as SQL result accuracy. Full execution evaluation belongs to Gate P6."
-        )
-        for item in reports:
-            if "spider" in str(item.get("evaluation_id", "")).lower():
-                st.json(item)
+        spider = [
+            item for item in reports if "spider" in str(item.get("evaluation_id", "")).lower()
+        ]
+        if not spider:
+            st.info("Run the guarded Spider release benchmark to populate Gate P6 evidence.")
+        else:
+            labels = {
+                f"{item.get('evaluation_id')} · n={item.get('case_count')}": item for item in spider
+            }
+            selected_label = st.selectbox("Release report", list(labels), key="spider-report")
+            selected = labels[selected_label]
+            try:
+                report = client.report(str(selected["report_id"]))
+            except httpx.HTTPError as exc:
+                api_error(exc)
+                return
+            accuracy = float(report.get("result_accuracy") or 0)
+            completion = float(report.get("workflow_completion_rate") or 0)
+            latency = report.get("latency_ms") or {}
+            a, b, c, d = st.columns(4)
+            with a:
+                metric("Execution accuracy", f"{accuracy * 100:.2f}%")
+            with b:
+                metric("Workflow completion", f"{completion * 100:.2f}%")
+            with c:
+                metric("P50", f"{float(latency.get('p50', 0)) / 1000:.1f}s")
+            with d:
+                metric("P95", f"{float(latency.get('p95', 0)) / 1000:.1f}s")
+            st.caption(
+                "Cross-domain Spider execution is never blended with Olist application fitness."
+            )
+            categories = report.get("failure_categories") or {}
+            complexity = report.get("by_complexity") or {}
+            failures, slices, provenance = st.tabs(
+                ["Failure taxonomy", "Complexity slices", "Manifest & provenance"]
+            )
+            with failures:
+                if categories:
+                    frame = pd.DataFrame(
+                        [{"category": key, "count": value} for key, value in categories.items()]
+                    )
+                    st.plotly_chart(
+                        px.bar(
+                            frame, x="count", y="category", orientation="h", template="plotly_dark"
+                        ),
+                        use_container_width=True,
+                    )
+                else:
+                    st.success("No failures in this report.")
+            with slices:
+                st.dataframe(
+                    pd.DataFrame(
+                        [{"complexity": key, **value} for key, value in complexity.items()]
+                    ),
+                    use_container_width=True,
+                    hide_index=True,
+                )
+            with provenance:
+                st.json(
+                    {
+                        "manifest": report.get("manifest"),
+                        "provenance": report.get("provenance"),
+                        "limitations": report.get("limitations"),
+                    }
+                )
 
 
 def system_center() -> None:

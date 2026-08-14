@@ -30,3 +30,13 @@ no button to execute edited SQL and the API accepts only a registered `db_id`.
 
 Finish in Benchmark Lab. Keep Olist application acceptance separate from Spider generalization;
 show failed cases and sample size instead of presenting a single blended score.
+
+## Gate P6 release view
+
+In Benchmark Lab → Generalization, select `spider-dev-1034-p6-v1`. Show the four release KPIs,
+then open Failure taxonomy, Complexity slices, and Manifest & provenance. State explicitly that:
+
+- this is full local Spider dev, not a hidden-test leaderboard submission;
+- Olist application fitness and Spider cross-domain execution are never averaged together;
+- detailed predictions/gold stay ignored and the UI receives a sanitized report without `details`;
+- a failed case remains in the denominator and the limitations panel is part of the demo.

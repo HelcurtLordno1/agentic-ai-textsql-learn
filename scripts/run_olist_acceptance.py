@@ -24,6 +24,7 @@ def main() -> None:
     parser.add_argument("--cases", type=Path)
     parser.add_argument("--predictions", type=Path)
     parser.add_argument("--report", type=Path)
+    parser.add_argument("--evaluation-id", default="olist-acceptance-60-p5-v1")
     parser.add_argument("--correction", action=argparse.BooleanOptionalAction, default=True)
     parser.add_argument("--resume", action=argparse.BooleanOptionalAction, default=True)
     parser.add_argument("--max-new-cases", type=int)
@@ -97,6 +98,7 @@ def main() -> None:
             predictions=predictions,
             database=database,
             report_path=report_path,
+            evaluation_id=args.evaluation_id,
         )
     print(json.dumps({key: value for key, value in report.items() if key != "details"}, indent=2))
 

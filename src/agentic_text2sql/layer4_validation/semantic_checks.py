@@ -15,7 +15,9 @@ from agentic_text2sql.contracts.validation import (
 from agentic_text2sql.layer4_validation.parser import parse_one
 
 
-def validate_semantics(question: str, plan: LogicalPlan, sql: str) -> ValidationReport:
+def validate_semantics(
+    question: str, plan: LogicalPlan, sql: str, *, db_id: str | None = None
+) -> ValidationReport:
     """Return only high-precision, gold-independent semantic suspicions."""
     statement = parse_one(sql)
     normalized_question = question.casefold()
@@ -24,6 +26,7 @@ def validate_semantics(question: str, plan: LogicalPlan, sql: str) -> Validation
     order = statement.args.get("order")
     ordered = list(order.expressions) if isinstance(order, exp.Order) else []
     sql_lower = sql.casefold()
+    olist_rules = db_id in {None, "olist"}
 
     ranking_language = bool(re.search(r"\bnhiều\b.{0,40}\bnhất\b", normalized_question)) or any(
         phrase in normalized_question
@@ -82,9 +85,9 @@ def validate_semantics(question: str, plan: LogicalPlan, sql: str) -> Validation
     asks_returning_customer = (
         "quay lại" in normalized_question or "returning customer" in normalized_question
     ) and any(token in normalized_question for token in ("customer", "khách hàng"))
-    if asks_returning_customer and "customer_unique_id" not in sql_lower:
+    if olist_rules and asks_returning_customer and "customer_unique_id" not in sql_lower:
         signals.append("CUSTOMER_IDENTITY_NOT_UNIQUE")
-    if asks_returning_customer and select is not None and len(select.selects) != 1:
+    if olist_rules and asks_returning_customer and select is not None and len(select.selects) != 1:
         signals.append("RETURNING_CUSTOMER_OUTPUT_SHAPE")
 
     asks_late_delivery = (
@@ -93,7 +96,11 @@ def validate_semantics(question: str, plan: LogicalPlan, sql: str) -> Validation
         or "late deliver" in normalized_question
         or "delivered late" in normalized_question
     )
-    if asks_late_delivery and re.search(r"order_status\s*=\s*['\"]delivered['\"]", sql_lower):
+    if (
+        olist_rules
+        and asks_late_delivery
+        and re.search(r"order_status\s*=\s*['\"]delivered['\"]", sql_lower)
+    ):
         signals.append("DELIVERY_POPULATION_NARROWED_BY_STATUS")
 
     asks_scalar_maximum = any(
@@ -110,25 +117,33 @@ def validate_semantics(question: str, plan: LogicalPlan, sql: str) -> Validation
     asks_freight_per_order = (
         "freight" in normalized_question and "per order" in normalized_question and asks_average
     )
-    if asks_freight_per_order and not {
-        "order_item_totals",
-        "freight_cents",
-    }.issubset(set(re.findall(r"[a-z_][a-z0-9_]*", sql_lower))):
+    if (
+        olist_rules
+        and asks_freight_per_order
+        and not {
+            "order_item_totals",
+            "freight_cents",
+        }.issubset(set(re.findall(r"[a-z_][a-z0-9_]*", sql_lower)))
+    ):
         signals.append("FREIGHT_PER_ORDER_GRAIN_MISMATCH")
 
     asks_multiple_review_rows = "review row" in normalized_question and any(
         phrase in normalized_question for phrase in ("nhiều", "more than one", "> 1")
     )
-    if asks_multiple_review_rows and not {
-        "order_review_summary",
-        "review_row_count",
-    }.issubset(set(re.findall(r"[a-z_][a-z0-9_]*", sql_lower))):
+    if (
+        olist_rules
+        and asks_multiple_review_rows
+        and not {
+            "order_review_summary",
+            "review_row_count",
+        }.issubset(set(re.findall(r"[a-z_][a-z0-9_]*", sql_lower)))
+    ):
         signals.append("MULTIPLE_REVIEW_ROWS_RULE_MISSING")
 
     asks_multiple_photos = "photo" in normalized_question and any(
         phrase in normalized_question for phrase in ("more than one", "nhiều hơn một", "> 1")
     )
-    if asks_multiple_photos and "product_photos_qty" not in sql_lower:
+    if olist_rules and asks_multiple_photos and "product_photos_qty" not in sql_lower:
         signals.append("PRODUCT_PHOTO_QUANTITY_FILTER_MISSING")
 
     groups_month_only = bool(re.search(r"strftime\s*\(\s*['\"]%m['\"]", sql_lower))

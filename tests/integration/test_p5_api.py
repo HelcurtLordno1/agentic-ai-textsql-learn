@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import sqlite3
 from pathlib import Path
 from types import TracebackType
@@ -102,4 +103,31 @@ def test_api_rejects_arbitrary_ingest_and_unknown_database(tmp_path: Path) -> No
             "/queries", json={"db_id": "unknown", "question": "Count", "correction_enabled": False}
         )
         assert response.status_code == 404
+    container.close()
+
+
+def test_report_api_exposes_release_summary_without_details(tmp_path: Path) -> None:
+    container = make_container(tmp_path)
+    reports = tmp_path / "evals/reports"
+    reports.mkdir(parents=True)
+    (reports / "spider-release.json").write_text(
+        json.dumps(
+            {
+                "evaluation_id": "spider-dev-1034-p6-v1",
+                "benchmark_kind": "cross-domain-execution",
+                "release_status": "complete",
+                "case_count": 1034,
+                "result_accuracy": 0.5,
+                "failure_categories": {"EXECUTION_MISMATCH": 10},
+                "details": [{"generated_sql": "SELECT private_debug_value"}],
+            }
+        ),
+        encoding="utf-8",
+    )
+    with TestClient(create_app(container)) as client:
+        listed = client.get("/reports").json()
+        assert listed[0]["release_status"] == "complete"
+        report = client.get("/reports/spider-release").json()
+        assert "details" not in report
+        assert report["failure_categories"] == {"EXECUTION_MISMATCH": 10}
     container.close()

@@ -12,7 +12,13 @@ from agentic_text2sql.contracts.planning import LogicalPlan
 from agentic_text2sql.contracts.retrieval import SchemaContext
 from agentic_text2sql.contracts.sql import SqlCandidate
 
-GENERATOR_PROMPT_VERSION = "generator_v3_grounded"
+GENERATOR_PROMPT_VERSION = "generator_v4_cross_domain"
+
+
+def domain_rules(catalog: CatalogSnapshot, glossary_path: Path) -> str:
+    if catalog.db_id == "olist":
+        return glossary_path.read_text(encoding="utf-8")
+    return "No domain-specific business rules. Use only the supplied catalog and question."
 
 
 def catalog_as_sqlite_context(catalog: CatalogSnapshot) -> str:
@@ -55,7 +61,7 @@ class PromptBuilder:
                 if schema_context is not None
                 else "Full schema baseline"
             ),
-            business_glossary=self.glossary_path.read_text(encoding="utf-8"),
+            business_glossary=domain_rules(catalog, self.glossary_path),
             output_schema=json.dumps(SqlCandidate.model_json_schema(), ensure_ascii=False),
             catalog_hash=catalog.catalog_hash,
         )

@@ -54,7 +54,7 @@ def service(provider: QueueProvider) -> DirectBaselineService:
         planner=PlannerAgent(provider, ROOT / "configs/prompts/planner_v2.j2"),
         generation=GenerationService(
             PromptBuilder(
-                ROOT / "configs/prompts/generator_v3_grounded.j2",
+                ROOT / "configs/prompts/generator_v4_cross_domain.j2",
                 ROOT / "datasets/olist/business_glossary.yaml",
             ),
             GeneratorAgent(provider),

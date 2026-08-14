@@ -16,7 +16,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: uv sync --frozen --group dev
+      - run: uv sync --frozen --extra ui --group dev
       - run: uv run python scripts/generate_synthetic_fixture.py
       - run: uv run ruff check .
       - run: uv run ruff format --check .

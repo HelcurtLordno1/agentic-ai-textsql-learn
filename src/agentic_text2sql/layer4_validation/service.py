@@ -49,7 +49,9 @@ class ValidationService:
         result_report = validate_result(result, plan)
         if not result_report.accepted:
             if question is not None and plan is not None:
-                semantic_report = validate_semantics(question, plan, decision.normalized_sql)
+                semantic_report = validate_semantics(
+                    question, plan, decision.normalized_sql, db_id=catalog.db_id
+                )
                 result_report.signals.extend(
                     signal
                     for signal in semantic_report.signals
@@ -57,7 +59,9 @@ class ValidationService:
                 )
             return result_report, result
         if question is not None and plan is not None:
-            semantic_report = validate_semantics(question, plan, decision.normalized_sql)
+            semantic_report = validate_semantics(
+                question, plan, decision.normalized_sql, db_id=catalog.db_id
+            )
             semantic_report.warnings.extend(result_report.warnings)
             return semantic_report, result
         return result_report, result

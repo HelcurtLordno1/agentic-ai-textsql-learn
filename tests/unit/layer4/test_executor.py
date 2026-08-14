@@ -63,3 +63,8 @@ def test_timeout_interrupts_expensive_query(database: Path) -> None:
 def test_result_byte_cap(database: Path) -> None:
     with pytest.raises(ResultLimitError):
         ReadOnlySQLiteExecutor(max_bytes=10).execute(database, "SELECT * FROM values_table")
+
+
+def test_executor_replaces_malformed_legacy_utf8(database: Path) -> None:
+    result = ReadOnlySQLiteExecutor().execute(database, "SELECT CAST(x'80' AS TEXT)")
+    assert result.rows == [["�"]]

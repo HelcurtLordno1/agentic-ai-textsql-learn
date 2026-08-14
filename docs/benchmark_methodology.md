@@ -23,11 +23,28 @@ prompt version, hardware context and dataset/manifest hashes accompany gate evid
 
 Retrieval is not considered useful from recall alone. A same-version full-schema versus grounded
 generation ablation must show no result-accuracy regression and report both prompt-token savings and
-latency cost. Later Spider SQL evaluation will use the pinned official test-suite evaluator; schema
-recall is not presented as execution accuracy.
+latency cost. P6 reports local read-only Spider-dev execution equivalence with its exact comparator
+contract; schema recall is not presented as execution accuracy or as a hidden-test leaderboard.
 
 P4 correction ablation uses the frozen Olist smoke cases and reports trigger category, attempted and
 recovered counts, stop reason, LLM calls, repair count, correct-to-wrong regression, and end-to-end
 latency. Runtime validation is gold-blind. Because local model output varies across regenerated
 plans/candidates, a single favorable run is gate evidence for bounded behavior, not a stability
 claim; correction remains opt-in until repeated runs and the reviewed Olist-60 holdout pass.
+
+P6 full Spider dev uses a tracked 1,034-case/20-database manifest. It hashes `dev.json`,
+`tables.json`, each SQLite database and every selected row. Rows are reordered only by database and
+original dev index so a runtime can reuse one catalog while atomic checkpoints remain a strict
+manifest prefix. The report exposes execution accuracy, typed completion, valid-candidate rate,
+P50/P95, database/complexity slices and top failure categories.
+
+The local execution evaluator is intentionally described as local Spider-dev equivalence, not the
+official hidden Spider leaderboard. It treats gold `ORDER BY` as ordered, otherwise compares row
+multisets, permits candidate column permutations up to eight columns, normalizes finite numeric
+values to six decimals, and fails closed on evaluation timeout or SQLite error.
+Result materialization is capped at 100,000 rows per query to prevent an incorrect cross join from
+exhausting laptop memory; exceeding the cap is an evaluator execution failure, never a pass.
+Before live inference, an exact-gold evaluator self-test must score all 1,034 dev rows correctly.
+SQLite legacy text with malformed UTF-8 is decoded deterministically with replacement characters in
+both runtime and evaluator, avoiding environment-dependent execution failures while preserving
+candidate/gold comparability.

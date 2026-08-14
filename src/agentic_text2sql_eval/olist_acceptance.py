@@ -201,7 +201,7 @@ def evaluate_olist_acceptance(
         "details": details,
     }
     report_path.parent.mkdir(parents=True, exist_ok=True)
-    report_path.write_text(
-        json.dumps(report, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
-    )
+    temporary = report_path.with_suffix(f"{report_path.suffix}.tmp")
+    temporary.write_text(json.dumps(report, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    temporary.replace(report_path)
     return report
