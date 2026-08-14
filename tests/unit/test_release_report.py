@@ -17,7 +17,12 @@ def test_release_report_keeps_scores_separate_and_requires_complete_inputs(
     olist = write(tmp_path / "olist.json", {"case_count": 60, "result_accuracy": 0.9})
     spider = write(
         tmp_path / "spider.json",
-        {"case_count": 1034, "release_status": "complete", "result_accuracy": 0.5},
+        {
+            "case_count": 200,
+            "release_status": "complete",
+            "result_accuracy": 0.5,
+            "manifest": {"benchmark_profile": "laptop-stratified"},
+        },
     )
     retrieval = write(tmp_path / "retrieval.json", {"evaluation_id": "retrieval-modes"})
     correction = write(tmp_path / "correction.json", {"evaluation_id": "correction-off-on"})

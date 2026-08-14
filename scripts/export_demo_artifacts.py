@@ -19,6 +19,7 @@ ALLOWED_FIELDS = {
     "valid_candidate_count",
     "latency_ms",
     "by_complexity",
+    "by_partition",
     "failure_categories",
     "manifest",
     "provenance",

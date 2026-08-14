@@ -59,22 +59,23 @@ execution or arbitrary database paths.
 
 ## Gate P6 release evaluation
 
-P6 pins every Spider dev row, `dev.json`, `tables.json`, and all 20 SQLite databases by SHA-256.
-Inference checkpoints before any gold-aware evaluation; generated predictions and detailed reports
-remain ignored. Start the bounded Ollama supervisor, then create/verify the manifest and run the
-resumable release:
+P6 uses a laptop-stratified Spider-200 release: 100 regression plus 100 disjoint holdout cases over
+all 20 databases. It pins every selected row, `dev.json`, `tables.json`, and each SQLite database by
+SHA-256. Full Spider-1034 remains a tracked, runnable P6.1 profile for stronger hardware and is not
+claimed as completed by the laptop report. Inference checkpoints before any gold-aware evaluation:
 
 ```bash
 uv run python scripts/serve_ollama_guarded.py --profile acceptance-safe
-uv run python scripts/run_benchmark.py --create-manifest
+uv run python scripts/create_spider_laptop_manifest.py
 OLLAMA_BASE_URL=http://127.0.0.1:11434 TEXT2SQL_OLLAMA_NUM_GPU=6 \
   uv run python scripts/run_benchmark.py --correction --resume --max-new-cases 1
 # Remove --max-new-cases only after the pilot is healthy.
 OLLAMA_BASE_URL=http://127.0.0.1:11434 TEXT2SQL_OLLAMA_NUM_GPU=6 \
   uv run python scripts/run_guarded_spider.py \
   --profile interactive-balanced --batch-size 10 --cooldown-seconds 20 \
-  --predictions evals/predictions/spider-p6-1034-gpu6.jsonl \
-  --report evals/reports/spider-p6-1034.json
+  --manifest evals/configs/spider-laptop-200.json \
+  --predictions evals/predictions/spider-p6-200-gpu6.jsonl \
+  --report evals/reports/spider-p6-200.json
 ```
 
 Benchmark Lab renders Olist and Spider in separate tabs. Spider reports execution equivalence,

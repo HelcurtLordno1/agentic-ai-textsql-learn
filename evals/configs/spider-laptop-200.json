@@ -1,0 +1,1634 @@
+{
+  "version": 1,
+  "dataset": "spider-dev",
+  "benchmark_profile": "laptop-stratified",
+  "selection": "pinned regression-100 plus disjoint holdout-100, grouped by database",
+  "dev_sha256": "30d64a3fccde493226df79687aed9e4a1c0129525baf44f29c0573d914d758a4",
+  "tables_sha256": "61bb20aa401f03164e2d7f3b16509b7b5f79cc9c943ca7bd159046df1159e2ed",
+  "database_sha256": {
+    "battle_death": "12569f4493a9655639c4ea86ba4bd8a4ea6411e1b8ae0e1fdf3d6a995344265d",
+    "car_1": "9d851e396e02997a1de073ae982fe1e4b1769fdffce2fac6e325857a3a938709",
+    "concert_singer": "4fa1ba5ab4577e895271088b1dc44aa94be88e25a54293317a67584112ef059d",
+    "course_teach": "da45fcdde64ac2b9330146506b7653ad4417489d8e496e509045e1b02245d793",
+    "cre_Doc_Template_Mgt": "9c3fdd03d8795ecde60aae782ce50c4fb1d6c03de1401fcdd6dc177342a53df5",
+    "dog_kennels": "ea5fbc6cf6aaf500371c5c121c339d9802ba6f5fbecd948a5274c0b487a9f486",
+    "employee_hire_evaluation": "760fec5cc872ef0cdf99242614f05c93dbd00d422ac9da87ea64fcf555be7373",
+    "flight_2": "db777ba6488ae2b515cb138d71ff23c4533e5fd0355854648a1102faff3fb7af",
+    "museum_visit": "3217aee38d8e3661d374bf025591b7164a1179c568ef5d20f3c338035fc6e1dd",
+    "network_1": "bec92cd9a68d6f23469a0df246429299f44caaf75eab12275784e0bb7d0aa9ca",
+    "orchestra": "13b64af1cf6fcbd34953a44f951b2bf79bedc000b344549212dac1a9345e2f86",
+    "pets_1": "8ffe0ea9b3b034ca8860a2f18300a98c7583ce2522ea195726a04803f675e5bb",
+    "poker_player": "63fffd7b68524f07a742a74b74b95a4ba178e6419f3574b9ee78b8dda1df46ba",
+    "real_estate_properties": "5d0bd83afa93a843e68f892d8430fe625d7ed2508aae00a341926b0b5b478a29",
+    "singer": "5c1b72755d148c294b26d7b479307e8799b93485ac918720f953e2ab84d59a0a",
+    "student_transcripts_tracking": "5a1f4928a1fd36f6edb31c4f054203b2e2fab6b18e5951c4f5633628f82a8e56",
+    "tvshow": "1212c2e75cf1dcf3aeb4055331a85298b073d8a613ead77975b13bd3346b9fc4",
+    "voter_1": "815bf1611b8a32f649d292a6138562f1761a0c10cb256e20f6561199cff31531",
+    "world_1": "17b986695f16786d58d66f85e49dba87bdfe72953207ab9b1b49da9d2301ef65",
+    "wta_1": "8f20747456d7748674b4f05432f3de96446ced95b8bd5a6fd01284f6c28f727c"
+  },
+  "case_count": 200,
+  "database_count": 20,
+  "cases": [
+    {
+      "id": "spider_holdout_0491",
+      "dev_index": 491,
+      "db_id": "battle_death",
+      "case_hash": "2ecb40f337d07e412433b5e5bc47824fe0f6996e81521bf007c5e72483720c30",
+      "complexity": "easy",
+      "partition": "holdout"
+    },
+    {
+      "id": "spider_holdout_0495",
+      "dev_index": 495,
+      "db_id": "battle_death",
+      "case_hash": "d457a1055bf69e16c25f552f4db79bd94f953e722ad097010e5d97293b3d292f",
+      "complexity": "easy",
+      "partition": "holdout"
+    },
+    {
+      "id": "spider_holdout_0497",
+      "dev_index": 497,
+      "db_id": "battle_death",
+      "case_hash": "8bf9cde2f4346fb59b1b61d4d05b87beecfd846950d361cc0ec3627dbb8bf79f",
+      "complexity": "easy",
+      "partition": "holdout"
+    },
+    {
+      "id": "spider_holdout_0498",
+      "dev_index": 498,
+      "db_id": "battle_death",
+      "case_hash": "6a8e5ba0fbfa30d4491e1ba336061bdb07f99b016892cb04548e1b32f0b01090",
+      "complexity": "medium",
+      "partition": "holdout"
+    },
+    {
+      "id": "spider_holdout_0499",
+      "dev_index": 499,
+      "db_id": "battle_death",
+      "case_hash": "62137c8fea7a2b5734a8b95a3b4fde9465777c123d0275e67704f29156b77694",
+      "complexity": "extra",
+      "partition": "holdout"
+    },
+    {
+      "id": "spider_regression_0492",
+      "dev_index": 492,
+      "db_id": "battle_death",
+      "case_hash": "e2f4205baaf3fc0fddadae89d0fdb34d649d5b558aeae5a8a4f995f843876efd",
+      "complexity": "easy",
+      "partition": "regression"
+    },
+    {
+      "id": "spider_regression_0500",
+      "dev_index": 500,
+      "db_id": "battle_death",
+      "case_hash": "abcb37ae9fdd2e241e8f808fa0582d566d95d4d2a1ab8e20ba9ae17de4a8ceac",
+      "complexity": "medium",
+      "partition": "regression"
+    },
+    {
+      "id": "spider_regression_0501",
+      "dev_index": 501,
+      "db_id": "battle_death",
+      "case_hash": "2b95b2485ee8bfd90ed697ab6b032d9dc1f0fcf54545ad9defd0c388be39c916",
+      "complexity": "easy",
+      "partition": "regression"
+    },
+    {
+      "id": "spider_regression_0504",
+      "dev_index": 504,
+      "db_id": "battle_death",
+      "case_hash": "6216e232e8b3f4f163e4a3e7dc0c84c2bdf5e499b35da1dec7d0c7d10c4cf91a",
+      "complexity": "extra",
+      "partition": "regression"
+    },
+    {
+      "id": "spider_regression_0506",
+      "dev_index": 506,
+      "db_id": "battle_death",
+      "case_hash": "7425001eca523462db9fcbe2177060fb59dc1f2dca846785b1d1a05072907dab",
+      "complexity": "easy",
+      "partition": "regression"
+    },
+    {
+      "id": "spider_holdout_0098",
+      "dev_index": 98,
+      "db_id": "car_1",
+      "case_hash": "943811c25437ed74e51c92d6397e543f45b84a817f6efe307c719e2133fa338e",
+      "complexity": "hard",
+      "partition": "holdout"
+    },
+    {
+      "id": "spider_holdout_0114",
+      "dev_index": 114,
+      "db_id": "car_1",
+      "case_hash": "c67c34d5934b7c1e0684928e0143aff87fefcd36a34102753b7b6500d59b1368",
+      "complexity": "medium",
+      "partition": "holdout"
+    },
+    {
+      "id": "spider_holdout_0119",
+      "dev_index": 119,
+      "db_id": "car_1",
+      "case_hash": "3de56f7830ddd2985c9af5101aac0b1666cf7a07be650648a9cf2d414f2ee576",
+      "complexity": "easy",
+      "partition": "holdout"
+    },
+    {
+      "id": "spider_holdout_0120",
+      "dev_index": 120,
+      "db_id": "car_1",
+      "case_hash": "c3b471fba9d0120ca7c33f0210262326e27bbc796211f0d10b74af1a1b835d83",
+      "complexity": "easy",
+      "partition": "holdout"
+    },
+    {
+      "id": "spider_holdout_0134",
+      "dev_index": 134,
+      "db_id": "car_1",
+      "case_hash": "4dba67f59b93df864fefbf6791978f7802ed96c52422f079457ac0c3b2d84bfc",
+      "complexity": "medium",
+      "partition": "holdout"
+    },
+    {
+      "id": "spider_holdout_0173",
+      "dev_index": 173,
+      "db_id": "car_1",
+      "case_hash": "b336c58715586cf253842caa2e64e5ba6bc3d50a053e3da470e6d184b0dd80e1",
+      "complexity": "extra",
+      "partition": "holdout"
+    },
+    {
+      "id": "spider_regression_0102",
+      "dev_index": 102,
+      "db_id": "car_1",
+      "case_hash": "386965fbe7c0197bfa0372d4df7024e3b5c2d565a012d8b2d2ffd53a32beed3c",
+      "complexity": "hard",
+      "partition": "regression"
+    },
+    {
+      "id": "spider_regression_0107",
+      "dev_index": 107,
+      "db_id": "car_1",
+      "case_hash": "83865bea3a0f4b7bbaef1538fda740dcbdab3d25cd4e1b745c85def9c707a507",
+      "complexity": "medium",
+      "partition": "regression"
+    },
+    {
+      "id": "spider_regression_0139",
+      "dev_index": 139,
+      "db_id": "car_1",
+      "case_hash": "54df27d01eb86a4aa07d50604a24988e72f5e0a94a92968dbcf1160f27a0327d",
+      "complexity": "easy",
+      "partition": "regression"
+    },
+    {
+      "id": "spider_regression_0145",
+      "dev_index": 145,
+      "db_id": "car_1",
+      "case_hash": "dd6104ca5879738277d3fed1e5bd81080083260552504f1a9e57d97ea8b51839",
+      "complexity": "easy",
+      "partition": "regression"
+    },
+    {
+      "id": "spider_regression_0175",
+      "dev_index": 175,
+      "db_id": "car_1",
+      "case_hash": "46b2a8d58fc058b457722174e5d01b635bde35d76f4b706491ba05de1d3e7ee6",
+      "complexity": "extra",
+      "partition": "regression"
+    },
+    {
+      "id": "spider_holdout_0015",
+      "dev_index": 15,
+      "db_id": "concert_singer",
+      "case_hash": "a5a8cd8ba1a431f6992e3e3b84e2798fb42af4a6320171763c19345d9490a6e6",
+      "complexity": "easy",
+      "partition": "holdout"
+    },
+    {
+      "id": "spider_holdout_0016",
+      "dev_index": 16,
+      "db_id": "concert_singer",
+      "case_hash": "f8fe99f94d409f38f6a16c8fa473a41708efef43629e6a36f23994ad6aa8b50c",
+      "complexity": "easy",
+      "partition": "holdout"
+    },
+    {
+      "id": "spider_holdout_0025",
+      "dev_index": 25,
+      "db_id": "concert_singer",
+      "case_hash": "7c9ecb75bd0a23a44950c5776423e485d89201b33610da16a121dbe951c46f2c",
+      "complexity": "medium",
+      "partition": "holdout"
+    },
+    {
+      "id": "spider_holdout_0032",
+      "dev_index": 32,
+      "db_id": "concert_singer",
+      "case_hash": "2b5d86df0a5d0a045d0418583f6e89e0234edb75e311bdaddb4e680f58a31f1e",
+      "complexity": "extra",
+      "partition": "holdout"
+    },
+    {
+      "id": "spider_holdout_0039",
+      "dev_index": 39,
+      "db_id": "concert_singer",
+      "case_hash": "4ec2bbc1e5e8977e6b2925bf13f84d1dd83d9b433ab1c55e7a0a81d5892bf3b6",
+      "complexity": "easy",
+      "partition": "holdout"
+    },
+    {
+      "id": "spider_regression_0009",
+      "dev_index": 9,
+      "db_id": "concert_singer",
+      "case_hash": "44c52582c9be0ba7c9aa9261361722343932737a3ac12e1a01d75c47224625f0",
+      "complexity": "easy",
+      "partition": "regression"
+    },
+    {
+      "id": "spider_regression_0010",
+      "dev_index": 10,
+      "db_id": "concert_singer",
+      "case_hash": "f71005e2760ef3cbb5fee12957afc073ae1b2a4228ec8b1276ebe62bb0b62c22",
+      "complexity": "easy",
+      "partition": "regression"
+    },
+    {
+      "id": "spider_regression_0021",
+      "dev_index": 21,
+      "db_id": "concert_singer",
+      "case_hash": "a4d7148478be089dcdf8c8aaf7ed89c818158e34718c482740b557e09107aabb",
+      "complexity": "easy",
+      "partition": "regression"
+    },
+    {
+      "id": "spider_regression_0033",
+      "dev_index": 33,
+      "db_id": "concert_singer",
+      "case_hash": "718dce46720469ce5e74dc8f3ce43bd81293d1d71e859219d8d4c5f5f697e45e",
+      "complexity": "medium",
+      "partition": "regression"
+    },
+    {
+      "id": "spider_regression_0038",
+      "dev_index": 38,
+      "db_id": "concert_singer",
+      "case_hash": "c89ed264c80442c37e82857d1ee1bdf2846021af4e8d5a67f6e3963ba79f9e47",
+      "complexity": "hard",
+      "partition": "regression"
+    },
+    {
+      "id": "spider_holdout_0382",
+      "dev_index": 382,
+      "db_id": "course_teach",
+      "case_hash": "2b086a9778a529cda07567211aa38bc88284ffc5baeab9a2a4dfc071045ca4b2",
+      "complexity": "easy",
+      "partition": "holdout"
+    },
+    {
+      "id": "spider_holdout_0394",
+      "dev_index": 394,
+      "db_id": "course_teach",
+      "case_hash": "a0b709351ace1ee976fa9b440fcb57f9d6a958995dc16f7ec8ee9f78e4d48e1b",
+      "complexity": "easy",
+      "partition": "holdout"
+    },
+    {
+      "id": "spider_holdout_0395",
+      "dev_index": 395,
+      "db_id": "course_teach",
+      "case_hash": "f4f88f6116c381f86f2d1cc7c5432a4badc1de2d845c92eeec552c82248bebf3",
+      "complexity": "easy",
+      "partition": "holdout"
+    },
+    {
+      "id": "spider_holdout_0404",
+      "dev_index": 404,
+      "db_id": "course_teach",
+      "case_hash": "b76d8efe2b81f0e394c02faae99e0589e6dc3ace138c52201d914bc1871324bf",
+      "complexity": "hard",
+      "partition": "holdout"
+    },
+    {
+      "id": "spider_holdout_0406",
+      "dev_index": 406,
+      "db_id": "course_teach",
+      "case_hash": "db96b86b29de1eb54366445a0aaa6640900366c17c2106e75f6e2cca0f44dcba",
+      "complexity": "medium",
+      "partition": "holdout"
+    },
+    {
+      "id": "spider_regression_0385",
+      "dev_index": 385,
+      "db_id": "course_teach",
+      "case_hash": "3be50d8d356bede6cd6e23aa758c054ae8df83ee9346a2b5a91d516378cfbef5",
+      "complexity": "easy",
+      "partition": "regression"
+    },
+    {
+      "id": "spider_regression_0387",
+      "dev_index": 387,
+      "db_id": "course_teach",
+      "case_hash": "a1c16573adf8dc37efc329e6ff7e4ae1442a076dafebd3a24fdf3385b0fb1a05",
+      "complexity": "easy",
+      "partition": "regression"
+    },
+    {
+      "id": "spider_regression_0393",
+      "dev_index": 393,
+      "db_id": "course_teach",
+      "case_hash": "f55bc856cdc43fab92f64aeea02b0b3e04a08b537c3cd6c20dfaf93176f083ff",
+      "complexity": "easy",
+      "partition": "regression"
+    },
+    {
+      "id": "spider_regression_0397",
+      "dev_index": 397,
+      "db_id": "course_teach",
+      "case_hash": "ed2008ab442be0de3803c94c2d8c1f20b01d3c3e93824bc696efb7cd105e2b54",
+      "complexity": "medium",
+      "partition": "regression"
+    },
+    {
+      "id": "spider_regression_0401",
+      "dev_index": 401,
+      "db_id": "course_teach",
+      "case_hash": "d0a4855389463a37e550e4bb42d074ff624c8902729be8dad8f327e9ac04f411",
+      "complexity": "hard",
+      "partition": "regression"
+    },
+    {
+      "id": "spider_holdout_0303",
+      "dev_index": 303,
+      "db_id": "cre_Doc_Template_Mgt",
+      "case_hash": "1016c96a416667f16d97d449349baa1ff51e44ad6fa44aaa5fb0fefba78d3f1a",
+      "complexity": "easy",
+      "partition": "holdout"
+    },
+    {
+      "id": "spider_holdout_0334",
+      "dev_index": 334,
+      "db_id": "cre_Doc_Template_Mgt",
+      "case_hash": "92641897d99917e711ba600f3db448da2111d9568d660e8002161cebf3bc2f5b",
+      "complexity": "medium",
+      "partition": "holdout"
+    },
+    {
+      "id": "spider_holdout_0347",
+      "dev_index": 347,
+      "db_id": "cre_Doc_Template_Mgt",
+      "case_hash": "b22315a735790e6232ff5494bab2f7204b407f3b3e90df0790647a8688d83cf1",
+      "complexity": "easy",
+      "partition": "holdout"
+    },
+    {
+      "id": "spider_holdout_0351",
+      "dev_index": 351,
+      "db_id": "cre_Doc_Template_Mgt",
+      "case_hash": "520010a4417abcd0ba9225962fff5041f6b3bca91ce628cc5a8954be8b941eb5",
+      "complexity": "easy",
+      "partition": "holdout"
+    },
+    {
+      "id": "spider_holdout_0366",
+      "dev_index": 366,
+      "db_id": "cre_Doc_Template_Mgt",
+      "case_hash": "40b2aeee162849b8edda195696d80390969c39f55623e7f2f9157672b6592bea",
+      "complexity": "medium",
+      "partition": "holdout"
+    },
+    {
+      "id": "spider_holdout_0379",
+      "dev_index": 379,
+      "db_id": "cre_Doc_Template_Mgt",
+      "case_hash": "9a5fee61351e39210ad31324cc6cb0c664c26a61447351ee03b32b86ed9df999",
+      "complexity": "hard",
+      "partition": "holdout"
+    },
+    {
+      "id": "spider_regression_0302",
+      "dev_index": 302,
+      "db_id": "cre_Doc_Template_Mgt",
+      "case_hash": "dc83e0057c52980546b3e2ee3e00c1527ceee3e7ccc79b94c301b77dfc5285cf",
+      "complexity": "easy",
+      "partition": "regression"
+    },
+    {
+      "id": "spider_regression_0308",
+      "dev_index": 308,
+      "db_id": "cre_Doc_Template_Mgt",
+      "case_hash": "e760ade5428ca578fc58f3f3115c10ff36727e2fa1f60acc54b34fb4f5819666",
+      "complexity": "medium",
+      "partition": "regression"
+    },
+    {
+      "id": "spider_regression_0318",
+      "dev_index": 318,
+      "db_id": "cre_Doc_Template_Mgt",
+      "case_hash": "750abbc7982b67e4ca504f9fa551822003a4a9586d043d33dbbd4e2e0c383957",
+      "complexity": "easy",
+      "partition": "regression"
+    },
+    {
+      "id": "spider_regression_0327",
+      "dev_index": 327,
+      "db_id": "cre_Doc_Template_Mgt",
+      "case_hash": "160052082e49447ca5330179be46703bcf617127abfe549ab40e21704b5dfbd3",
+      "complexity": "easy",
+      "partition": "regression"
+    },
+    {
+      "id": "spider_regression_0339",
+      "dev_index": 339,
+      "db_id": "cre_Doc_Template_Mgt",
+      "case_hash": "7804aad1b9a024466633894404304dc2c615ce525e75687c6fd977f8d3de39ad",
+      "complexity": "medium",
+      "partition": "regression"
+    },
+    {
+      "id": "spider_holdout_0927",
+      "dev_index": 927,
+      "db_id": "dog_kennels",
+      "case_hash": "042c17f0606d4ee9bf3f6fedf8e9b576b0ff83b46a48ab21803796adaaa420b3",
+      "complexity": "extra",
+      "partition": "holdout"
+    },
+    {
+      "id": "spider_holdout_0930",
+      "dev_index": 930,
+      "db_id": "dog_kennels",
+      "case_hash": "60b9cccb53e313acff56b6b75e9d3949418e860a65b055a808ef0b8f0756a60d",
+      "complexity": "medium",
+      "partition": "holdout"
+    },
+    {
+      "id": "spider_holdout_0933",
+      "dev_index": 933,
+      "db_id": "dog_kennels",
+      "case_hash": "077ffad86dc0ca1d31c6c84840315bbe4544b3b45094c4b0396455cf1ba70793",
+      "complexity": "hard",
+      "partition": "holdout"
+    },
+    {
+      "id": "spider_holdout_0967",
+      "dev_index": 967,
+      "db_id": "dog_kennels",
+      "case_hash": "e52d860e1ee39eda71f6528c26479d6eb27bcf241aff856a3c6b1809cac9c1be",
+      "complexity": "easy",
+      "partition": "holdout"
+    },
+    {
+      "id": "spider_holdout_0976",
+      "dev_index": 976,
+      "db_id": "dog_kennels",
+      "case_hash": "3bb0027877193eb36cd5e29a23ee313e6478cdedaf72561b873a80422b045683",
+      "complexity": "easy",
+      "partition": "holdout"
+    },
+    {
+      "id": "spider_regression_0944",
+      "dev_index": 944,
+      "db_id": "dog_kennels",
+      "case_hash": "1de1808f96acc7b0695f8a42d5deecda6d21038ec3ed5fffb32793dd1104fe3d",
+      "complexity": "hard",
+      "partition": "regression"
+    },
+    {
+      "id": "spider_regression_0951",
+      "dev_index": 951,
+      "db_id": "dog_kennels",
+      "case_hash": "64facee91b0c272277d9b63a5a6ec3f3b0db26855b7bcc4680d8d839d2dc6025",
+      "complexity": "medium",
+      "partition": "regression"
+    },
+    {
+      "id": "spider_regression_0961",
+      "dev_index": 961,
+      "db_id": "dog_kennels",
+      "case_hash": "f32c9b6c41043de57c2b8a6f2ddc603589a590bbd774810b709f9ee54a7d3372",
+      "complexity": "hard",
+      "partition": "regression"
+    },
+    {
+      "id": "spider_regression_0962",
+      "dev_index": 962,
+      "db_id": "dog_kennels",
+      "case_hash": "53988f7276b90a58b06103e509e25d6ce05d869a3427c6908c51fd1a830631e9",
+      "complexity": "easy",
+      "partition": "regression"
+    },
+    {
+      "id": "spider_regression_0973",
+      "dev_index": 973,
+      "db_id": "dog_kennels",
+      "case_hash": "e350e72ed6c912410d7dd222c9bf2e95f33f7e305048eace2577c237d423f269",
+      "complexity": "easy",
+      "partition": "regression"
+    },
+    {
+      "id": "spider_holdout_0261",
+      "dev_index": 261,
+      "db_id": "employee_hire_evaluation",
+      "case_hash": "79cfc1b740073ecc193b771ce16130d3f10cf542f4a9ad5f4aaa1d76cb636a1f",
+      "complexity": "easy",
+      "partition": "holdout"
+    },
+    {
+      "id": "spider_holdout_0264",
+      "dev_index": 264,
+      "db_id": "employee_hire_evaluation",
+      "case_hash": "f0264937deb3f145fbf8ba533a90d3f2969384a9c729760bc438ac67d41fad4b",
+      "complexity": "easy",
+      "partition": "holdout"
+    },
+    {
+      "id": "spider_holdout_0267",
+      "dev_index": 267,
+      "db_id": "employee_hire_evaluation",
+      "case_hash": "22660784c561b7b91e3f63f2013fd75f0b03d47422c61b271838dbdcf3373f88",
+      "complexity": "easy",
+      "partition": "holdout"
+    },
+    {
+      "id": "spider_holdout_0275",
+      "dev_index": 275,
+      "db_id": "employee_hire_evaluation",
+      "case_hash": "e8adea8ba4806b873c37e56189528a7bcc664b5c1ee0fe5b9c7560dd05f7771e",
+      "complexity": "medium",
+      "partition": "holdout"
+    },
+    {
+      "id": "spider_holdout_0282",
+      "dev_index": 282,
+      "db_id": "employee_hire_evaluation",
+      "case_hash": "888fc1023ac61beb205625c79c858d767377cf001b35e3a328a249c682f8d2d5",
+      "complexity": "medium",
+      "partition": "holdout"
+    },
+    {
+      "id": "spider_regression_0260",
+      "dev_index": 260,
+      "db_id": "employee_hire_evaluation",
+      "case_hash": "83b5bb32d2c1ffa26ffe85a64a684635779f19c9dc71f4b64e168624b32f701a",
+      "complexity": "easy",
+      "partition": "regression"
+    },
+    {
+      "id": "spider_regression_0269",
+      "dev_index": 269,
+      "db_id": "employee_hire_evaluation",
+      "case_hash": "f45cce060f82740449a019d6a061c54b71fb7323a5b9debea104a5c5af34b794",
+      "complexity": "easy",
+      "partition": "regression"
+    },
+    {
+      "id": "spider_regression_0281",
+      "dev_index": 281,
+      "db_id": "employee_hire_evaluation",
+      "case_hash": "7d5991b07847fa23b5110265b9944050ac39fc39672809ef0bf302616f2015e1",
+      "complexity": "medium",
+      "partition": "regression"
+    },
+    {
+      "id": "spider_regression_0284",
+      "dev_index": 284,
+      "db_id": "employee_hire_evaluation",
+      "case_hash": "ee3cc79e6724dfc4c1d41ca7656bae102b9d6e78ab77798a650f58efb28b9e9f",
+      "complexity": "medium",
+      "partition": "regression"
+    },
+    {
+      "id": "spider_regression_0296",
+      "dev_index": 296,
+      "db_id": "employee_hire_evaluation",
+      "case_hash": "1f3fa2422be2317952f684e88dfd7109f30c913ca5c6eb0b9de6f56e4f407faa",
+      "complexity": "easy",
+      "partition": "regression"
+    },
+    {
+      "id": "spider_holdout_0186",
+      "dev_index": 186,
+      "db_id": "flight_2",
+      "case_hash": "4a128704a223d844754b9ace3a0fe09b2674c677a077abf3802a2a56a0f40c89",
+      "complexity": "easy",
+      "partition": "holdout"
+    },
+    {
+      "id": "spider_holdout_0201",
+      "dev_index": 201,
+      "db_id": "flight_2",
+      "case_hash": "a2d77fff4eb899c51f618a04091de23b14c62fb8c22e2b93062fe377b169bd56",
+      "complexity": "easy",
+      "partition": "holdout"
+    },
+    {
+      "id": "spider_holdout_0212",
+      "dev_index": 212,
+      "db_id": "flight_2",
+      "case_hash": "93c1687de736f56246e05a7da20d4fc240c6e31bf15a451c493c137cacecfc3b",
+      "complexity": "hard",
+      "partition": "holdout"
+    },
+    {
+      "id": "spider_holdout_0216",
+      "dev_index": 216,
+      "db_id": "flight_2",
+      "case_hash": "4d61b91b6a5eba6f590f9d8ce93f71722548a7aafb9fc6a25f0ee30f8aba91f6",
+      "complexity": "medium",
+      "partition": "holdout"
+    },
+    {
+      "id": "spider_holdout_0223",
+      "dev_index": 223,
+      "db_id": "flight_2",
+      "case_hash": "c02de2149e52278bdd9693fc145e15c35ce3601182df760808cbb94ec1309d37",
+      "complexity": "medium",
+      "partition": "holdout"
+    },
+    {
+      "id": "spider_regression_0202",
+      "dev_index": 202,
+      "db_id": "flight_2",
+      "case_hash": "b25d8c5d9a40c03a7a5fb6c3f17dbc3d3791c71a020811eb15964c43596471cc",
+      "complexity": "easy",
+      "partition": "regression"
+    },
+    {
+      "id": "spider_regression_0236",
+      "dev_index": 236,
+      "db_id": "flight_2",
+      "case_hash": "cb7933b1d547047c12208141b74a6d7eac81b356b99c358dcf845cafeb730780",
+      "complexity": "medium",
+      "partition": "regression"
+    },
+    {
+      "id": "spider_regression_0241",
+      "dev_index": 241,
+      "db_id": "flight_2",
+      "case_hash": "a125553d4a89603824395e3e2628c791b736357e049e793251e5546c1ddc8c27",
+      "complexity": "hard",
+      "partition": "regression"
+    },
+    {
+      "id": "spider_regression_0250",
+      "dev_index": 250,
+      "db_id": "flight_2",
+      "case_hash": "51957099f781136afb826ac5b0c830c52c621706e5d8f7a49d9fc72d0b8d7b10",
+      "complexity": "easy",
+      "partition": "regression"
+    },
+    {
+      "id": "spider_regression_0254",
+      "dev_index": 254,
+      "db_id": "flight_2",
+      "case_hash": "53560e0cc6b9c88b991261941661c4db1f46f3573468c22a56118b90961e6349",
+      "complexity": "medium",
+      "partition": "regression"
+    },
+    {
+      "id": "spider_holdout_0411",
+      "dev_index": 411,
+      "db_id": "museum_visit",
+      "case_hash": "a18e4459807e20106178b807d2716d20ddc0f3f4e149c2ad5f0cef53bceae308",
+      "complexity": "easy",
+      "partition": "holdout"
+    },
+    {
+      "id": "spider_holdout_0417",
+      "dev_index": 417,
+      "db_id": "museum_visit",
+      "case_hash": "d48af384f951219be2d85711cd03310d35493e3bd0a6f24da9ce57c3c10ef6f5",
+      "complexity": "easy",
+      "partition": "holdout"
+    },
+    {
+      "id": "spider_holdout_0418",
+      "dev_index": 418,
+      "db_id": "museum_visit",
+      "case_hash": "ca0c327ec55af895576e346c8813cf115ad94be0805412876c7cce7f931b2d05",
+      "complexity": "medium",
+      "partition": "holdout"
+    },
+    {
+      "id": "spider_holdout_0419",
+      "dev_index": 419,
+      "db_id": "museum_visit",
+      "case_hash": "54335e291cedeacdee06c95a62ad1ae0de9e2eb7c5e0d1f721bdfc3120c5ad08",
+      "complexity": "hard",
+      "partition": "holdout"
+    },
+    {
+      "id": "spider_holdout_0428",
+      "dev_index": 428,
+      "db_id": "museum_visit",
+      "case_hash": "481849f32b49fe1623395fbd8d215fb4d7fa400ef4670f6afd58bbf291ea8b62",
+      "complexity": "easy",
+      "partition": "holdout"
+    },
+    {
+      "id": "spider_regression_0412",
+      "dev_index": 412,
+      "db_id": "museum_visit",
+      "case_hash": "ae0bfbcdc0a4865bef845eb6a334b63dfc6b2f15288c0cc3bc92cdb965962497",
+      "complexity": "easy",
+      "partition": "regression"
+    },
+    {
+      "id": "spider_regression_0416",
+      "dev_index": 416,
+      "db_id": "museum_visit",
+      "case_hash": "24725992cafa10e72210b5148f9d934e653530c220ee5071d25c47bd67f64eff",
+      "complexity": "easy",
+      "partition": "regression"
+    },
+    {
+      "id": "spider_regression_0420",
+      "dev_index": 420,
+      "db_id": "museum_visit",
+      "case_hash": "1f4eeb0fbc27b1a951db374ebaaca7718ee56a13c86b3a04bf0f1a0c5d195f8b",
+      "complexity": "medium",
+      "partition": "regression"
+    },
+    {
+      "id": "spider_regression_0425",
+      "dev_index": 425,
+      "db_id": "museum_visit",
+      "case_hash": "7a5c27ebf5ad6c798eb3a0da52afdf7112dddf4f155c7c69e5044d6c30979f3d",
+      "complexity": "medium",
+      "partition": "regression"
+    },
+    {
+      "id": "spider_regression_0427",
+      "dev_index": 427,
+      "db_id": "museum_visit",
+      "case_hash": "972e7bd1e7cf2ebd00bd455f384f74f93a92d01e523904bd25cad52fcafed6cf",
+      "complexity": "hard",
+      "partition": "regression"
+    },
+    {
+      "id": "spider_holdout_0863",
+      "dev_index": 863,
+      "db_id": "network_1",
+      "case_hash": "1fd6704bd0275daf99d32dfeab7cd8c17825b4c5fb0fa1286c1f47da69690da3",
+      "complexity": "easy",
+      "partition": "holdout"
+    },
+    {
+      "id": "spider_holdout_0871",
+      "dev_index": 871,
+      "db_id": "network_1",
+      "case_hash": "aeec094f5dc954067244ffc95b0531d2d25f601e7f6e88fd1ceba7d4b3000795",
+      "complexity": "easy",
+      "partition": "holdout"
+    },
+    {
+      "id": "spider_holdout_0887",
+      "dev_index": 887,
+      "db_id": "network_1",
+      "case_hash": "5af6528bc81469f05247dd62189212b15a67df06ceab56d541b9168bf9dd74bd",
+      "complexity": "medium",
+      "partition": "holdout"
+    },
+    {
+      "id": "spider_holdout_0894",
+      "dev_index": 894,
+      "db_id": "network_1",
+      "case_hash": "559b0f306ed7aca72aea63fb101b6ab638671d2b939a83241caa77dd93b45995",
+      "complexity": "hard",
+      "partition": "holdout"
+    },
+    {
+      "id": "spider_holdout_0908",
+      "dev_index": 908,
+      "db_id": "network_1",
+      "case_hash": "ec244e7896a58e876aedb5e68dd3906d0fd041f5692d463d8a5edcb53ec78035",
+      "complexity": "hard",
+      "partition": "holdout"
+    },
+    {
+      "id": "spider_regression_0876",
+      "dev_index": 876,
+      "db_id": "network_1",
+      "case_hash": "1d83db16d1708db8c6f5dfb36f589d169900f8519c01e3fd6707914dfdae7c35",
+      "complexity": "easy",
+      "partition": "regression"
+    },
+    {
+      "id": "spider_regression_0881",
+      "dev_index": 881,
+      "db_id": "network_1",
+      "case_hash": "5f4f537d8716238f397f141ea08b27b67c8f049d598e0c6f0a6a4d77a39805fa",
+      "complexity": "medium",
+      "partition": "regression"
+    },
+    {
+      "id": "spider_regression_0898",
+      "dev_index": 898,
+      "db_id": "network_1",
+      "case_hash": "692217be2bf9395dedad5666d7511ce714502c97ee6faab0fd605b6a6f5ad5df",
+      "complexity": "hard",
+      "partition": "regression"
+    },
+    {
+      "id": "spider_regression_0903",
+      "dev_index": 903,
+      "db_id": "network_1",
+      "case_hash": "aeb9ad7e76b5e471637e4548397e164f180d194095130337bce097510572346b",
+      "complexity": "easy",
+      "partition": "regression"
+    },
+    {
+      "id": "spider_regression_0916",
+      "dev_index": 916,
+      "db_id": "network_1",
+      "case_hash": "fa5b3f3ab55c051b4b56e6c208bbcc624d449d242075e39773164b5ed0a9857a",
+      "complexity": "hard",
+      "partition": "regression"
+    },
+    {
+      "id": "spider_holdout_0822",
+      "dev_index": 822,
+      "db_id": "orchestra",
+      "case_hash": "67375b9443b58d6b537da219cbe437d9894e666ef3ed1dc3f7fb86d7f82fd478",
+      "complexity": "easy",
+      "partition": "holdout"
+    },
+    {
+      "id": "spider_holdout_0830",
+      "dev_index": 830,
+      "db_id": "orchestra",
+      "case_hash": "993e8bfe1dd2c45d5d349eba6929161c87529e0c995ee30e9b0f49e9a1d48112",
+      "complexity": "easy",
+      "partition": "holdout"
+    },
+    {
+      "id": "spider_holdout_0836",
+      "dev_index": 836,
+      "db_id": "orchestra",
+      "case_hash": "2423f38f21943fc18259a40a83cfa577dc1fa2ff9de2edca2deac2f041e3fd2f",
+      "complexity": "easy",
+      "partition": "holdout"
+    },
+    {
+      "id": "spider_holdout_0855",
+      "dev_index": 855,
+      "db_id": "orchestra",
+      "case_hash": "518eba4e991272c9a2dc513cb6f31ac09ac25ecb8647f3e0709f476e9d4576bb",
+      "complexity": "medium",
+      "partition": "holdout"
+    },
+    {
+      "id": "spider_holdout_0857",
+      "dev_index": 857,
+      "db_id": "orchestra",
+      "case_hash": "1e450d7c53af92104684cbb1a770e62eefe3a90164045d70221e53dd1ffdda2f",
+      "complexity": "hard",
+      "partition": "holdout"
+    },
+    {
+      "id": "spider_regression_0831",
+      "dev_index": 831,
+      "db_id": "orchestra",
+      "case_hash": "9ec2aff980f18cea0d887cd714a5fb422d790c2e63c1e68747f260865418046e",
+      "complexity": "easy",
+      "partition": "regression"
+    },
+    {
+      "id": "spider_regression_0839",
+      "dev_index": 839,
+      "db_id": "orchestra",
+      "case_hash": "283d9443e89a219110c16ee86a0d9aeb519cbee98787fa6e494b4a7c8aeded86",
+      "complexity": "easy",
+      "partition": "regression"
+    },
+    {
+      "id": "spider_regression_0844",
+      "dev_index": 844,
+      "db_id": "orchestra",
+      "case_hash": "5d2964ea5a669cb9e26d0c5ff194f14609c01fc501d24b7a0eaa30e8698b10b8",
+      "complexity": "medium",
+      "partition": "regression"
+    },
+    {
+      "id": "spider_regression_0850",
+      "dev_index": 850,
+      "db_id": "orchestra",
+      "case_hash": "6a68b72b1ba8a2a60129ac50823c8efb123aa7dfa83083850b3f1b5a0b03a79b",
+      "complexity": "easy",
+      "partition": "regression"
+    },
+    {
+      "id": "spider_regression_0861",
+      "dev_index": 861,
+      "db_id": "orchestra",
+      "case_hash": "3589ddd9e244ffda98454acf15b71be8d02f4700407fa7e61769210d9ab79c10",
+      "complexity": "hard",
+      "partition": "regression"
+    },
+    {
+      "id": "spider_holdout_0063",
+      "dev_index": 63,
+      "db_id": "pets_1",
+      "case_hash": "a4384db995b1a99febdbc270190a0759b5b88e9376b95377aa912f05b76830ba",
+      "complexity": "extra",
+      "partition": "holdout"
+    },
+    {
+      "id": "spider_holdout_0070",
+      "dev_index": 70,
+      "db_id": "pets_1",
+      "case_hash": "cdb3d6eb26ba5b28e81cc00db089b9262d30e6608e03578ab87342d27898011e",
+      "complexity": "easy",
+      "partition": "holdout"
+    },
+    {
+      "id": "spider_holdout_0071",
+      "dev_index": 71,
+      "db_id": "pets_1",
+      "case_hash": "4ae497268e96c0c8ae7654ca770b3d85a8cfbbc1bbd67456d35690c74699bae6",
+      "complexity": "easy",
+      "partition": "holdout"
+    },
+    {
+      "id": "spider_holdout_0080",
+      "dev_index": 80,
+      "db_id": "pets_1",
+      "case_hash": "84f675622259421b5396f4c097aef1fe1795b032602c8e4acc4d72d76936d572",
+      "complexity": "medium",
+      "partition": "holdout"
+    },
+    {
+      "id": "spider_holdout_0081",
+      "dev_index": 81,
+      "db_id": "pets_1",
+      "case_hash": "686ebeb58de85a6466081b4dc4922b4c1bc8db3bcc1fc578dc25219125df25a2",
+      "complexity": "hard",
+      "partition": "holdout"
+    },
+    {
+      "id": "spider_regression_0051",
+      "dev_index": 51,
+      "db_id": "pets_1",
+      "case_hash": "a382cd7d0de4c93589dbc0f10bba1477fb5881558f9acc358cfeda483a66a971",
+      "complexity": "medium",
+      "partition": "regression"
+    },
+    {
+      "id": "spider_regression_0059",
+      "dev_index": 59,
+      "db_id": "pets_1",
+      "case_hash": "9398e4f1edae7eee827934b3978173d0be1e3e0dd6d6e8c24dc1130810987c96",
+      "complexity": "extra",
+      "partition": "regression"
+    },
+    {
+      "id": "spider_regression_0067",
+      "dev_index": 67,
+      "db_id": "pets_1",
+      "case_hash": "4be698e7dbc6bfedecb4c4974ad89f1a47e949b66e05f74592a3d6dbaa1c534e",
+      "complexity": "easy",
+      "partition": "regression"
+    },
+    {
+      "id": "spider_regression_0068",
+      "dev_index": 68,
+      "db_id": "pets_1",
+      "case_hash": "c0c264213b4609f12265c422fcbe83b746bfd4e537bafd82bb7ab49a6326e922",
+      "complexity": "easy",
+      "partition": "regression"
+    },
+    {
+      "id": "spider_regression_0084",
+      "dev_index": 84,
+      "db_id": "pets_1",
+      "case_hash": "71ca114ed0f97f36cf065daee2e943486fa2c7f24f58d9ccfaabba368993966e",
+      "complexity": "hard",
+      "partition": "regression"
+    },
+    {
+      "id": "spider_holdout_0649",
+      "dev_index": 649,
+      "db_id": "poker_player",
+      "case_hash": "397638f7fc8e87c1ef1c2e38fb11e74bdef5ef366a946bb986de289dd02af31f",
+      "complexity": "easy",
+      "partition": "holdout"
+    },
+    {
+      "id": "spider_holdout_0656",
+      "dev_index": 656,
+      "db_id": "poker_player",
+      "case_hash": "c7e069530a26286b15dce7335e3a7e656b7e67df35585bda4c677aa569a3a15b",
+      "complexity": "easy",
+      "partition": "holdout"
+    },
+    {
+      "id": "spider_holdout_0657",
+      "dev_index": 657,
+      "db_id": "poker_player",
+      "case_hash": "926697b0561b5e7e598c8e8f6ae032fe15b1485094ca720240a683fc51e0e4d0",
+      "complexity": "easy",
+      "partition": "holdout"
+    },
+    {
+      "id": "spider_holdout_0662",
+      "dev_index": 662,
+      "db_id": "poker_player",
+      "case_hash": "c4ab94dd0d94d4064cb54bb6121ddf2a265601e66baa62de8293db1776b5d539",
+      "complexity": "medium",
+      "partition": "holdout"
+    },
+    {
+      "id": "spider_holdout_0677",
+      "dev_index": 677,
+      "db_id": "poker_player",
+      "case_hash": "420f669162eb89cf1fd0b7dde6f2dc808b88d8b698916c7edabc306b1a1d7596",
+      "complexity": "medium",
+      "partition": "holdout"
+    },
+    {
+      "id": "spider_regression_0651",
+      "dev_index": 651,
+      "db_id": "poker_player",
+      "case_hash": "54763211b775ffd45d749a72520edf38dc25a1673bae69385993008727bc93f4",
+      "complexity": "easy",
+      "partition": "regression"
+    },
+    {
+      "id": "spider_regression_0661",
+      "dev_index": 661,
+      "db_id": "poker_player",
+      "case_hash": "cbba8fd28c51caabe28bde661704fce4d2f9a5bfb55c4bfb2b5d8c9ea4d44f8d",
+      "complexity": "medium",
+      "partition": "regression"
+    },
+    {
+      "id": "spider_regression_0679",
+      "dev_index": 679,
+      "db_id": "poker_player",
+      "case_hash": "979706da04e8be6bc2bf04b29dc1b84aaa664d551979594ad84f5c482ef9547c",
+      "complexity": "easy",
+      "partition": "regression"
+    },
+    {
+      "id": "spider_regression_0682",
+      "dev_index": 682,
+      "db_id": "poker_player",
+      "case_hash": "f540fb0359e62624c9b44efde47b4bcec34ba5ee50255288323e6a74b6a0cda3",
+      "complexity": "easy",
+      "partition": "regression"
+    },
+    {
+      "id": "spider_regression_0683",
+      "dev_index": 683,
+      "db_id": "poker_player",
+      "case_hash": "563c9787d7b3ab697165fa0ba1205571a3750c1b493a6b2c9a8088f70e7d7635",
+      "complexity": "medium",
+      "partition": "regression"
+    },
+    {
+      "id": "spider_regression_1030",
+      "dev_index": 1030,
+      "db_id": "real_estate_properties",
+      "case_hash": "b571632927e5ceb4723979d421bf8bff659c4ca18c6827f91af24aab7622ba84",
+      "complexity": "easy",
+      "partition": "regression"
+    },
+    {
+      "id": "spider_regression_1031",
+      "dev_index": 1031,
+      "db_id": "real_estate_properties",
+      "case_hash": "bf79257e9657623c4d7667108ea6c7f12bb633cf21143928cca3c575618d14aa",
+      "complexity": "medium",
+      "partition": "regression"
+    },
+    {
+      "id": "spider_regression_1032",
+      "dev_index": 1032,
+      "db_id": "real_estate_properties",
+      "case_hash": "7b2a07d331efd3768e012057796cb7f10cdb3a7898d9ed61364db89ef61c056d",
+      "complexity": "medium",
+      "partition": "regression"
+    },
+    {
+      "id": "spider_regression_1033",
+      "dev_index": 1033,
+      "db_id": "real_estate_properties",
+      "case_hash": "3e9b64be948fb66072dd51b8f039812f08ff9c7112646bcb9ca2b40c04f006ce",
+      "complexity": "hard",
+      "partition": "regression"
+    },
+    {
+      "id": "spider_holdout_1001",
+      "dev_index": 1001,
+      "db_id": "singer",
+      "case_hash": "30d2cd3f84b0a184d8f743fffc72b94d7bdd5c96d78a0dfbed4ba4b156a8d7e4",
+      "complexity": "easy",
+      "partition": "holdout"
+    },
+    {
+      "id": "spider_holdout_1003",
+      "dev_index": 1003,
+      "db_id": "singer",
+      "case_hash": "b34bf62e95d5a92091a0bceb57b186fdaa4cbe4c24196fa8a31d3d050c578a74",
+      "complexity": "easy",
+      "partition": "holdout"
+    },
+    {
+      "id": "spider_holdout_1005",
+      "dev_index": 1005,
+      "db_id": "singer",
+      "case_hash": "8a7d4df6ce173ffed2a84dda75fd7d118342ca7f9742f7f39bc8fb2090e1affc",
+      "complexity": "easy",
+      "partition": "holdout"
+    },
+    {
+      "id": "spider_holdout_1018",
+      "dev_index": 1018,
+      "db_id": "singer",
+      "case_hash": "9308f9a8c664af67688577fa39c2dcfbe794e8b392f2ac62cdcf73e76ae57f7b",
+      "complexity": "medium",
+      "partition": "holdout"
+    },
+    {
+      "id": "spider_holdout_1022",
+      "dev_index": 1022,
+      "db_id": "singer",
+      "case_hash": "6e8b8996e6b4050b58fb0a0740c7ff1a6cb36468abac014f41f57ea5048fab20",
+      "complexity": "hard",
+      "partition": "holdout"
+    },
+    {
+      "id": "spider_regression_1007",
+      "dev_index": 1007,
+      "db_id": "singer",
+      "case_hash": "bd0301a31d3a19729969370f3380eb62a80c9627c3fc917486abb16e1ce99f54",
+      "complexity": "easy",
+      "partition": "regression"
+    },
+    {
+      "id": "spider_regression_1008",
+      "dev_index": 1008,
+      "db_id": "singer",
+      "case_hash": "3c7f2139a2b283395f21b8e178f10a5924a1f6d14ba05acf3866e1993aeb89e5",
+      "complexity": "easy",
+      "partition": "regression"
+    },
+    {
+      "id": "spider_regression_1012",
+      "dev_index": 1012,
+      "db_id": "singer",
+      "case_hash": "8ec706e5663f9c5fe9f4d55b99011e1225d6c8b5946335508e070dcaeb019e6e",
+      "complexity": "easy",
+      "partition": "regression"
+    },
+    {
+      "id": "spider_regression_1019",
+      "dev_index": 1019,
+      "db_id": "singer",
+      "case_hash": "cbb7a0599772126c1022134677b8e3a1abbce4cf3513407e12c13cb15f72c607",
+      "complexity": "medium",
+      "partition": "regression"
+    },
+    {
+      "id": "spider_regression_1029",
+      "dev_index": 1029,
+      "db_id": "singer",
+      "case_hash": "884c0114a9ff042dd642d1ad33abcb78e59dfd54282d55cd0dc4be5c5ec2877f",
+      "complexity": "hard",
+      "partition": "regression"
+    },
+    {
+      "id": "spider_holdout_0507",
+      "dev_index": 507,
+      "db_id": "student_transcripts_tracking",
+      "case_hash": "f6ec991438c0e6c62b0971370266412ecaa7ef5aeacc1a8b5729d4d5844c7f53",
+      "complexity": "easy",
+      "partition": "holdout"
+    },
+    {
+      "id": "spider_holdout_0525",
+      "dev_index": 525,
+      "db_id": "student_transcripts_tracking",
+      "case_hash": "68a17ecc4aa412e858691ef0eed0b0cffbf47d9640f773e22aaf07d5f85722f3",
+      "complexity": "hard",
+      "partition": "holdout"
+    },
+    {
+      "id": "spider_holdout_0542",
+      "dev_index": 542,
+      "db_id": "student_transcripts_tracking",
+      "case_hash": "952aacfed7074befe6037f6308c2186426697911ce270bdaf62f0de3422d4477",
+      "complexity": "medium",
+      "partition": "holdout"
+    },
+    {
+      "id": "spider_holdout_0555",
+      "dev_index": 555,
+      "db_id": "student_transcripts_tracking",
+      "case_hash": "3e57ada58de33b822cf28bf2f8f3ac90ed833e83473f547c9b65a0434ca6a372",
+      "complexity": "easy",
+      "partition": "holdout"
+    },
+    {
+      "id": "spider_holdout_0570",
+      "dev_index": 570,
+      "db_id": "student_transcripts_tracking",
+      "case_hash": "a2df81e86e75469302f924ddbe70b334d57f05f718ce8927aaa037de8b71aed7",
+      "complexity": "easy",
+      "partition": "holdout"
+    },
+    {
+      "id": "spider_regression_0534",
+      "dev_index": 534,
+      "db_id": "student_transcripts_tracking",
+      "case_hash": "6c37b4b30ef76d1b7a7734e92ca5028d09adf30b90fd2d69abd4287852bc2460",
+      "complexity": "hard",
+      "partition": "regression"
+    },
+    {
+      "id": "spider_regression_0558",
+      "dev_index": 558,
+      "db_id": "student_transcripts_tracking",
+      "case_hash": "f71c61d658cfc507b27c8c389a8cc87a524af326d90361f8b431047db126f7c3",
+      "complexity": "easy",
+      "partition": "regression"
+    },
+    {
+      "id": "spider_regression_0562",
+      "dev_index": 562,
+      "db_id": "student_transcripts_tracking",
+      "case_hash": "8c41cf351272a808628416167b2ea58e8b07f6a2d300e8c4f8fa1090373d6e1f",
+      "complexity": "medium",
+      "partition": "regression"
+    },
+    {
+      "id": "spider_regression_0578",
+      "dev_index": 578,
+      "db_id": "student_transcripts_tracking",
+      "case_hash": "a73ff3d76b54697420ef02caaebc6303b40e3e4663663c6517e58592a1604602",
+      "complexity": "easy",
+      "partition": "regression"
+    },
+    {
+      "id": "spider_regression_0580",
+      "dev_index": 580,
+      "db_id": "student_transcripts_tracking",
+      "case_hash": "3dc8c29ef7733743518897aad26f7f30a6d928cf0fb7c022da2c1464bbe0bc20",
+      "complexity": "easy",
+      "partition": "regression"
+    },
+    {
+      "id": "spider_holdout_0609",
+      "dev_index": 609,
+      "db_id": "tvshow",
+      "case_hash": "16da738564caa98c2f4560dfe36ea0c8e13b6d24e2797161e2f198062f8749d2",
+      "complexity": "medium",
+      "partition": "holdout"
+    },
+    {
+      "id": "spider_holdout_0614",
+      "dev_index": 614,
+      "db_id": "tvshow",
+      "case_hash": "20bb08ee1f5b40643e59cdf7bbca559c1a44f4a8c60b3d26b46e9e31237ad05b",
+      "complexity": "easy",
+      "partition": "holdout"
+    },
+    {
+      "id": "spider_holdout_0620",
+      "dev_index": 620,
+      "db_id": "tvshow",
+      "case_hash": "d39364b673519d3ae2c43f5c7e74103485a00061c66631cf5b73ffd921117d9d",
+      "complexity": "easy",
+      "partition": "holdout"
+    },
+    {
+      "id": "spider_holdout_0621",
+      "dev_index": 621,
+      "db_id": "tvshow",
+      "case_hash": "8e28772487c21a1ef2f9611e45a0c203c544417d3a20762a2f6259b4b15c189b",
+      "complexity": "easy",
+      "partition": "holdout"
+    },
+    {
+      "id": "spider_holdout_0643",
+      "dev_index": 643,
+      "db_id": "tvshow",
+      "case_hash": "3628340b0c800b7c306c0b28137bd618d3f3121e63a979dc2a0602e9d5cd51aa",
+      "complexity": "hard",
+      "partition": "holdout"
+    },
+    {
+      "id": "spider_regression_0590",
+      "dev_index": 590,
+      "db_id": "tvshow",
+      "case_hash": "d58aec81a53c5e9f55ddeed9e6e412db916cf2a20db70f3368f35a2e1fbcb765",
+      "complexity": "easy",
+      "partition": "regression"
+    },
+    {
+      "id": "spider_regression_0594",
+      "dev_index": 594,
+      "db_id": "tvshow",
+      "case_hash": "717e90b2ebe9b90fc243ef573b17141f83df542d4ca67b25374ef4fba28e8da3",
+      "complexity": "easy",
+      "partition": "regression"
+    },
+    {
+      "id": "spider_regression_0623",
+      "dev_index": 623,
+      "db_id": "tvshow",
+      "case_hash": "fc6a11007f8b44a0f3a5d1dde52a89564670efb2f28d366028282158c52b0762",
+      "complexity": "medium",
+      "partition": "regression"
+    },
+    {
+      "id": "spider_regression_0627",
+      "dev_index": 627,
+      "db_id": "tvshow",
+      "case_hash": "2cebefebc6b4be35ea803bf4fb3c520e90d1c44250a89e5590a61de038204a06",
+      "complexity": "easy",
+      "partition": "regression"
+    },
+    {
+      "id": "spider_regression_0642",
+      "dev_index": 642,
+      "db_id": "tvshow",
+      "case_hash": "1c4efe34e82b6d9baf28d7755c6d4b125d09030b7b559b78149255bff3abef7a",
+      "complexity": "medium",
+      "partition": "regression"
+    },
+    {
+      "id": "spider_holdout_0687",
+      "dev_index": 687,
+      "db_id": "voter_1",
+      "case_hash": "e6f36143b4ecef74637496151e37adac515f998d31c5196879fc10d36928d861",
+      "complexity": "easy",
+      "partition": "holdout"
+    },
+    {
+      "id": "spider_holdout_0688",
+      "dev_index": 688,
+      "db_id": "voter_1",
+      "case_hash": "3a4f68182d9713bc262fcca957ba8c465b649be841edcdf40fcf566ec994b785",
+      "complexity": "easy",
+      "partition": "holdout"
+    },
+    {
+      "id": "spider_holdout_0690",
+      "dev_index": 690,
+      "db_id": "voter_1",
+      "case_hash": "7f9b8cf7bc0f31b8d7972a2810471ecfc07aad383e0be3cab8ef9644eae5609a",
+      "complexity": "easy",
+      "partition": "holdout"
+    },
+    {
+      "id": "spider_holdout_0697",
+      "dev_index": 697,
+      "db_id": "voter_1",
+      "case_hash": "ca47942a128bbe79c97170c143e74fe98453d01c4beacf9fb0b398b9f0a7467d",
+      "complexity": "medium",
+      "partition": "holdout"
+    },
+    {
+      "id": "spider_holdout_0700",
+      "dev_index": 700,
+      "db_id": "voter_1",
+      "case_hash": "8ab182a4832c597984d24e2feb1390983617d0430d74fbb0308845d2294b419a",
+      "complexity": "extra",
+      "partition": "holdout"
+    },
+    {
+      "id": "spider_regression_0689",
+      "dev_index": 689,
+      "db_id": "voter_1",
+      "case_hash": "18f2597a0694e558835ef1b3f52e856bf01b53f0421bc3724e2663f549b495b6",
+      "complexity": "easy",
+      "partition": "regression"
+    },
+    {
+      "id": "spider_regression_0691",
+      "dev_index": 691,
+      "db_id": "voter_1",
+      "case_hash": "cca238acb13b9856d89b38028da482c850031e6fc2b7eeb2bb22e0703d97b71b",
+      "complexity": "easy",
+      "partition": "regression"
+    },
+    {
+      "id": "spider_regression_0692",
+      "dev_index": 692,
+      "db_id": "voter_1",
+      "case_hash": "5c598642ad035e80fbff1ce930a2770f532cef39063a52bc4a1fd50c5e2b9504",
+      "complexity": "easy",
+      "partition": "regression"
+    },
+    {
+      "id": "spider_regression_0694",
+      "dev_index": 694,
+      "db_id": "voter_1",
+      "case_hash": "011f8aa34d2532b9df7c368ecff79bb754c36a2663cdf7c7e771ca310b247443",
+      "complexity": "hard",
+      "partition": "regression"
+    },
+    {
+      "id": "spider_regression_0699",
+      "dev_index": 699,
+      "db_id": "voter_1",
+      "case_hash": "8d30816a52e7e14eb1ee2b9281cff62ecda8da84dd7fef429da8a094f7e10c76",
+      "complexity": "medium",
+      "partition": "regression"
+    },
+    {
+      "id": "spider_holdout_0702",
+      "dev_index": 702,
+      "db_id": "world_1",
+      "case_hash": "ab0a7ca473a35b344971f6f96ceba784802209c49fb11ad3ca4b3ebfdfc82b9f",
+      "complexity": "easy",
+      "partition": "holdout"
+    },
+    {
+      "id": "spider_holdout_0709",
+      "dev_index": 709,
+      "db_id": "world_1",
+      "case_hash": "3b086612fe16e24a870ef4c81b835997c39830205a204ef005695a0d76cefbed",
+      "complexity": "easy",
+      "partition": "holdout"
+    },
+    {
+      "id": "spider_holdout_0742",
+      "dev_index": 742,
+      "db_id": "world_1",
+      "case_hash": "4ebee4bb3d7d9edbca25dfb17b40cc9f3d881551820807be1b86e4689bdfc2f8",
+      "complexity": "medium",
+      "partition": "holdout"
+    },
+    {
+      "id": "spider_holdout_0746",
+      "dev_index": 746,
+      "db_id": "world_1",
+      "case_hash": "636b29f067eeb907d46e466c8305db5ca92c4818bd0cd82cc841ee5b9fc0d44d",
+      "complexity": "extra",
+      "partition": "holdout"
+    },
+    {
+      "id": "spider_holdout_0751",
+      "dev_index": 751,
+      "db_id": "world_1",
+      "case_hash": "a511d9966b20f468785b6623c915a018f576342b3411778928bd7e1657129ba5",
+      "complexity": "medium",
+      "partition": "holdout"
+    },
+    {
+      "id": "spider_holdout_0791",
+      "dev_index": 791,
+      "db_id": "world_1",
+      "case_hash": "d360bd9d16c26717bdce2a65ada45184d22899a57f42c2b138d38cfe387f3dae",
+      "complexity": "easy",
+      "partition": "holdout"
+    },
+    {
+      "id": "spider_holdout_0795",
+      "dev_index": 795,
+      "db_id": "world_1",
+      "case_hash": "48b9e3877af54e75cf673b211af37600a2deca54e41a1aab3a6c78d1e7d2a001",
+      "complexity": "hard",
+      "partition": "holdout"
+    },
+    {
+      "id": "spider_holdout_0803",
+      "dev_index": 803,
+      "db_id": "world_1",
+      "case_hash": "72543f77740eea4691ea4271b206bf0d9f21a5671b572fde232e834d4dd9f32e",
+      "complexity": "easy",
+      "partition": "holdout"
+    },
+    {
+      "id": "spider_regression_0707",
+      "dev_index": 707,
+      "db_id": "world_1",
+      "case_hash": "8c32d62c042e446b410cdc8ba1b2273691b2745a5f08e1d30274c1cb5954806d",
+      "complexity": "easy",
+      "partition": "regression"
+    },
+    {
+      "id": "spider_regression_0715",
+      "dev_index": 715,
+      "db_id": "world_1",
+      "case_hash": "ceb93a1fcec740cea818faac4c2dcf1841224f0ac303bae34bd98d1031a1921e",
+      "complexity": "easy",
+      "partition": "regression"
+    },
+    {
+      "id": "spider_regression_0755",
+      "dev_index": 755,
+      "db_id": "world_1",
+      "case_hash": "399f19c7a5ac6ab49fe1534876aa9e7991e440690691edbe33492ca3ff00ffc2",
+      "complexity": "extra",
+      "partition": "regression"
+    },
+    {
+      "id": "spider_regression_0763",
+      "dev_index": 763,
+      "db_id": "world_1",
+      "case_hash": "4d531efdd01c4607a3f48d8631a4043701d4836a6421899fbfecb305b2848e3e",
+      "complexity": "easy",
+      "partition": "regression"
+    },
+    {
+      "id": "spider_regression_0773",
+      "dev_index": 773,
+      "db_id": "world_1",
+      "case_hash": "66bff8905610f5c686d1c639a631edf5b1fa05b446ba69c71521f9f1f94cc034",
+      "complexity": "medium",
+      "partition": "regression"
+    },
+    {
+      "id": "spider_regression_0798",
+      "dev_index": 798,
+      "db_id": "world_1",
+      "case_hash": "e85f1bd41d5444cc33a172314cb83d9e0836ca0407af31c230e64f5045755623",
+      "complexity": "medium",
+      "partition": "regression"
+    },
+    {
+      "id": "spider_holdout_0459",
+      "dev_index": 459,
+      "db_id": "wta_1",
+      "case_hash": "cea392681f2968212128647d918283139043242eb0db824cfc7b2daba377250d",
+      "complexity": "medium",
+      "partition": "holdout"
+    },
+    {
+      "id": "spider_holdout_0476",
+      "dev_index": 476,
+      "db_id": "wta_1",
+      "case_hash": "a7df5c19a4303c0633b1fad549694a618f3d40689543dae84ff2bbd9b72ee246",
+      "complexity": "easy",
+      "partition": "holdout"
+    },
+    {
+      "id": "spider_holdout_0482",
+      "dev_index": 482,
+      "db_id": "wta_1",
+      "case_hash": "ecfc65abdd8d5cbd2e9df589a54132aacce45cbbced00c13d0e60e140e9df2bd",
+      "complexity": "easy",
+      "partition": "holdout"
+    },
+    {
+      "id": "spider_holdout_0485",
+      "dev_index": 485,
+      "db_id": "wta_1",
+      "case_hash": "718a00e618f057f1fa47a3243398453152586529aeba88c1c15c126ebcd1e10e",
+      "complexity": "easy",
+      "partition": "holdout"
+    },
+    {
+      "id": "spider_holdout_0489",
+      "dev_index": 489,
+      "db_id": "wta_1",
+      "case_hash": "245adbd563849dd8e8b56059838dbf16fe12b9acae1420e6d2354ba07f954a2b",
+      "complexity": "easy",
+      "partition": "holdout"
+    },
+    {
+      "id": "spider_regression_0431",
+      "dev_index": 431,
+      "db_id": "wta_1",
+      "case_hash": "ae7b1b69cc611ecfaf8c802fe4b5fa5084ae70ea4891953cbd70d53b7162a08d",
+      "complexity": "easy",
+      "partition": "regression"
+    },
+    {
+      "id": "spider_regression_0441",
+      "dev_index": 441,
+      "db_id": "wta_1",
+      "case_hash": "58f8fb28f300c71164c5afae0be7c680b6f976b0e7c9445a0a59f7fe893c06f0",
+      "complexity": "easy",
+      "partition": "regression"
+    },
+    {
+      "id": "spider_regression_0466",
+      "dev_index": 466,
+      "db_id": "wta_1",
+      "case_hash": "eda098de88d0f784bbb6c606b3c174784b65ce515bcefd2b14b592db126f1679",
+      "complexity": "easy",
+      "partition": "regression"
+    },
+    {
+      "id": "spider_regression_0484",
+      "dev_index": 484,
+      "db_id": "wta_1",
+      "case_hash": "30801399d6a57da4295dcb7380cb5e747dbba027b113920dbddb8f8293efb69e",
+      "complexity": "easy",
+      "partition": "regression"
+    },
+    {
+      "id": "spider_regression_0487",
+      "dev_index": 487,
+      "db_id": "wta_1",
+      "case_hash": "abbed3b179eb2117bbc4b4c4be3a93aec7ee634527809835fc6443d6b9d0e5bd",
+      "complexity": "medium",
+      "partition": "regression"
+    }
+  ]
+}

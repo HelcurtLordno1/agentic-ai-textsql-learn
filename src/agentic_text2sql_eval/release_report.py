@@ -30,8 +30,16 @@ def build_release_report(
     spider = _load(spider_report_path)
     if int(olist.get("case_count", 0)) != 60:
         raise ValueError("P6 requires a complete Olist-60 report")
-    if int(spider.get("case_count", 0)) != 1034 or spider.get("release_status") != "complete":
-        raise ValueError("P6 requires a complete Spider-dev-1034 release report")
+    spider_manifest = spider.get("manifest")
+    profile = (
+        spider_manifest.get("benchmark_profile") if isinstance(spider_manifest, dict) else None
+    )
+    if (
+        int(spider.get("case_count", 0)) != 200
+        or profile != "laptop-stratified"
+        or spider.get("release_status") != "complete"
+    ):
+        raise ValueError("P6 requires a complete laptop-stratified Spider-200 report")
     ablations = {
         kind: {
             "path": str(path),
@@ -58,6 +66,8 @@ def build_release_report(
             "evaluation_id": spider.get("evaluation_id"),
             "case_count": spider["case_count"],
             "database_count": spider.get("database_count"),
+            "benchmark_profile": profile,
+            "by_partition": spider.get("by_partition"),
             "result_accuracy": spider.get("result_accuracy"),
             "workflow_completion_rate": spider.get("workflow_completion_rate"),
             "sha256": _hash(spider_report_path),

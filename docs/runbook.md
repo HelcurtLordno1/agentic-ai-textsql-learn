@@ -91,26 +91,30 @@ Inference receives only the question, database and schema. After the model runti
 evaluator opens the reviewed Olist-60 gold SQL on a read-only database copy. Predictions and full
 reports remain ignored; `docs/evidence/p5_gate.md` is the tracked summary.
 
-## Gate P6 full release
+## Gate P6 laptop release
 
 Use a persistent `--models-dir` when a model cache must survive OS cleanup; `/tmp` is disposable.
 The server refuses to start if preflight resources are already unsafe.
 
 ```bash
 uv run python scripts/serve_ollama_guarded.py \
-  --profile acceptance-safe \
+  --profile interactive-balanced \
   --models-dir data/artifacts/ollama-models
 
-uv run python scripts/run_benchmark.py --create-manifest
+uv run python scripts/create_spider_laptop_manifest.py
 OLLAMA_BASE_URL=http://127.0.0.1:11434 TEXT2SQL_OLLAMA_NUM_GPU=6 \
   uv run python scripts/run_benchmark.py \
+  --manifest evals/configs/spider-laptop-200.json \
+  --predictions evals/predictions/spider-p6-200-gpu6.jsonl \
+  --report evals/reports/spider-p6-200.json \
   --correction --resume --max-new-cases 1
 OLLAMA_BASE_URL=http://127.0.0.1:11434 TEXT2SQL_OLLAMA_NUM_GPU=6 \
   uv run python scripts/run_guarded_spider.py \
   --profile interactive-balanced \
   --batch-size 10 --cooldown-seconds 20 \
-  --predictions evals/predictions/spider-p6-1034-gpu6.jsonl \
-  --report evals/reports/spider-p6-1034.json
+  --manifest evals/configs/spider-laptop-200.json \
+  --predictions evals/predictions/spider-p6-200-gpu6.jsonl \
+  --report evals/reports/spider-p6-200.json
 
 OLLAMA_BASE_URL=http://127.0.0.1:11434 uv run python scripts/run_guarded_acceptance.py \
   --profile acceptance-safe \
@@ -120,20 +124,21 @@ OLLAMA_BASE_URL=http://127.0.0.1:11434 uv run python scripts/run_guarded_accepta
 ```
 
 The pilot must produce one atomic prediction and the supervisor must remain alive before removing
-`--max-new-cases`. Full Spider dev is 1,034 cases across 20 databases, so interruption/resume is the
-normal operating mode. The guarded full runner unloads both models every ten cases and cools for 20
-seconds, bounding prompt-cache growth and accumulated load. Never commit predictions, detailed
-reports, indexes, model blobs, raw Spider data, or databases. When complete, export only the
-gold-free portfolio summary:
+`--max-new-cases`. The laptop profile is 200 cases across 20 databases, so interruption/resume is
+the normal operating mode. The guarded runner unloads both models every ten cases and cools for 20
+seconds, bounding prompt-cache growth and accumulated load. Full Spider-1034 remains available via
+`spider-release-1034.json` as optional P6.1 on stronger hardware; never present the laptop score as
+full dev. Never commit predictions, detailed reports, indexes, model blobs, raw Spider data, or
+databases. When complete, export only the gold-free portfolio summary:
 
 ```bash
 uv run python scripts/export_demo_artifacts.py \
-  --report evals/reports/spider-p6-1034.json \
+  --report evals/reports/spider-p6-200.json \
   --output docs/demo_assets/p6_spider_release.json
 
 uv run python scripts/build_release_report.py \
   --olist-report evals/reports/olist-p6-60.json \
-  --spider-report evals/reports/spider-p6-1034.json \
+  --spider-report evals/reports/spider-p6-200.json \
   --retrieval-ablation data/artifacts/p3_1/spider_holdout_100_schema_recall.json \
   --correction-ablation evals/reports/olist-grounded-correction-p4.json \
   --output evals/reports/p6-release.json

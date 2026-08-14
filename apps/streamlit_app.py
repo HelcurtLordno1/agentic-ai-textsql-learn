@@ -427,8 +427,14 @@ def benchmark_lab() -> None:
             )
             categories = report.get("failure_categories") or {}
             complexity = report.get("by_complexity") or {}
-            failures, slices, provenance = st.tabs(
-                ["Failure taxonomy", "Complexity slices", "Manifest & provenance"]
+            partitions = report.get("by_partition") or {}
+            failures, slices, partition_view, provenance = st.tabs(
+                [
+                    "Failure taxonomy",
+                    "Complexity slices",
+                    "Regression vs holdout",
+                    "Manifest & provenance",
+                ]
             )
             with failures:
                 if categories:
@@ -447,6 +453,14 @@ def benchmark_lab() -> None:
                 st.dataframe(
                     pd.DataFrame(
                         [{"complexity": key, **value} for key, value in complexity.items()]
+                    ),
+                    use_container_width=True,
+                    hide_index=True,
+                )
+            with partition_view:
+                st.dataframe(
+                    pd.DataFrame(
+                        [{"partition": key, **value} for key, value in partitions.items()]
                     ),
                     use_container_width=True,
                     hide_index=True,

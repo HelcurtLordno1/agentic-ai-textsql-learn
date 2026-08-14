@@ -1,4 +1,4 @@
-"""Run full Spider release in cooled, resumable batches under the laptop guard."""
+"""Run a Spider release manifest in cooled, resumable batches under the laptop guard."""
 
 from __future__ import annotations
 
@@ -12,8 +12,6 @@ from pathlib import Path
 import httpx
 
 from agentic_text2sql.hardware import PROFILES, ProfileName, sample_resources, unsafe_reason
-
-TOTAL_CASES = 1034
 
 
 def count_predictions(path: Path) -> int:
@@ -43,6 +41,7 @@ def main() -> None:
     parser.add_argument("--max-batches", type=int)
     parser.add_argument("--predictions", type=Path, required=True)
     parser.add_argument("--report", type=Path, required=True)
+    parser.add_argument("--manifest", type=Path, required=True)
     args = parser.parse_args()
     if not 1 <= args.batch_size <= 20:
         raise SystemExit("batch-size must be between 1 and 20")
@@ -50,6 +49,10 @@ def main() -> None:
         raise SystemExit("cooldown-seconds must be between 0 and 300")
 
     root = Path(__file__).resolve().parents[1]
+    manifest_payload = json.loads(args.manifest.read_text(encoding="utf-8"))
+    total_cases = int(manifest_payload["case_count"])
+    if total_cases < 1:
+        raise SystemExit("manifest case_count must be positive")
     profile = PROFILES[ProfileName(args.profile)]
     base_url = os.environ.get("OLLAMA_BASE_URL", "http://127.0.0.1:11434").rstrip("/")
     environment = {
@@ -60,7 +63,7 @@ def main() -> None:
     }
     batches = 0
     observed_peak = sample_resources()
-    while count_predictions(args.predictions) < TOTAL_CASES:
+    while count_predictions(args.predictions) < total_cases:
         before = count_predictions(args.predictions)
         command = [
             "uv",
@@ -75,6 +78,8 @@ def main() -> None:
             str(args.predictions),
             "--report",
             str(args.report),
+            "--manifest",
+            str(args.manifest),
         ]
         process = subprocess.Popen(command, cwd=root, env=environment)
         reason: str | None = None
@@ -105,7 +110,7 @@ def main() -> None:
         after = count_predictions(args.predictions)
         if reason:
             unload_models(base_url)
-            print(f"RESOURCE_GUARD_STOP: {reason}; checkpoint={after}/{TOTAL_CASES}")
+            print(f"RESOURCE_GUARD_STOP: {reason}; checkpoint={after}/{total_cases}")
             print(json.dumps({"observed_peak": observed_peak.__dict__}, indent=2))
             raise SystemExit(75)
         if process.returncode != 0:
@@ -120,7 +125,7 @@ def main() -> None:
                 {
                     "status": "batch_complete",
                     "checkpoint": after,
-                    "total": TOTAL_CASES,
+                    "total": total_cases,
                     "observed_peak": observed_peak.__dict__,
                 }
             ),
@@ -128,7 +133,7 @@ def main() -> None:
         )
         if args.max_batches is not None and batches >= args.max_batches:
             return
-        if after < TOTAL_CASES:
+        if after < total_cases:
             time.sleep(args.cooldown_seconds)
 
 

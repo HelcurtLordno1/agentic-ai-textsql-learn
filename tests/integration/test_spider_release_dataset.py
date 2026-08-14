@@ -54,3 +54,17 @@ def test_full_spider_release_evaluator_accepts_exact_gold(tmp_path: Path) -> Non
     assert report["case_count"] == 1034
     assert report["result_correct_count"] == 1034
     assert report["result_accuracy"] == 1
+
+
+def test_laptop_manifest_is_disjoint_and_stratified() -> None:
+    root = discover_project_root()
+    spider_root = root / "data/raw/spider/spider_data"
+    if not (spider_root / "dev.json").is_file():
+        pytest.skip("full Spider dev is not installed")
+    manifest, cases = load_release_cases(spider_root, root / "evals/configs/spider-laptop-200.json")
+    assert manifest.benchmark_profile == "laptop-stratified"
+    assert manifest.case_count == len(cases) == 200
+    assert manifest.database_count == len({case.db_id for case in cases}) == 20
+    assert sum(case.partition == "regression" for case in cases) == 100
+    assert sum(case.partition == "holdout" for case in cases) == 100
+    assert len({case.dev_index for case in cases}) == 200

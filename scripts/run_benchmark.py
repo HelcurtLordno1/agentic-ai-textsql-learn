@@ -1,4 +1,4 @@
-"""Create and run the pinned full Spider-dev Gate P6 release benchmark."""
+"""Run a pinned Spider release manifest; full dev remains an optional profile."""
 
 from __future__ import annotations
 
@@ -65,11 +65,12 @@ def main() -> None:
     settings = Settings()
     root = settings.project_root
     spider_root = root / "data/raw/spider/spider_data"
-    manifest_path = args.manifest or root / "evals/configs/spider-release-1034.json"
-    predictions_path = args.predictions or root / "evals/predictions/spider-p6-1034.jsonl"
+    manifest_path = args.manifest or root / "evals/configs/spider-laptop-200.json"
+    predictions_path = args.predictions or root / "evals/predictions/spider-p6-200.jsonl"
     provenance_path = predictions_path.with_suffix(".provenance.json")
-    report_path = args.report or root / "evals/reports/spider-p6-1034.json"
+    report_path = args.report or root / "evals/reports/spider-p6-200.json"
     if args.create_manifest:
+        manifest_path = args.manifest or root / "evals/configs/spider-release-1034.json"
         manifest = create_release_manifest(spider_root)
         manifest_path.parent.mkdir(parents=True, exist_ok=True)
         manifest_path.write_text(manifest.model_dump_json(indent=2) + "\n", encoding="utf-8")

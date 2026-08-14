@@ -32,11 +32,12 @@ latency. Runtime validation is gold-blind. Because local model output varies acr
 plans/candidates, a single favorable run is gate evidence for bounded behavior, not a stability
 claim; correction remains opt-in until repeated runs and the reviewed Olist-60 holdout pass.
 
-P6 full Spider dev uses a tracked 1,034-case/20-database manifest. It hashes `dev.json`,
-`tables.json`, each SQLite database and every selected row. Rows are reordered only by database and
-original dev index so a runtime can reuse one catalog while atomic checkpoints remain a strict
-manifest prefix. The report exposes execution accuracy, typed completion, valid-candidate rate,
-P50/P95, database/complexity slices and top failure categories.
+P6 laptop release uses 200 pinned cases: domain-balanced regression-100 and a disjoint holdout-100.
+Together they cover all 20 databases and expose partition, complexity and database slices. It hashes
+`dev.json`, `tables.json`, each SQLite database and every selected row. Rows are reordered only by
+database/partition/original index so runtime can reuse one catalog while atomic checkpoints remain a
+strict manifest prefix. Full Spider-1034 uses the same evaluator as optional P6.1 and must never be
+inferred from or conflated with the laptop score.
 
 The local execution evaluator is intentionally described as local Spider-dev equivalence, not the
 official hidden Spider leaderboard. It treats gold `ORDER BY` as ordered, otherwise compares row

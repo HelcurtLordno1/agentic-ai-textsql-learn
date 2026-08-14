@@ -55,10 +55,12 @@ flowchart LR
     G -. never imported .-> X[Runtime package]
 ```
 
-P6 groups full Spider dev by database to reuse the catalog/index while preserving a manifest prefix
-for crash-safe resume. The evaluator opens gold only after all runtime contexts close, executes both
-queries with SQLite `query_only` and a deadline, normalizes unordered result multisets and column
-permutations up to width eight, and records hashes rather than gold rows in the report.
+P6 groups the laptop-stratified Spider-200 profile by database to reuse the catalog/index while
+preserving a manifest prefix for crash-safe resume. Regression-100 and disjoint holdout-100 remain
+separate report slices. The same harness can run full Spider-1034 as optional P6.1 on stronger
+hardware. The evaluator opens gold only after all runtime contexts close, executes both queries with
+SQLite `query_only` and a deadline, normalizes unordered result multisets and column permutations up
+to width eight, and records hashes rather than gold rows in the report.
 
 Release inference is pinned to seed 42, configured Qwen/BGE digests, and one clean Git commit.
 Resume refuses predictions from another revision; per-database index/catalog provenance is

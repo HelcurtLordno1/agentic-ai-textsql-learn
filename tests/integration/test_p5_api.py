@@ -113,10 +113,10 @@ def test_report_api_exposes_release_summary_without_details(tmp_path: Path) -> N
     (reports / "spider-release.json").write_text(
         json.dumps(
             {
-                "evaluation_id": "spider-dev-1034-p6-v1",
-                "benchmark_kind": "cross-domain-execution",
+                "evaluation_id": "spider-dev-stratified-200-p6-v1",
+                "benchmark_kind": "cross-domain-execution-laptop-stratified",
                 "release_status": "complete",
-                "case_count": 1034,
+                "case_count": 200,
                 "result_accuracy": 0.5,
                 "failure_categories": {"EXECUTION_MISMATCH": 10},
                 "details": [{"generated_sql": "SELECT private_debug_value"}],

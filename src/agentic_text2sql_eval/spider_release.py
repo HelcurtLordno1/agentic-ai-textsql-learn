@@ -1,4 +1,4 @@
-"""Pinned full Spider-dev manifest and gold-separated execution evaluation."""
+"""Pinned Spider-dev release profiles and gold-separated execution evaluation."""
 
 from __future__ import annotations
 
@@ -24,17 +24,19 @@ from agentic_text2sql_eval.spider_adapter import case_hash, classify_complexity
 
 class SpiderReleaseCase(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
-    id: str = Field(pattern=r"^spider_dev_\d{4}$")
+    id: str = Field(pattern=r"^spider_(?:dev|regression|holdout)_\d{4}$")
     dev_index: int = Field(ge=0)
     db_id: str
     case_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
     complexity: Literal["easy", "medium", "hard", "extra"]
+    partition: Literal["full", "regression", "holdout"] = "full"
 
 
 class SpiderReleaseManifest(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
     version: int = 1
     dataset: str = "spider-dev"
+    benchmark_profile: Literal["full-dev", "laptop-stratified"] = "full-dev"
     selection: str = "full dev reordered by database then original row"
     dev_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
     tables_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
@@ -52,6 +54,7 @@ class LoadedSpiderCase(BaseModel):
     question: str
     gold_sql: str
     complexity: Literal["easy", "medium", "hard", "extra"]
+    partition: Literal["full", "regression", "holdout"] = "full"
 
 
 def sha256_file(path: Path) -> str:
@@ -88,6 +91,55 @@ def create_release_manifest(spider_root: Path) -> SpiderReleaseManifest:
         case_count=len(cases),
         database_count=len(db_ids),
         cases=cases,
+    )
+
+
+def create_laptop_manifest(
+    spider_root: Path, regression_manifest_path: Path, holdout_manifest_path: Path
+) -> SpiderReleaseManifest:
+    """Combine the two disjoint, pinned 100-case manifests for laptop P6."""
+    dev_path = spider_root / "dev.json"
+    dev: list[dict[str, Any]] = json.loads(dev_path.read_text(encoding="utf-8"))
+    selected: list[SpiderReleaseCase] = []
+    partitions: tuple[tuple[Literal["regression", "holdout"], Path], ...] = (
+        ("regression", regression_manifest_path),
+        ("holdout", holdout_manifest_path),
+    )
+    for partition, path in partitions:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        if payload.get("dev_sha256") != sha256_file(dev_path) or payload.get("case_count") != 100:
+            raise ValueError(f"invalid Spider laptop source manifest: {path}")
+        for row in payload["cases"]:
+            index = int(row["dev_index"])
+            case = dev[index]
+            if str(case["db_id"]) != row["db_id"] or case_hash(case) != row["case_hash"]:
+                raise ValueError(f"Spider laptop source mismatch at dev row {index}")
+            selected.append(
+                SpiderReleaseCase(
+                    id=f"spider_{partition}_{index:04d}",
+                    dev_index=index,
+                    db_id=str(case["db_id"]),
+                    case_hash=case_hash(case),
+                    complexity=classify_complexity(str(case["query"])),
+                    partition=partition,
+                )
+            )
+    if len(selected) != 200 or len({case.dev_index for case in selected}) != 200:
+        raise ValueError("Spider laptop release requires 200 disjoint cases")
+    ordered = tuple(sorted(selected, key=lambda case: (case.db_id, case.partition, case.dev_index)))
+    db_ids = sorted({case.db_id for case in ordered})
+    return SpiderReleaseManifest(
+        benchmark_profile="laptop-stratified",
+        selection="pinned regression-100 plus disjoint holdout-100, grouped by database",
+        dev_sha256=sha256_file(dev_path),
+        tables_sha256=sha256_file(spider_root / "tables.json"),
+        database_sha256={
+            db_id: sha256_file(spider_root / "database" / db_id / f"{db_id}.sqlite")
+            for db_id in db_ids
+        },
+        case_count=len(ordered),
+        database_count=len(db_ids),
+        cases=ordered,
     )
 
 
@@ -128,6 +180,7 @@ def load_release_cases(
                 question=str(case["question"]),
                 gold_sql=str(case["query"]),
                 complexity=selected.complexity,
+                partition=selected.partition,
             )
         )
     if len(loaded) != manifest.case_count or len({case.id for case in loaded}) != len(loaded):
@@ -252,6 +305,7 @@ def evaluate_spider_release(
                     "dev_index": case.dev_index,
                     "db_id": case.db_id,
                     "complexity": case.complexity,
+                    "partition": case.partition,
                     "status": result.status.value,
                     "result_correct": correct,
                     "generated_sql": generated_sql,
@@ -288,8 +342,12 @@ def evaluate_spider_release(
         str(item["failure_category"]) for item in details if item["failure_category"] is not None
     )
     report: dict[str, Any] = {
-        "evaluation_id": "spider-dev-1034-p6-v1",
-        "benchmark_kind": "cross-domain-execution",
+        "evaluation_id": (
+            "spider-dev-stratified-200-p6-v1"
+            if manifest.benchmark_profile == "laptop-stratified"
+            else "spider-dev-1034-p6-v1"
+        ),
+        "benchmark_kind": f"cross-domain-execution-{manifest.benchmark_profile}",
         "release_status": "complete",
         "case_count": len(details),
         "database_count": manifest.database_count,
@@ -303,6 +361,7 @@ def evaluate_spider_release(
             "p95": _percentile(latency, 0.95),
         },
         "by_complexity": slices("complexity"),
+        "by_partition": slices("partition"),
         "by_database": slices("db_id"),
         "failure_categories": dict(categories.most_common()),
         "manifest": manifest.model_dump(mode="json", exclude={"cases"}),

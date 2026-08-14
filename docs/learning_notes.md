@@ -3,9 +3,10 @@
 Evidence-backed notes will be added gate by gate.
 
 P6 makes dataset identity broader than one JSON checksum: a trustworthy release manifest must pin
-the questions, schema metadata, and every executable database. Reordering full Spider dev by
-database is a performance optimization only; retaining original `dev_index` and per-row hashes
-keeps the selection auditable and makes a checkpointed prefix deterministic.
+the questions, schema metadata, and every executable database. The laptop release combines a
+domain-balanced regression-100 with a disjoint holdout-100, then reorders only for database reuse.
+Retaining partition, original `dev_index`, and per-row hashes keeps selection auditable and makes a
+checkpointed prefix deterministic. Full Spider-1034 remains an optional stronger-hardware profile.
 
 Execution accuracy is not one universal metric. Olist uses reviewed business semantics and explicit
 tolerances; Spider tests cross-domain SQL equivalence. The UI therefore presents separate tabs and

@@ -138,7 +138,8 @@ Core project được coi là hoàn thành khi:
 1. toàn bộ module `CORE` trong completion matrix là `VERIFIED`;
 2. chạy end-to-end local không cần Internet sau khi model/data đã tải;
 3. safety suite chặn 100% fixture write/multi-statement nguy hiểm;
-4. benchmark full Spider dev chạy được và xuất report tái lập;
+4. benchmark laptop-stratified Spider-200 chạy được và xuất report tái lập; full Spider-1034 là
+   P6.1 optional cho hardware mạnh hơn;
 5. report ghi score thực, không sửa số và không dùng gold leakage;
 6. có ít nhất một ablation cho retrieval và một ablation cho correction;
 7. demo UI, README, architecture và runbook hoạt động;
@@ -154,9 +155,9 @@ Research target được theo dõi riêng:
 |---|---|---:|
 | Smoke | 20 case được chọn cố định | pipeline pass 100%, accuracy chỉ ghi nhận |
 | Mini | 100 case cố định, stratified | ≥ 60% execution accuracy ban đầu |
-| Baseline | Full Spider dev | đo trung thực, không áp target trước |
-| Improvement | Full Spider dev | tăng ≥ 5 điểm tuyệt đối so với direct-generation baseline |
-| Stretch | Full Spider dev | > 80% execution/test-suite accuracy |
+| Baseline | Spider-200 stratified | đo trung thực, report regression/holdout riêng |
+| Improvement | Spider-200 stratified | tăng ≥ 5 điểm tuyệt đối so với direct-generation baseline |
+| Stretch/P6.1 | Full Spider dev | > 80% execution/test-suite accuracy trên hardware phù hợp |
 
 Application quality gate cho nhãn portfolio-complete “10/10”:
 
@@ -1536,7 +1537,7 @@ Gate P5.1:
 
 Tasks:
 
-- Olist release acceptance gồm holdout và full Spider dev inference/evaluation.
+- Olist release acceptance và Spider-200 stratified inference/evaluation.
 - Required ablations.
 - Error analysis top categories.
 - README, diagrams, learning notes, demo video script.
@@ -1544,15 +1545,17 @@ Tasks:
 
 P6 implementation contract bổ sung:
 
-- tracked full-dev manifest gồm 1.034 case/20 database, pin `dev.json`, `tables.json`, từng SQLite
-  database và từng dev row bằng SHA-256;
+- tracked laptop manifest gồm regression-100 + disjoint holdout-100 trên 20 database; pin
+  `dev.json`, `tables.json`, từng SQLite database và từng selected row bằng SHA-256;
+- tracked full-dev 1.034 manifest/harness được giữ làm P6.1 optional, không suy diễn full score từ
+  laptop report;
 - manifest được reorder theo database chỉ để reuse catalog/index; giữ `dev_index` để audit và
   checkpoint luôn là prefix xác định;
 - runtime prompt v4/corrector v3 không mang Olist glossary sang database khác;
 - Ollama generation dùng `seed=42`, fail-closed theo model digest pin; resume provenance khóa theo
   clean Git commit và lưu runtime/index identity cho từng database;
 - inference checkpoint trước, evaluator mới mở gold và chỉ dùng read-only execution equivalence;
-- evaluator full-corpus self-test phải đạt 1.034/1.034 với exact-gold fixture; legacy TEXT lỗi UTF-8
+- evaluator self-test phải đạt 1.034/1.034 với exact-gold fixture; legacy TEXT lỗi UTF-8
   được decode ổn định và result materialization bị cap 100.000 row để bảo vệ RAM;
 - P6 long pilot đã loại profile 8-layer sau transient 113,77 W tại case 34; release phải bắt đầu
   lại đồng nhất ở 6 layers, không trộn 33 diagnostic predictions vào final report;
@@ -1567,7 +1570,7 @@ Gate P6 — Core Complete:
 
 - tất cả core module `VERIFIED`;
 - Olist data build/UAT/semantic regression đều `VERIFIED`;
-- full report có manifest/hashes;
+- Spider-200 report có manifest/hashes và regression/holdout slices;
 - limitations và failed cases được ghi;
 - demo/reproduction pass.
 
@@ -1693,7 +1696,8 @@ Mỗi bug quan trọng cần:
 | E-M1 | Olist smoke/UAT report | Yes | D-M6, L1–L6 | VERIFIED | Olist-60: 47/60 result correct, 60/60 typed terminal; `docs/evidence/p5_gate.md` |
 | E-M2 | Spider smoke-20 | Yes | L1–L6 | NOT_STARTED | — |
 | E-M3 | Spider mini-100 | Yes | E-M2 | NOT_STARTED | — |
-| E-M4 | Full Spider dev report | Yes | E-M3 | NOT_STARTED | — |
+| E-M4 | Spider-200 laptop report | Yes | E-M3 | IN_PROGRESS | regression-100 + disjoint holdout-100; full-1034 moved to optional P6.1 |
+| E-M4.1 | Full Spider dev report | No | E-M4, stronger hardware | NOT_STARTED | optional P6.1 manifest/harness tracked |
 | E-M5 | Retrieval ablation | Yes | L2 | VERIFIED | qualified k=5/10/20, raw/semantic, mini + disjoint holdout; `docs/evidence/p3_1_gate.md` |
 | E-M6 | Correction ablation | Yes | L5 | VERIFIED | frozen Olist 14/18 off vs 17/18 on; `docs/evidence/p4_gate.md` |
 | E-M7 | BIRD Mini-Dev | No | core complete | NOT_STARTED | — |
