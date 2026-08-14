@@ -1554,6 +1554,10 @@ P6 implementation contract bổ sung:
 - inference checkpoint trước, evaluator mới mở gold và chỉ dùng read-only execution equivalence;
 - evaluator full-corpus self-test phải đạt 1.034/1.034 với exact-gold fixture; legacy TEXT lỗi UTF-8
   được decode ổn định và result materialization bị cap 100.000 row để bảo vệ RAM;
+- P6 long pilot đã loại profile 8-layer sau transient 113,77 W tại case 34; release phải bắt đầu
+  lại đồng nhất ở 6 layers, không trộn 33 diagnostic predictions vào final report;
+- guarded Spider runner chia batch 10 case, atomic resume, unload Qwen/BGE và cooldown 20 giây giữa
+  batch để chặn prompt-cache growth và accumulated load;
 - report không blend Olist/Spider, có complexity/database slices, failure taxonomy, latency,
   provenance, limitations và artifact hashes;
 - Benchmark Lab đọc sanitized report qua FastAPI, không đọc database/gold/details trực tiếp;

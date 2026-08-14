@@ -100,16 +100,25 @@ def main() -> None:
     revision = git_provenance(root)
     if revision["git_commit"] == "unknown" or not revision["tracked_worktree_clean"]:
         raise SystemExit("release inference requires a known commit and clean tracked worktree")
+    run_config = {
+        "model": settings.ollama_model,
+        "num_gpu": settings.ollama_num_gpu,
+        "seed": settings.ollama_seed,
+        "correction_enabled": args.correction,
+    }
     if provenance_path.is_file():
         run_provenance = json.loads(provenance_path.read_text(encoding="utf-8"))
         if run_provenance.get("git_commit") != revision["git_commit"]:
             raise SystemExit("persisted predictions belong to a different Git commit")
+        if run_provenance.get("run_config") != run_config:
+            raise SystemExit("persisted predictions belong to a different runtime configuration")
     else:
         run_provenance = {
             **revision,
             "experiment_id": "spider-dev-qwen3-14b-hybrid-p6-v1",
             "evaluator_version": "spider_release_v1",
             "oracle_evidence_used": False,
+            "run_config": run_config,
             "database_runtime": {},
         }
     remaining = cases[len(predictions) :]

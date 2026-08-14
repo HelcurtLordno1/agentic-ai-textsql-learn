@@ -62,7 +62,7 @@ PROFILES = {
         description=(
             "Keep Qwen and BGE resident to avoid model thrash while bounding compute offload."
         ),
-        ollama_num_gpu=8,
+        ollama_num_gpu=6,
         cpu_cores=12,
         max_loaded_models=2,
         keep_alive="5m",
@@ -74,7 +74,7 @@ PROFILES = {
     ProfileName.ACCEPTANCE: HardwareProfile(
         name=ProfileName.ACCEPTANCE,
         description="One checkpointed case, explicit unload, and cooldown for long benchmarks.",
-        ollama_num_gpu=8,
+        ollama_num_gpu=6,
         cpu_cores=12,
         max_loaded_models=1,
         keep_alive="0",

@@ -67,11 +67,14 @@ resumable release:
 ```bash
 uv run python scripts/serve_ollama_guarded.py --profile acceptance-safe
 uv run python scripts/run_benchmark.py --create-manifest
-OLLAMA_BASE_URL=http://127.0.0.1:11434 TEXT2SQL_OLLAMA_NUM_GPU=8 \
+OLLAMA_BASE_URL=http://127.0.0.1:11434 TEXT2SQL_OLLAMA_NUM_GPU=6 \
   uv run python scripts/run_benchmark.py --correction --resume --max-new-cases 1
 # Remove --max-new-cases only after the pilot is healthy.
-OLLAMA_BASE_URL=http://127.0.0.1:11434 TEXT2SQL_OLLAMA_NUM_GPU=8 \
-  uv run python scripts/run_benchmark.py --correction --resume
+OLLAMA_BASE_URL=http://127.0.0.1:11434 TEXT2SQL_OLLAMA_NUM_GPU=6 \
+  uv run python scripts/run_guarded_spider.py \
+  --profile interactive-balanced --batch-size 10 --cooldown-seconds 20 \
+  --predictions evals/predictions/spider-p6-1034-gpu6.jsonl \
+  --report evals/reports/spider-p6-1034.json
 ```
 
 Benchmark Lab renders Olist and Spider in separate tabs. Spider reports execution equivalence,

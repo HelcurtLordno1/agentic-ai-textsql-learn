@@ -38,7 +38,7 @@ uv run text2sql hardware-health --profile interactive-balanced
 uv run python scripts/serve_ollama_guarded.py --profile interactive-balanced
 ```
 
-The interactive profile keeps at most two models resident; Qwen receives a bounded eight-layer GPU
+The interactive profile keeps at most two models resident; Qwen receives a bounded six-layer GPU
 offload while the much smaller BGE model may use a small amount of VRAM. The acceptance command
 below instead unloads checkpoints, runs one case per batch, and cools for 20 seconds. It checkpoints
 each case, so `--resume` continues from the exact persisted prefix after an interruption.
@@ -83,7 +83,9 @@ memory, temperature, power, and utilization telemetry.
 Do not raise `TEXT2SQL_OLLAMA_NUM_GPU` above the selected profile. Controlled 12/14-layer pilots
 independently spiked to 108.02/137.65 W and were stopped automatically; snapshot-only monitoring
 missed those transients. A 10-layer long pilot also reached 101.93 W after its shorter pilot had
-looked safe. P5.1 therefore uses 8 GPU layers pending guarded evidence.
+looked safe. P5.1 used 8 GPU layers, but the longer P6 pilot eventually observed 113.77 W at case
+34 and stopped correctly. P6 therefore supersedes that operating profile with 6 GPU layers; the
+33 earlier predictions are diagnostic only and cannot be mixed into release evidence.
 
 Inference receives only the question, database and schema. After the model runtime closes, the
 evaluator opens the reviewed Olist-60 gold SQL on a read-only database copy. Predictions and full
@@ -100,11 +102,15 @@ uv run python scripts/serve_ollama_guarded.py \
   --models-dir data/artifacts/ollama-models
 
 uv run python scripts/run_benchmark.py --create-manifest
-OLLAMA_BASE_URL=http://127.0.0.1:11434 TEXT2SQL_OLLAMA_NUM_GPU=8 \
+OLLAMA_BASE_URL=http://127.0.0.1:11434 TEXT2SQL_OLLAMA_NUM_GPU=6 \
   uv run python scripts/run_benchmark.py \
   --correction --resume --max-new-cases 1
-OLLAMA_BASE_URL=http://127.0.0.1:11434 TEXT2SQL_OLLAMA_NUM_GPU=8 \
-  uv run python scripts/run_benchmark.py --correction --resume
+OLLAMA_BASE_URL=http://127.0.0.1:11434 TEXT2SQL_OLLAMA_NUM_GPU=6 \
+  uv run python scripts/run_guarded_spider.py \
+  --profile interactive-balanced \
+  --batch-size 10 --cooldown-seconds 20 \
+  --predictions evals/predictions/spider-p6-1034-gpu6.jsonl \
+  --report evals/reports/spider-p6-1034.json
 
 OLLAMA_BASE_URL=http://127.0.0.1:11434 uv run python scripts/run_guarded_acceptance.py \
   --profile acceptance-safe \
@@ -115,8 +121,10 @@ OLLAMA_BASE_URL=http://127.0.0.1:11434 uv run python scripts/run_guarded_accepta
 
 The pilot must produce one atomic prediction and the supervisor must remain alive before removing
 `--max-new-cases`. Full Spider dev is 1,034 cases across 20 databases, so interruption/resume is the
-normal operating mode. Never commit predictions, detailed reports, indexes, model blobs, raw Spider
-data, or databases. When complete, export only the gold-free portfolio summary:
+normal operating mode. The guarded full runner unloads both models every ten cases and cools for 20
+seconds, bounding prompt-cache growth and accumulated load. Never commit predictions, detailed
+reports, indexes, model blobs, raw Spider data, or databases. When complete, export only the
+gold-free portfolio summary:
 
 ```bash
 uv run python scripts/export_demo_artifacts.py \
