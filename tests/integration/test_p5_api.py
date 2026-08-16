@@ -81,7 +81,10 @@ def test_api_ingest_query_sse_reload_and_feedback(tmp_path: Path) -> None:
             "/queries", json={"db_id": "olist", "question": "Count orders again"}
         )
         assert default_response.status_code == 202
-        default_run = client.get(f"/queries/{default_response.json()['run_id']}").json()
+        default_run_id = default_response.json()["run_id"]
+        with client.stream("GET", f"/queries/{default_run_id}/events") as stream:
+            assert "event: terminal" in "".join(stream.iter_text())
+        default_run = client.get(f"/queries/{default_run_id}").json()
         assert default_run["config"]["correction_enabled"] is True
         summaries = client.get("/queries", params={"include_result": False}).json()
         summary = next(item for item in summaries if item["run_id"] == run_id)
