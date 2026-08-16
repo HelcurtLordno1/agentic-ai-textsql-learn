@@ -15,6 +15,9 @@ def test_streamlit_observatory_uses_api_and_has_drag_resize_accessibility() -> N
     assert "@st.cache_data" in source
     assert "@st.fragment" in source
     assert "while time.monotonic()" not in source
+    assert "value=True" in source
+    assert "Attempted output and diagnostics" in source
+    assert "not measured accuracy" in source
     assert all(
         page in source
         for page in ("Query Studio", "Run Inspector", "History", "Benchmark Lab", "System Center")

@@ -154,7 +154,15 @@ def render_result(run: dict[str, Any]) -> None:
     rows = result.get("result_rows", [])
     columns = result.get("result_columns", [])
     latency = float((result.get("latency_ms") or {}).get("total", 0)) / 1000
-    c1, c2, c3, c4 = st.columns(4)
+    candidate_record = result.get("candidate") or {}
+    candidate_payload = candidate_record.get("candidate") or {}
+    candidate_confidence = candidate_payload.get("confidence")
+    confidence_label = (
+        f"{float(candidate_confidence) * 100:.0f}%"
+        if isinstance(candidate_confidence, int | float)
+        else "n/a"
+    )
+    c1, c2, c3, c4, c5 = st.columns(5)
     with c1:
         metric(
             "Final status",
@@ -168,6 +176,12 @@ def render_result(run: dict[str, Any]) -> None:
     with c4:
         calls = int((result.get("correction") or {}).get("llm_calls", 0))
         metric("Repair calls", str(calls))
+    with c5:
+        metric("Model confidence", confidence_label)
+    st.caption(
+        "Model confidence is self-reported, not measured accuracy. Per-query accuracy is unavailable "
+        "without an independent reference answer; Layer 4 validation is the pass/fail trust signal."
+    )
 
     if status == "SUCCEEDED":
         table, chart, sql, trust = st.tabs(["Result", "Visualization", "SQL", "Trust & evidence"])
@@ -193,8 +207,7 @@ def render_result(run: dict[str, Any]) -> None:
             else:
                 st.info("This result shape is best represented as a table or KPI.")
         with sql:
-            candidate = result.get("candidate") or {}
-            st.code(candidate.get("normalized_sql", "No SQL candidate"), language="sql")
+            st.code(candidate_record.get("normalized_sql", "No SQL candidate"), language="sql")
             st.caption(
                 "Read-only policy verified · Copy is allowed · Browser execution is disabled"
             )
@@ -215,6 +228,16 @@ def render_result(run: dict[str, Any]) -> None:
             st.info(message)
         else:
             st.error(message)
+        with st.expander("Attempted output and diagnostics", expanded=True):
+            st.code(candidate_record.get("normalized_sql", "No SQL candidate"), language="sql")
+            st.write(f"Validation error: `{result.get('error_class') or status}`")
+            if result.get("schema_context"):
+                st.code(
+                    result["schema_context"].get("rendered_context", "No schema context"),
+                    language="text",
+                )
+            if result.get("correction"):
+                st.json(result["correction"])
 
     st.subheader("Was this answer useful?")
     st.caption("Feedback stays on this machine and is linked to the immutable run ID.")
@@ -336,11 +359,11 @@ def query_studio() -> None:
             with st.expander("Advanced controls"):
                 correction = st.toggle(
                     "Enable bounded correction",
-                    value=False,
+                    value=True,
                     help="At most one repair call; every candidate re-enters the full safety gate.",
                 )
                 st.caption(
-                    "Correction remains opt-in after Gate P4 because local model runs can vary."
+                    "Recommended for free-form questions. Disable only for controlled ablations."
                 )
             submitted = st.form_submit_button("Run query", type="primary", width="stretch")
         if submitted:

@@ -44,6 +44,12 @@ The tracked Streamlit config disables source-file watching: WSL polling across t
 starve even the health endpoint, while production-like local use does not need hot reload. Restart
 Streamlit manually after editing UI source.
 
+Bounded correction is enabled by default for interactive API/UI requests. Disable it only when an
+ablation explicitly needs first-pass behavior. A successful query shows the model's self-reported
+confidence plus Layer 4 validation; the former is not accuracy. Free-form per-query accuracy is
+`n/a` without an independently supplied reference answer. Failed runs still expose attempted SQL,
+schema evidence, typed validation error, and correction diagnostics rather than a blank output.
+
 For the verified 16 GiB laptop GPU, start Ollama through the fail-closed monitor. It binds locally,
 limits Ollama to one request, pins 12 low-priority logical CPU cores, uses Flash Attention and a
 quantized KV cache, and terminates the whole Ollama process group on a threshold breach:

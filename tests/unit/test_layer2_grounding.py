@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 from pathlib import Path
+from typing import Literal
 
 import httpx
 import pytest
@@ -200,6 +201,194 @@ def test_join_closure_drops_disconnected_schema_decoys() -> None:
     )
     assert reversed_tables == {"items", "products"}
     assert reversed_joins == ["items.product_id = products.product_id"]
+
+
+def test_schema_linker_prefers_compact_semantic_view_for_scalar_intent() -> None:
+    from agentic_text2sql.layer2_grounding.schema_linker import link_schema
+
+    catalog = CatalogSnapshot(
+        db_id="olist",
+        tables=(
+            TableInfo(
+                name="customer_order_facts",
+                kind="view",
+                columns=(
+                    ColumnInfo(name="customer_unique_id", data_type="TEXT"),
+                    ColumnInfo(name="order_count", data_type="INTEGER"),
+                ),
+            ),
+            TableInfo(
+                name="customers",
+                columns=(
+                    ColumnInfo(name="customer_id", data_type="TEXT"),
+                    ColumnInfo(name="customer_unique_id", data_type="TEXT"),
+                ),
+            ),
+            TableInfo(
+                name="orders",
+                columns=(
+                    ColumnInfo(name="order_id", data_type="TEXT"),
+                    ColumnInfo(name="customer_id", data_type="TEXT"),
+                ),
+                foreign_keys=(
+                    ForeignKeyInfo(
+                        from_columns=("customer_id",),
+                        target_table="customers",
+                        target_columns=("customer_id",),
+                    ),
+                ),
+            ),
+            TableInfo(
+                name="items",
+                columns=(
+                    ColumnInfo(name="product_id", data_type="TEXT"),
+                    ColumnInfo(name="freight_cents", data_type="INTEGER"),
+                    ColumnInfo(name="price_cents", data_type="INTEGER"),
+                ),
+                foreign_keys=(
+                    ForeignKeyInfo(
+                        from_columns=("product_id",),
+                        target_table="products",
+                        target_columns=("product_id",),
+                    ),
+                ),
+            ),
+            TableInfo(
+                name="products",
+                columns=(
+                    ColumnInfo(name="product_id", data_type="TEXT"),
+                    ColumnInfo(name="category", data_type="TEXT"),
+                ),
+            ),
+            TableInfo(
+                name="order_totals",
+                kind="view",
+                columns=(
+                    ColumnInfo(name="revenue_cents", data_type="INTEGER"),
+                    ColumnInfo(name="freight_cents", data_type="INTEGER"),
+                ),
+            ),
+            TableInfo(
+                name="category_translation",
+                columns=(ColumnInfo(name="category", data_type="TEXT"),),
+            ),
+        ),
+        catalog_hash="semantic-catalog",
+    )
+
+    def ranked(
+        document_id: str,
+        kind: Literal["table", "column", "relationship"],
+        table: str,
+        column: str | None,
+        score: float,
+        neighbors: tuple[str, ...] = (),
+    ) -> RankedDocument:
+        return RankedDocument(
+            document=CatalogDocument(
+                document_id=document_id,
+                db_id="olist",
+                kind=kind,
+                table=table,
+                column=column,
+                description=document_id,
+                neighbors=neighbors,
+                catalog_hash=catalog.catalog_hash,
+            ),
+            score=score,
+            sources=("hybrid",),
+        )
+
+    retrieval = RetrievalResult(
+        db_id="olist",
+        mode="hybrid",
+        candidates=(
+            ranked(
+                "olist.customer_order_facts.customer_unique_id",
+                "column",
+                "customer_order_facts",
+                "customer_unique_id",
+                1.0,
+            ),
+            ranked(
+                "olist.customers.customer_unique_id",
+                "column",
+                "customers",
+                "customer_unique_id",
+                0.99,
+            ),
+            ranked(
+                "olist.customer_order_facts.order_count",
+                "column",
+                "customer_order_facts",
+                "order_count",
+                0.98,
+            ),
+            ranked(
+                "olist.orders.fk0",
+                "relationship",
+                "orders",
+                None,
+                0.97,
+                ("orders.customer_id = customers.customer_id",),
+            ),
+        ),
+        estimated_tokens=40,
+        catalog_hash=catalog.catalog_hash,
+    )
+    plan = LogicalPlan(
+        question_language="vi",
+        task_type="aggregation",
+        metrics=["returning customer count"],
+        required_concepts=["customer_unique_id", "returning customers"],
+    )
+
+    context = link_schema(plan, retrieval, catalog)
+
+    assert context.selected_tables == ["customer_order_facts"]
+    assert "customer_order_facts.order_count" in context.selected_columns
+
+    revenue_retrieval = RetrievalResult(
+        db_id="olist",
+        mode="hybrid",
+        candidates=(
+            ranked(
+                "olist.category_translation.category",
+                "column",
+                "category_translation",
+                "category",
+                1.0,
+            ),
+            ranked(
+                "olist.order_totals.revenue_cents", "column", "order_totals", "revenue_cents", 0.99
+            ),
+            ranked("olist.items.freight_cents", "column", "items", "freight_cents", 0.98),
+            ranked("olist.products.category", "column", "products", "category", 0.97),
+            ranked(
+                "olist.items.fk0",
+                "relationship",
+                "items",
+                None,
+                0.96,
+                ("items.product_id = products.product_id",),
+            ),
+        ),
+        estimated_tokens=50,
+        catalog_hash=catalog.catalog_hash,
+    )
+    revenue_plan = LogicalPlan(
+        question_language="vi",
+        task_type="ranking",
+        metrics=["revenue", "freight"],
+        dimensions=["category"],
+        limit=5,
+        required_concepts=["revenue", "freight", "category"],
+    )
+
+    revenue_context = link_schema(revenue_plan, revenue_retrieval, catalog)
+
+    assert revenue_context.selected_tables == ["items", "products"]
+    assert "items.product_id = products.product_id" in revenue_context.joins
 
 
 def test_failed_rebuild_keeps_previous_active_bundle(tmp_path: Path) -> None:

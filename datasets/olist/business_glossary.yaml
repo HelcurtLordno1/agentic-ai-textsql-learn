@@ -16,6 +16,9 @@ concepts:
   repeat_customer:
     definition: More than one distinct order for one customer_unique_id.
     identity_column: olist_customers_dataset.customer_unique_id
+    canonical_relation: customer_order_facts
+    canonical_filter: customer_order_facts.order_count > 1
+    canonical_scalar: COUNT(*)
   multi_payment_method:
     definition: More than one distinct payment_type for an order.
     canonical_expression: order_payment_totals.distinct_payment_type_count > 1

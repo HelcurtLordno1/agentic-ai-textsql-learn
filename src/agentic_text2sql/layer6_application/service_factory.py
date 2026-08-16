@@ -115,7 +115,7 @@ class RuntimeBundle(AbstractContextManager["RuntimeBundle"]):
                 corrector=CorrectorAgent(
                     self.provider,
                     normalizer,
-                    root / "configs/prompts/corrector_v4_schema_coherent.j2",
+                    root / "configs/prompts/corrector_v5_scalar_semantic.j2",
                     root / "datasets/olist/business_glossary.yaml",
                     settings.ollama_model,
                 ),
@@ -129,7 +129,7 @@ class RuntimeBundle(AbstractContextManager["RuntimeBundle"]):
             planner=PlannerAgent(self.provider, root / "configs/prompts/planner_v2.j2"),
             generation=GenerationService(
                 PromptBuilder(
-                    root / "configs/prompts/generator_v5_schema_coherent.j2",
+                    root / "configs/prompts/generator_v6_scalar_semantic.j2",
                     root / "datasets/olist/business_glossary.yaml",
                 ),
                 GeneratorAgent(self.provider),

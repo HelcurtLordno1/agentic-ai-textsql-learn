@@ -20,7 +20,7 @@ from agentic_text2sql.layer3_generation.prompt_builder import (
     domain_rules,
 )
 
-CORRECTOR_PROMPT_VERSION = "corrector_v4_schema_coherent"
+CORRECTOR_PROMPT_VERSION = "corrector_v5_scalar_semantic"
 
 
 class CorrectorAgent:

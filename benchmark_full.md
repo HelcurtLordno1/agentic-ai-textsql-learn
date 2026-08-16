@@ -7,8 +7,8 @@ Trạng thái: `GATE_P6_VERIFIED`
 
 > Ghi chú hậu P6 (2026-08-16): các score dưới đây chỉ có hiệu lực cho revision benchmark
 > `1509faa...`, generator v4 và corrector v3. Working tree sau benchmark đã harden schema-linking,
-> prompt và runtime/UI để sửa một lỗi join thực tế. Không được coi 95%/65% là accuracy đã đo của
-> generator v5/corrector v4; muốn công bố score mới phải chạy lại manifest khóa độc lập. Kết quả cũ
+> prompt và runtime/UI để sửa các lỗi join/scope/scalar thực tế. Không được coi 95%/65% là accuracy
+> đã đo của generator v6/corrector v5; muốn công bố score mới phải chạy lại manifest khóa độc lập. Kết quả cũ
 > vẫn là historical release evidence hợp lệ, không bị sửa ngược.
 
 ## 1. Phạm vi và nguyên tắc

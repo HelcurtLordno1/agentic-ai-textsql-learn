@@ -85,8 +85,23 @@ def validate_semantics(
     asks_returning_customer = (
         "quay lại" in normalized_question or "returning customer" in normalized_question
     ) and any(token in normalized_question for token in ("customer", "khách hàng"))
-    if olist_rules and asks_returning_customer and "customer_unique_id" not in sql_lower:
+    uses_repeat_customer_view = "customer_order_facts" in set(
+        re.findall(r"[a-z_][a-z0-9_]*", sql_lower)
+    )
+    if (
+        olist_rules
+        and asks_returning_customer
+        and "customer_unique_id" not in sql_lower
+        and not uses_repeat_customer_view
+    ):
         signals.append("CUSTOMER_IDENTITY_NOT_UNIQUE")
+    if (
+        olist_rules
+        and asks_returning_customer
+        and uses_repeat_customer_view
+        and not re.search(r"order_count\s*>\s*1\b", sql_lower)
+    ):
+        signals.append("RETURNING_CUSTOMER_REPEAT_FILTER_MISSING")
     if olist_rules and asks_returning_customer and select is not None and len(select.selects) != 1:
         signals.append("RETURNING_CUSTOMER_OUTPUT_SHAPE")
 

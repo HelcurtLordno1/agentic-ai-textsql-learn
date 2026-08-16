@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from sqlglot import exp
+from sqlglot.optimizer.scope import Scope, traverse_scope
 
 from agentic_text2sql.contracts.catalog import CatalogSnapshot
 from agentic_text2sql.contracts.validation import ErrorClass, PolicyDecision
@@ -90,6 +91,33 @@ class SQLSafetyPolicy:
                 }
                 if column.name not in projection_aliases:
                     return _blocked(f"Unknown column: {column.name}", ErrorClass.UNKNOWN_COLUMN)
+
+        # Fail closed on implicit correlated references. An unqualified column must resolve inside
+        # its own SELECT scope; outer-scope references remain supported when explicitly qualified.
+        for scope in traverse_scope(statement):
+            local_columns: set[str] = set()
+            for source in scope.sources.values():
+                if isinstance(source, exp.Table) and source.name in allowed_tables:
+                    local_columns.update(
+                        column.name for column in allowed_tables[source.name].columns
+                    )
+                elif isinstance(source, Scope):
+                    local_columns.update(source.expression.named_selects)
+            if not local_columns or not isinstance(scope.expression, exp.Select):
+                continue
+            projection_aliases = {
+                item.alias for item in scope.expression.selects if getattr(item, "alias", "")
+            }
+            for column in scope.columns:
+                if column.table or column.name in projection_aliases:
+                    continue
+                if column.find_ancestor(exp.Select) is not scope.expression:
+                    continue
+                if column.name not in local_columns:
+                    return _blocked(
+                        f"Unknown column in local query scope: {column.name}",
+                        ErrorClass.UNKNOWN_COLUMN,
+                    )
 
         limit_injected = False
         scalar_aggregate = (

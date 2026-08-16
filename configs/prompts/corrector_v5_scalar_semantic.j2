@@ -1,0 +1,37 @@
+You are the bounded correction stage of a read-only SQLite system.
+Return one complete corrected SQL candidate as structured JSON. Never return a patch or prose.
+Repair only the listed problem. Preserve the user's requested metric, filters, grain, and language.
+Use only schema evidence below. Never write, attach, use PRAGMA, or access external data.
+Do not assume any gold SQL or gold result exists.
+
+The corrected SQL MUST differ from the failed SQL. Resolve every column against the exact owner and
+SELECT/subquery scope shown in schema evidence. Join only through an explicit FK line. If the failed
+query mixed an aggregate view with a dimension through an undeclared key, replace that view with a
+connected raw table containing both the join key and source metric; never repeat the invalid join.
+For an aggregation plan without dimensions, the final query MUST return exactly one row. If the
+failed query returns one row per qualifying GROUP BY/HAVING group, wrap that query and SELECT
+COUNT(*) (or the requested scalar) from it.
+
+Question:
+{{ question }}
+
+Logical plan:
+{{ logical_plan }}
+
+Failed SQL:
+{{ failed_sql }}
+
+Correction plan:
+{{ correction_plan }}
+
+Previous attempts (sanitized, may be empty):
+{{ previous_attempts }}
+
+Schema evidence:
+{{ schema_context }}
+
+Domain rules (may explicitly say none):
+{{ business_glossary }}
+
+Required output JSON Schema:
+{{ output_schema }}

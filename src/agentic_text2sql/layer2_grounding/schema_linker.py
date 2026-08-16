@@ -22,6 +22,15 @@ def _plan_terms(plan: LogicalPlan) -> set[str]:
     return set(normalize_tokens(" ".join(values)))
 
 
+def _intent_terms(plan: LogicalPlan) -> tuple[set[str], set[str], set[str]]:
+    dimensions = set(normalize_tokens(" ".join(plan.dimensions)))
+    metrics = set(normalize_tokens(" ".join(plan.metrics)))
+    intent = set(
+        normalize_tokens(" ".join([*plan.metrics, *plan.dimensions, *plan.required_concepts]))
+    )
+    return dimensions, metrics, intent
+
+
 def link_schema(
     plan: LogicalPlan,
     retrieval: RetrievalResult,
@@ -35,11 +44,12 @@ def link_schema(
     if token_budget < 1 or max_tables < 1:
         raise ValueError("schema budget and max_tables must be positive")
     terms = _plan_terms(plan)
+    dimension_terms, metric_terms, intent_terms = _intent_terms(plan)
     ranked = sorted(
         retrieval.candidates,
         key=lambda item: (
-            -len(terms & set(normalize_tokens(item.document.retrieval_text()))),
             -item.score,
+            -len(terms & set(normalize_tokens(item.document.retrieval_text()))),
             item.document.document_id,
         ),
     )
@@ -62,13 +72,42 @@ def link_schema(
     if not table_order:
         raise ValueError("schema linker received no retrieval candidates")
     best: SchemaContext | None = None
-    for seed_count in range(1, len(table_order) + 1):
-        tables, joins = minimal_join_closure(catalog, table_order[:seed_count], fk_hops)
+    best_score: tuple[int, int, int, float, int, int] | None = None
+    closure_candidates: list[tuple[set[str], list[str]]] = [
+        minimal_join_closure(catalog, [seed], fk_hops) for seed in table_order
+    ]
+    closure_candidates.extend(
+        minimal_join_closure(catalog, table_order[:seed_count], fk_hops)
+        for seed_count in range(2, len(table_order) + 1)
+    )
+    seen_closures: set[tuple[frozenset[str], tuple[str, ...]]] = set()
+    for tables, joins in closure_candidates:
+        closure_key = (frozenset(tables), tuple(joins))
+        if closure_key in seen_closures:
+            continue
+        seen_closures.add(closure_key)
         columns = {
             f"{item.document.table}.{item.document.column}"
             for item in ranked
             if item.document.table in tables and item.document.column is not None
         }
+        informative_terms = intent_terms - {
+            "id",
+            "order",
+            "orders",
+            "customer",
+            "customers",
+            "product",
+            "products",
+            "table",
+            "dataset",
+        }
+        for catalog_table in catalog.tables:
+            if catalog_table.name not in tables:
+                continue
+            for column in catalog_table.columns:
+                if informative_terms & set(normalize_tokens(column.name)):
+                    columns.add(f"{catalog_table.name}.{column.name}")
         for join in joins:
             for equality in join.split(" AND "):
                 left, right = equality.split(" = ", maxsplit=1)
@@ -88,7 +127,7 @@ def link_schema(
             for item in ranked
             if item.document.table in tables
         ]
-        best = SchemaContext(
+        context = SchemaContext(
             db_id=catalog.db_id,
             selected_tables=sorted(tables),
             selected_columns=sorted(columns),
@@ -98,6 +137,19 @@ def link_schema(
             rendered_context=rendered,
             estimated_tokens=tokens,
         )
+        schema_terms = set(normalize_tokens(rendered))
+        evidence_quality = sum(item.score for item in evidence) / max(1, len(evidence))
+        score = (
+            len(dimension_terms & schema_terms),
+            len(metric_terms & schema_terms),
+            len(intent_terms & schema_terms),
+            evidence_quality,
+            -len(tables),
+            -tokens,
+        )
+        if best_score is None or score > best_score:
+            best = context
+            best_score = score
     if best is None:
         raise ValueError("even the smallest schema context exceeds the token budget")
     return best

@@ -12,7 +12,7 @@ from agentic_text2sql.contracts.planning import LogicalPlan
 from agentic_text2sql.contracts.retrieval import SchemaContext
 from agentic_text2sql.contracts.sql import SqlCandidate
 
-GENERATOR_PROMPT_VERSION = "generator_v5_schema_coherent"
+GENERATOR_PROMPT_VERSION = "generator_v6_scalar_semantic"
 
 
 def domain_rules(catalog: CatalogSnapshot, glossary_path: Path) -> str:

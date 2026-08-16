@@ -58,7 +58,9 @@ def make_container(tmp_path: Path) -> ApplicationContainer:
 def test_api_ingest_query_sse_reload_and_feedback(tmp_path: Path) -> None:
     container = make_container(tmp_path)
     with TestClient(create_app(container)) as client:
-        assert client.get("/health").status_code == 200
+        health = client.get("/health")
+        assert health.status_code == 200
+        assert health.json()["correction_default"] is True
         assert client.post("/catalogs/ingest", json={"dataset": "olist"}).status_code == 201
         response = client.post(
             "/queries",
@@ -75,9 +77,15 @@ def test_api_ingest_query_sse_reload_and_feedback(tmp_path: Path) -> None:
         assert persisted["result"]["run_id"] == run_id
         assert persisted["config"]["correction_enabled"] is False
         assert persisted["config"]["max_result_rows"] == 200
+        default_response = client.post(
+            "/queries", json={"db_id": "olist", "question": "Count orders again"}
+        )
+        assert default_response.status_code == 202
+        default_run = client.get(f"/queries/{default_response.json()['run_id']}").json()
+        assert default_run["config"]["correction_enabled"] is True
         summaries = client.get("/queries", params={"include_result": False}).json()
-        assert summaries[0]["run_id"] == run_id
-        assert summaries[0]["result"] is None
+        summary = next(item for item in summaries if item["run_id"] == run_id)
+        assert summary["result"] is None
         trace = client.get(f"/queries/{run_id}/trace")
         assert trace.status_code == 200
         assert [event["layer"] for event in trace.json()] == [str(i) for i in range(7)]

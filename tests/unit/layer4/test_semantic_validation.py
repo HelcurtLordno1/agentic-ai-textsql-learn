@@ -58,6 +58,25 @@ def test_valid_scalar_aggregate_has_no_semantic_suspicion() -> None:
     assert semantic_report.accepted
 
 
+def test_returning_customer_semantic_view_is_validated_at_its_declared_grain() -> None:
+    plan = aggregate_plan("returning customer count")
+    valid = validate_semantics(
+        "Có bao nhiêu khách hàng quay lại theo customer_unique_id?",
+        plan,
+        "SELECT COUNT(*) FROM customer_order_facts WHERE order_count > 1",
+        db_id="olist",
+    )
+    missing_filter = validate_semantics(
+        "Có bao nhiêu khách hàng quay lại theo customer_unique_id?",
+        plan,
+        "SELECT COUNT(*) FROM customer_order_facts",
+        db_id="olist",
+    )
+
+    assert valid.accepted
+    assert "RETURNING_CUSTOMER_REPEAT_FILTER_MISSING" in missing_filter.signals
+
+
 def test_ranking_requires_desc_exact_limit_and_tie_break() -> None:
     plan = LogicalPlan(
         question_language="en",

@@ -58,6 +58,22 @@ def test_blocks_unknown_schema(catalog) -> None:
     assert column.error_class is ErrorClass.UNKNOWN_COLUMN
 
 
+def test_rejects_implicit_outer_column_inside_subquery_scope(catalog) -> None:
+    decision = SQLSafetyPolicy().evaluate(
+        "SELECT customer_id FROM customers WHERE customer_id IN (SELECT customer_id FROM products)",
+        catalog,
+    )
+    explicit = SQLSafetyPolicy().evaluate(
+        "SELECT c.customer_id FROM customers AS c "
+        "WHERE EXISTS (SELECT 1 FROM products AS p WHERE c.customer_id IS NOT NULL)",
+        catalog,
+    )
+
+    assert not decision.allowed
+    assert decision.error_class is ErrorClass.UNKNOWN_COLUMN
+    assert explicit.allowed
+
+
 def test_injects_limit_only_for_non_scalar_query(catalog) -> None:
     rows = SQLSafetyPolicy(default_limit=17).evaluate("SELECT * FROM customers", catalog)
     scalar = SQLSafetyPolicy(default_limit=17).evaluate("SELECT COUNT(*) FROM customers", catalog)

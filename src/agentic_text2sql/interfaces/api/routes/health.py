@@ -16,7 +16,7 @@ def health(container: ContainerDep) -> dict[str, object]:
         "status": "ok",
         "environment": "local",
         "registered_catalogs": len(container.registry.list()),
-        "correction_default": False,
+        "correction_default": True,
     }
 
 

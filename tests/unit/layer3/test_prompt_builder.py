@@ -18,7 +18,7 @@ def test_prompt_contains_contract_catalog_glossary_and_version_inputs() -> None:
         required_concepts=["orders"],
     )
     prompt = PromptBuilder(
-        ROOT / "configs/prompts/generator_v5_schema_coherent.j2",
+        ROOT / "configs/prompts/generator_v6_scalar_semantic.j2",
         ROOT / "datasets/olist/business_glossary.yaml",
     ).build("How many orders?", plan, catalog)
     assert "TABLE orders(" in prompt
@@ -28,6 +28,8 @@ def test_prompt_contains_contract_catalog_glossary_and_version_inputs() -> None:
     assert '"confidence"' in prompt
     assert "Never use DML" in prompt
     assert "Join tables only through an explicit FK line" in prompt
+    assert "aggregation plan without dimensions MUST return exactly one row" in prompt
+    assert "SELECT/subquery scope" in prompt
 
 
 def test_prompt_uses_budgeted_grounded_context_instead_of_full_catalog() -> None:
@@ -45,7 +47,7 @@ def test_prompt_uses_budgeted_grounded_context_instead_of_full_catalog() -> None
         estimated_tokens=10,
     )
     prompt = PromptBuilder(
-        ROOT / "configs/prompts/generator_v5_schema_coherent.j2",
+        ROOT / "configs/prompts/generator_v6_scalar_semantic.j2",
         ROOT / "datasets/olist/business_glossary.yaml",
     ).build("Find orders", plan, catalog, context)
     assert "Retrieved schema context with evidence" in prompt

@@ -13,7 +13,7 @@ class QueryRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     db_id: str = Field(min_length=1, max_length=100)
     question: str = Field(min_length=1, max_length=2000)
-    correction_enabled: bool = False
+    correction_enabled: bool = True
 
 
 class QueryAccepted(BaseModel):

@@ -49,7 +49,9 @@ Gate evidence is recorded under [`docs/evidence`](docs/evidence), including the
 The application routes unsupported/write intents before model calls, creates a schema-agnostic
 structured plan, grounds it against a pinned local index, generates one candidate, and sends every
 candidate—including repairs—through the same read-only policy/executor. Correction is bounded to
-one repair and remains opt-in. Gold SQL is loaded only by the evaluator after inference closes.
+one repair. It is enabled by default for interactive API/UI questions and remains explicitly
+switchable for controlled ablations. Gold SQL is loaded only by the evaluator after inference
+closes.
 
 P5 adds one shared runtime path for CLI, FastAPI and Streamlit; a persistent SQLite run/trace/
 feedback/catalog ledger; restart-safe SSE; and a five-workspace local SQL Observatory. Query
@@ -64,6 +66,13 @@ weakening `mode=ro`, `query_only`, the SQLite authorizer, or execution limits. T
 connection, caches bounded metadata, loads history summaries, and polls long queries in a fragment
 so navigation does not block. Drag organization is optional because its component has a measurable
 first-load cost; the keyboard selector remains immediate.
+
+Free-form query hardening scores candidate schema components jointly on required dimensions,
+metrics, intent coverage, retrieval quality, and complexity. This lets a self-contained semantic
+view win for scalar business concepts while retaining connected raw tables for dimensioned queries.
+Unqualified columns must resolve inside their own subquery scope. The UI exposes model confidence
+and validation separately: confidence is not presented as per-query accuracy, which cannot be
+measured honestly without an independent reference result.
 
 ## Gate P6 release evaluation
 

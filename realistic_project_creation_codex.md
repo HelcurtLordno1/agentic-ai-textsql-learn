@@ -1671,19 +1671,19 @@ Mỗi bug quan trọng cần:
 | L2-M3 | Embedding Indexer | Yes | L2-M1, P0-M2 | VERIFIED | immutable FAISS bundles, digest/cache/shape/checksum/rollback; `docs/evidence/p3_1_gate.md` |
 | L2-M4 | Keyword Indexer | Yes | L2-M1 | VERIFIED | JSON artifact, identifier/Vietnamese BM25 and exact boost tests |
 | L2-M5 | Hybrid Retriever | Yes | L2-M3, L2-M4 | VERIFIED | equal-weight RRF wins qualified column recall on disjoint holdout; db isolation |
-| L2-M6 | Schema Linker | Yes | L1-M3, L2-M5 | VERIFIED | rank-independent best connected FK component; disconnected schema decoys are excluded; `docs/evidence/p6_2_hardening.md` |
-| L3-M1 | Prompt Builder | Yes | L1-M3, L2-M6 | VERIFIED | generator v5 validates ownership, declared joins and aggregate-view coherence; `docs/evidence/p6_2_hardening.md` |
+| L2-M6 | Schema Linker | Yes | L1-M3, L2-M5 | VERIFIED | metric/dimension/intent-aware component selection; semantic singleton vs connected raw regressions; `docs/evidence/p6_3_query_recovery.md` |
+| L3-M1 | Prompt Builder | Yes | L1-M3, L2-M6 | VERIFIED | generator v6 validates owner/scope/FK and scalar-over-group result shape; `docs/evidence/p6_3_query_recovery.md` |
 | L3-M2 | Generator Agent | Yes | L3-M1, P0-M2 | VERIFIED | 20-case live typed baseline, one candidate budget; `docs/evidence/p2_gate.md` |
 | L3-M3 | Candidate Normalizer | Yes | L3-M2 | VERIFIED | fence/semicolon/multi-statement/non-query/fingerprint tests |
 | L3-M4 | Candidate Selector | No | baseline complete | NOT_STARTED | — |
-| L4-M1 | Parser + Safety Policy | Yes | P0-M3 | VERIFIED | `tests/unit/layer4/test_policy.py`, `tests/safety/test_sql_safety.py` |
+| L4-M1 | Parser + Safety Policy | Yes | P0-M3 | VERIFIED | subquery-local unqualified-column resolution plus existing AST safety; `tests/unit/layer4/test_policy.py` |
 | L4-M2 | Read-only Executor | Yes | L4-M1 | VERIFIED | RO URI/query_only/authorizer plus atomic read-only WSL-native runtime cache, timeout/caps/checksum tests |
 | L4-M3 | Execution Validator | Yes | L4-M2 | VERIFIED | typed shape/warning reports; `tests/unit/layer4/test_semantic_validation.py`; `docs/evidence/p4_gate.md` |
-| L4-M4 | Semantic Validator | Yes | L4-M3 | VERIFIED | gold-blind intent/shape/business signals; frozen P5 replay + P5.1 rerun |
+| L4-M4 | Semantic Validator | Yes | L4-M3 | VERIFIED | gold-blind intent/shape/business signals including semantic-view grain/filter validation |
 | L4-M5 | Error Normalizer | Yes | L4-M1 | VERIFIED | `tests/unit/layer4/test_error_normalizer.py` |
 | L5-M1 | Error Classifier | Yes | L4-M5 | VERIFIED | rule-first eligibility; policy/timeout no-repair tests |
 | L5-M2 | Correction Planner | Yes | L5-M1 | VERIFIED | typed plan and signal-specific deterministic guidance |
-| L5-M3 | Corrector Agent | Yes | L5-M2, P0-M2 | VERIFIED | structured full-candidate local repair; gold separation test |
+| L5-M3 | Corrector Agent | Yes | L5-M2, P0-M2 | VERIFIED | corrector v5 enforces owner/scope and scalar grouped-result repair; gold separation test |
 | L5-M4 | Feedback Loop Controller | Yes | L5-M3, L4 | VERIFIED | call/repair/deadline/fingerprint stops; full L4 revalidation |
 | L6-M1 | Query State/short memory | Yes | L1–L5 contracts | VERIFIED | typed persistent run/config state + restart recovery; P5 unit/integration tests |
 | L6-M2 | Verified Example Store | No | baseline complete | NOT_STARTED | — |
@@ -1691,7 +1691,7 @@ Mỗi bug quan trọng cần:
 | L6-M4 | Benchmark Harness | Yes | L4, L6-M3 | VERIFIED | filtered/resumable gold-blind inference, checkpoint then evaluator; P5/P5.1 reports |
 | L6-M5 | CLI | Yes | workflow | VERIFIED | ingest/ask/trace/serve commands + CLI integration test |
 | L6-M6 | FastAPI | Yes | L6-M5 | VERIFIED | registered-db API, one-worker queue, summary projection, SSE/trace/report/feedback; API restart test |
-| L6-M7 | Streamlit UI | Yes | L6-M6 | VERIFIED | non-blocking query fragment, cached persistent API client, optional drag/native charts; AppTest/live evidence |
+| L6-M7 | Streamlit UI | Yes | L6-M6 | VERIFIED | correction-on default, confidence/accuracy distinction and failed-attempt diagnostics; `docs/evidence/p6_3_query_recovery.md` |
 | L6-M8 | Documentation/portfolio | Yes | reports/demo | VERIFIED | README, architecture, runbook, demo script, sanitized UI artifact and `docs/evidence/p6_gate.md` |
 | E-M1 | Olist smoke/UAT report | Yes | D-M6, L1–L6 | VERIFIED | P6 Olist-60: 57/60 result correct, 60/60 typed terminal; `docs/evidence/p6_gate.md` |
 | E-M2 | Spider smoke-20 | Yes | L1–L6 | VERIFIED | subsumed by the completed deterministic Spider-200 run; exact-gold evaluator self-test 1,034/1,034 |
@@ -1722,6 +1722,15 @@ không phụ thuộc thứ tự rank; generator v5/corrector v4 bắt buộc ki�
 loop. Evidence tái hiện, kiểm thử và giới hạn benchmark nằm tại
 `docs/evidence/p6_2_hardening.md`. Score P6 lịch sử vẫn gắn với revision cũ; chưa tuyên bố accuracy
 mới nếu chưa rerun manifest.
+
+Post-P6 query-recovery hardening ngày 2026-08-17 xử lý incident returning-customer
+`e4e905f4...`: generator dùng column ngoài subquery scope; correction sau đó trả một dòng `1` cho
+mỗi group; semantic validator lại false-positive với canonical semantic view. Schema linker nay
+đánh giá đồng thời dimension/metric/intent và mọi singleton component, policy chặn implicit outer
+column, generator v6/corrector v5 bắt buộc scalar shape, validator hiểu grain của
+`customer_order_facts`, và correction được bật mặc định cho interactive API/UI. Live run
+`170c567e...` trả scalar `2997` ngay first pass. Chi tiết tại
+`docs/evidence/p6_3_query_recovery.md`. Đây không phải accuracy benchmark mới.
 
 ---
 
