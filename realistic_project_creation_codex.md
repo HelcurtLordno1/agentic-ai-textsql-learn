@@ -1671,13 +1671,13 @@ Mỗi bug quan trọng cần:
 | L2-M3 | Embedding Indexer | Yes | L2-M1, P0-M2 | VERIFIED | immutable FAISS bundles, digest/cache/shape/checksum/rollback; `docs/evidence/p3_1_gate.md` |
 | L2-M4 | Keyword Indexer | Yes | L2-M1 | VERIFIED | JSON artifact, identifier/Vietnamese BM25 and exact boost tests |
 | L2-M5 | Hybrid Retriever | Yes | L2-M3, L2-M4 | VERIFIED | equal-weight RRF wins qualified column recall on disjoint holdout; db isolation |
-| L2-M6 | Schema Linker | Yes | L1-M3, L2-M5 | VERIFIED | plan-aware minimal FK closure, join columns, final serialized budget |
-| L3-M1 | Prompt Builder | Yes | L1-M3, L2-M6 | VERIFIED | cross-domain prompt v4 validates column ownership/minimal shape and prevents Olist glossary leakage |
+| L2-M6 | Schema Linker | Yes | L1-M3, L2-M5 | VERIFIED | rank-independent best connected FK component; disconnected schema decoys are excluded; `docs/evidence/p6_2_hardening.md` |
+| L3-M1 | Prompt Builder | Yes | L1-M3, L2-M6 | VERIFIED | generator v5 validates ownership, declared joins and aggregate-view coherence; `docs/evidence/p6_2_hardening.md` |
 | L3-M2 | Generator Agent | Yes | L3-M1, P0-M2 | VERIFIED | 20-case live typed baseline, one candidate budget; `docs/evidence/p2_gate.md` |
 | L3-M3 | Candidate Normalizer | Yes | L3-M2 | VERIFIED | fence/semicolon/multi-statement/non-query/fingerprint tests |
 | L3-M4 | Candidate Selector | No | baseline complete | NOT_STARTED | — |
 | L4-M1 | Parser + Safety Policy | Yes | P0-M3 | VERIFIED | `tests/unit/layer4/test_policy.py`, `tests/safety/test_sql_safety.py` |
-| L4-M2 | Read-only Executor | Yes | L4-M1 | VERIFIED | RO URI/query_only/authorizer, timeout/caps/checksum tests; canonical Olist queries |
+| L4-M2 | Read-only Executor | Yes | L4-M1 | VERIFIED | RO URI/query_only/authorizer plus atomic read-only WSL-native runtime cache, timeout/caps/checksum tests |
 | L4-M3 | Execution Validator | Yes | L4-M2 | VERIFIED | typed shape/warning reports; `tests/unit/layer4/test_semantic_validation.py`; `docs/evidence/p4_gate.md` |
 | L4-M4 | Semantic Validator | Yes | L4-M3 | VERIFIED | gold-blind intent/shape/business signals; frozen P5 replay + P5.1 rerun |
 | L4-M5 | Error Normalizer | Yes | L4-M1 | VERIFIED | `tests/unit/layer4/test_error_normalizer.py` |
@@ -1690,8 +1690,8 @@ Mỗi bug quan trọng cần:
 | L6-M3 | Trace Store | Yes | L6-M1 | VERIFIED | WAL SQLite layer 0–6 trace, SSE replay, restart persistence; `docs/evidence/p5_gate.md` |
 | L6-M4 | Benchmark Harness | Yes | L4, L6-M3 | VERIFIED | filtered/resumable gold-blind inference, checkpoint then evaluator; P5/P5.1 reports |
 | L6-M5 | CLI | Yes | workflow | VERIFIED | ingest/ask/trace/serve commands + CLI integration test |
-| L6-M6 | FastAPI | Yes | L6-M5 | VERIFIED | registered-db API, one-worker queue, SSE/trace/report/feedback; API restart test |
-| L6-M7 | Streamlit UI | Yes | L6-M6 | VERIFIED | five-workspace SQL Observatory, drag/keyboard UX, AppTest/live health evidence |
+| L6-M6 | FastAPI | Yes | L6-M5 | VERIFIED | registered-db API, one-worker queue, summary projection, SSE/trace/report/feedback; API restart test |
+| L6-M7 | Streamlit UI | Yes | L6-M6 | VERIFIED | non-blocking query fragment, cached persistent API client, optional drag/native charts; AppTest/live evidence |
 | L6-M8 | Documentation/portfolio | Yes | reports/demo | VERIFIED | README, architecture, runbook, demo script, sanitized UI artifact and `docs/evidence/p6_gate.md` |
 | E-M1 | Olist smoke/UAT report | Yes | D-M6, L1–L6 | VERIFIED | P6 Olist-60: 57/60 result correct, 60/60 typed terminal; `docs/evidence/p6_gate.md` |
 | E-M2 | Spider smoke-20 | Yes | L1–L6 | VERIFIED | subsumed by the completed deterministic Spider-200 run; exact-gold evaluator self-test 1,034/1,034 |
@@ -1712,6 +1712,16 @@ Spider-200 đạt 130/200 (65,00%; holdout 67%, regression 63%) và Olist-60 đ�
 evidence tại `docs/evidence/p6_gate.md`. Latency p95 85,29 giây (Spider) và 91,62 giây (Olist) còn
 vượt target interactive 60 giây nên được giữ như limitation. Full Spider-1.034 vẫn là P6.1 optional
 `NOT_STARTED`, không được suy diễn từ score Spider-200.
+
+Post-P6 usability hardening ngày 2026-08-16 đã sửa lỗi thực tế trong câu hỏi Olist “Top 5 danh mục
+theo doanh thu sản phẩm, tách phí vận chuyển, giải thích”. Nguyên nhân không phải từ “giải thích” mà
+do retrieval trộn raw tables với disconnected aggregate view, khiến model bịa
+`order_item_totals.product_id`. Schema linker nay chọn connected component phủ nhiều evidence nhất,
+không phụ thuộc thứ tự rank; generator v5/corrector v4 bắt buộc kiểm tra owner/FK. Runtime SQLite
+được stage atomic/read-only sang filesystem WSL và Streamlit không còn block toàn app trong polling
+loop. Evidence tái hiện, kiểm thử và giới hạn benchmark nằm tại
+`docs/evidence/p6_2_hardening.md`. Score P6 lịch sử vẫn gắn với revision cũ; chưa tuyên bố accuracy
+mới nếu chưa rerun manifest.
 
 ---
 

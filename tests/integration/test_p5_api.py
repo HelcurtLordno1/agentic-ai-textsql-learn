@@ -75,6 +75,9 @@ def test_api_ingest_query_sse_reload_and_feedback(tmp_path: Path) -> None:
         assert persisted["result"]["run_id"] == run_id
         assert persisted["config"]["correction_enabled"] is False
         assert persisted["config"]["max_result_rows"] == 200
+        summaries = client.get("/queries", params={"include_result": False}).json()
+        assert summaries[0]["run_id"] == run_id
+        assert summaries[0]["result"] is None
         trace = client.get(f"/queries/{run_id}/trace")
         assert trace.status_code == 200
         assert [event["layer"] for event in trace.json()] == [str(i) for i in range(7)]

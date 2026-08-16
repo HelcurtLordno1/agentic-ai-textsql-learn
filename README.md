@@ -57,6 +57,14 @@ starters support smooth drag reordering with a keyboard-accessible fallback, whi
 History, Benchmark Lab and System Center expose evidence without allowing browser-side SQL
 execution or arbitrary database paths.
 
+Post-P6 usability hardening keeps schema evidence to the best connected FK component, explicitly
+forbids invented join keys in generator/corrector prompts, and stages registered SQLite files into
+an immutable read-only Linux temp cache. This avoids WSL `/mnt/*` random-I/O latency without
+weakening `mode=ro`, `query_only`, the SQLite authorizer, or execution limits. The UI reuses one HTTP
+connection, caches bounded metadata, loads history summaries, and polls long queries in a fragment
+so navigation does not block. Drag organization is optional because its component has a measurable
+first-load cost; the keyboard selector remains immediate.
+
 ## Gate P6 release evaluation
 
 P6 uses a laptop-stratified Spider-200 release: 100 regression plus 100 disjoint holdout cases over

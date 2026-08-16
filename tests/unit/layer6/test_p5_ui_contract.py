@@ -11,6 +11,10 @@ def test_streamlit_observatory_uses_api_and_has_drag_resize_accessibility() -> N
     assert "Keyboard users" in source
     assert "Save local feedback" in source
     assert "Failure categories" in source
+    assert "@st.cache_resource" in source
+    assert "@st.cache_data" in source
+    assert "@st.fragment" in source
+    assert "while time.monotonic()" not in source
     assert all(
         page in source
         for page in ("Query Studio", "Run Inspector", "History", "Benchmark Lab", "System Center")

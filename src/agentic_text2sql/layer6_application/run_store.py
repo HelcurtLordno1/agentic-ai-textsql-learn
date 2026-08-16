@@ -194,6 +194,7 @@ class SQLiteRunStore:
         limit: int = 50,
         status: RunStatus | None = None,
         query: str | None = None,
+        include_result: bool = True,
     ) -> list[RunRecord]:
         if not 1 <= limit <= 200:
             raise ValueError("limit must be between 1 and 200")
@@ -208,9 +209,17 @@ class SQLiteRunStore:
             parameters.append(f"%{escaped}%")
         where = " WHERE " + " AND ".join(clauses) if clauses else ""
         parameters.append(limit)
+        projection = (
+            "*"
+            if include_result
+            else (
+                "run_id, db_id, question, status, created_at, updated_at, config_json, "
+                "NULL AS result_json"
+            )
+        )
         with self._connect() as connection:
             rows = connection.execute(
-                f"SELECT * FROM runs{where} ORDER BY updated_at DESC LIMIT ?", parameters
+                f"SELECT {projection} FROM runs{where} ORDER BY updated_at DESC LIMIT ?", parameters
             ).fetchall()
         return [self._record(row) for row in rows]
 

@@ -46,8 +46,11 @@ def list_queries(
     limit: Annotated[int, Query(ge=1, le=200)] = 50,
     status: RunStatus | None = None,
     search: Annotated[str | None, Query(max_length=200)] = None,
+    include_result: bool = True,
 ) -> list[QueryResponse]:
-    records = container.runs.list(limit=limit, status=status, query=search)
+    records = container.runs.list(
+        limit=limit, status=status, query=search, include_result=include_result
+    )
     return [_response(item) for item in records]
 
 

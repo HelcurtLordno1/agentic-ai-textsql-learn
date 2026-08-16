@@ -234,16 +234,28 @@ class DirectBaselineService:
         timings["policy"] = (time.monotonic() - policy_started) * 1000
         if not decision.allowed or decision.normalized_sql is None:
             finish_timings()
+            error_class = decision.error_class
+            invalid_schema = {
+                ErrorClass.SYNTAX_ERROR,
+                ErrorClass.UNKNOWN_TABLE,
+                ErrorClass.UNKNOWN_COLUMN,
+                ErrorClass.AMBIGUOUS_COLUMN,
+                ErrorClass.DIALECT_ERROR,
+            }
             return DirectRunResult(
                 run_id=run_id,
                 question=question,
-                status=DirectStatus.POLICY_BLOCKED,
+                status=(
+                    DirectStatus.INVALID_SQL
+                    if error_class in invalid_schema
+                    else DirectStatus.POLICY_BLOCKED
+                ),
                 route_reason=route.reason,
                 prompt_versions=versions,
                 plan=plan.model_dump(mode="json"),
                 schema_context=(schema_context.model_dump(mode="json") if schema_context else None),
                 candidate=candidate,
-                error_class=decision.error_class.value if decision.error_class else None,
+                error_class=error_class.value if error_class else None,
                 safe_message=decision.safe_message,
                 latency_ms=timings,
             )

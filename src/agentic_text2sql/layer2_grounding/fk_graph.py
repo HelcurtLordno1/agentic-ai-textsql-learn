@@ -41,30 +41,44 @@ def minimal_join_closure(
             )
             adjacency[table.name].append((foreign_key.target_table, join))
             adjacency.setdefault(foreign_key.target_table, []).append((table.name, join))
-    if not ordered_seeds:
+    seeds = list(dict.fromkeys(seed for seed in ordered_seeds if seed in adjacency))
+    if not seeds:
         return set(), []
-    selected = {ordered_seeds[0]}
-    joins: set[str] = set()
-    for target in ordered_seeds[1:]:
-        if target in selected:
-            continue
-        queue: deque[PathState] = deque([(target, [target], [])])
-        visited = {target}
-        found: tuple[list[str], list[str]] | None = None
-        while queue:
-            node, path, path_joins = queue.popleft()
-            if len(path) - 1 > max_hops:
+
+    def closure_from(anchor: str) -> tuple[set[str], set[str]]:
+        selected = {anchor}
+        joins: set[str] = set()
+        for target in seeds:
+            if target in selected:
                 continue
-            if node in selected:
-                found = path, path_joins
-                break
-            for neighbor, join in sorted(adjacency.get(node, [])):
-                if neighbor not in visited:
-                    visited.add(neighbor)
-                    queue.append((neighbor, [*path, neighbor], [*path_joins, join]))
-        if found is None:
-            selected.add(target)
-        else:
-            selected.update(found[0])
-            joins.update(found[1])
+            queue: deque[PathState] = deque([(target, [target], [])])
+            visited = {target}
+            found: tuple[list[str], list[str]] | None = None
+            while queue:
+                node, path, path_joins = queue.popleft()
+                if len(path) - 1 > max_hops:
+                    continue
+                if node in selected:
+                    found = path, path_joins
+                    break
+                for neighbor, join in sorted(adjacency.get(node, [])):
+                    if neighbor not in visited:
+                        visited.add(neighbor)
+                        queue.append((neighbor, [*path, neighbor], [*path_joins, join]))
+            if found is not None:
+                selected.update(found[0])
+                joins.update(found[1])
+        return selected, joins
+
+    seed_set = set(seeds)
+    candidates = [closure_from(anchor) for anchor in seeds]
+    # Prefer the component covering the most retrieved evidence, then the smallest
+    # closure. Stable iteration preserves retrieval rank for an exact tie.
+    selected, joins = max(
+        candidates,
+        key=lambda candidate: (
+            len(candidate[0] & seed_set),
+            -len(candidate[0]),
+        ),
+    )
     return selected, sorted(joins)

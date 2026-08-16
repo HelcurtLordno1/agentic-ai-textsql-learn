@@ -2,15 +2,13 @@
 
 from __future__ import annotations
 
+import csv
+import io
 import json
-import time
 from typing import Any
 
 import httpx
-import pandas as pd
-import plotly.express as px
 import streamlit as st
-from streamlit_sortables import sort_items
 from ui_client import LocalAPIClient
 
 st.set_page_config(
@@ -72,7 +70,29 @@ SORTABLE_CSS = """
 """
 st.markdown(CSS, unsafe_allow_html=True)
 
-client = LocalAPIClient()
+
+@st.cache_resource
+def api_client() -> LocalAPIClient:
+    return LocalAPIClient()
+
+
+client = api_client()
+
+
+@st.cache_data(ttl=5, show_spinner=False)
+def cached_health() -> dict[str, Any]:
+    return client.health()
+
+
+@st.cache_data(ttl=10, show_spinner=False)
+def cached_catalogs() -> list[dict[str, Any]]:
+    return client.catalogs()
+
+
+@st.cache_data(ttl=30, show_spinner=False)
+def cached_reports() -> list[dict[str, Any]]:
+    return client.reports()
+
 
 EXAMPLES = [
     "Top 5 danh mục theo doanh thu sản phẩm, tách phí vận chuyển",
@@ -109,6 +129,24 @@ def metric(label: str, value: str, accent: str = "") -> None:
     )
 
 
+def horizontal_bars(records: list[dict[str, Any]], label: str, value: str) -> None:
+    numeric = [
+        (record, float(record[value]))
+        for record in records
+        if isinstance(record.get(value), int | float)
+    ]
+    if not numeric:
+        st.info("This result has no numeric measure to visualize.")
+        return
+    peak = max(abs(number) for _, number in numeric) or 1.0
+    for record, number in sorted(numeric, key=lambda item: item[1], reverse=True):
+        display = f"{number:,.0f}" if number.is_integer() else f"{number:,.2f}"
+        st.progress(
+            min(abs(number) / peak, 1.0),
+            text=f"{record.get(label, '—')} · {display}",
+        )
+
+
 def render_result(run: dict[str, Any]) -> None:
     result = run.get("result") or {}
     status = str(result.get("status", run["status"]))
@@ -133,29 +171,25 @@ def render_result(run: dict[str, Any]) -> None:
 
     if status == "SUCCEEDED":
         table, chart, sql, trust = st.tabs(["Result", "Visualization", "SQL", "Trust & evidence"])
-        frame = pd.DataFrame(rows, columns=columns)
+        frame = [dict(zip(columns, row, strict=True)) for row in rows]
         with table:
             if len(rows) == len(columns) == 1:
                 st.metric(columns[0], rows[0][0])
             else:
-                st.dataframe(frame, use_container_width=True, hide_index=True)
+                st.dataframe(frame, width="stretch", hide_index=True)
+            csv_buffer = io.StringIO()
+            writer = csv.writer(csv_buffer)
+            writer.writerow(columns)
+            writer.writerows(rows)
             st.download_button(
                 "Download preview CSV",
-                frame.to_csv(index=False).encode("utf-8"),
+                csv_buffer.getvalue().encode("utf-8"),
                 f"{run['run_id']}-preview.csv",
                 "text/csv",
             )
         with chart:
             if len(columns) == 2 and len(rows) > 1:
-                figure = px.bar(
-                    frame, x=columns[1], y=columns[0], orientation="h", template="plotly_dark"
-                )
-                figure.update_layout(
-                    paper_bgcolor="rgba(0,0,0,0)",
-                    plot_bgcolor="rgba(0,0,0,0)",
-                    margin=dict(l=10, r=10, t=20, b=10),
-                )
-                st.plotly_chart(figure, use_container_width=True)
+                horizontal_bars(frame, columns[0], columns[1])
             else:
                 st.info("This result shape is best represented as a table or KPI.")
         with sql:
@@ -221,6 +255,29 @@ def render_result(run: dict[str, Any]) -> None:
             api_error(exc)
 
 
+@st.fragment(run_every=1.0 if st.session_state.get("active_run_id") else None)
+def active_run_panel() -> None:
+    run_id = st.session_state.get("active_run_id")
+    if run_id:
+        try:
+            run = client.run(str(run_id))
+        except httpx.HTTPError as exc:
+            api_error(exc)
+            return
+        if run["status"] not in {"COMPLETED", "FAILED"}:
+            st.info(
+                f"Run `{str(run_id)[:8]}` is {str(run['status']).lower()}. "
+                "You may inspect another workspace while it continues in the background."
+            )
+            return
+        st.session_state["active_run"] = run
+        st.session_state.pop("active_run_id", None)
+        st.rerun()
+    if run := st.session_state.get("active_run"):
+        st.divider()
+        render_result(run)
+
+
 def query_studio() -> None:
     hero(
         "Query Studio",
@@ -228,8 +285,8 @@ def query_studio() -> None:
         "A local, read-only workspace for bilingual questions with grounded evidence and bounded correction.",
     )
     try:
-        health = client.health()
-        catalogs = client.catalogs()
+        health = cached_health()
+        catalogs = cached_catalogs()
     except httpx.HTTPError as exc:
         api_error(exc)
         return
@@ -242,6 +299,8 @@ def query_studio() -> None:
         if st.button("Register Olist", type="primary"):
             try:
                 client.ingest("olist")
+                cached_health.clear()
+                cached_catalogs.clear()
                 st.rerun()
             except httpx.HTTPError as exc:
                 api_error(exc)
@@ -251,14 +310,18 @@ def query_studio() -> None:
     with right:
         st.subheader("Drag to prioritize")
         st.caption(
-            "Pull question starters into your preferred order. Keyboard users can use the selector below."
+            "Keyboard users get an instant selector. Enable the optional drag organizer when needed."
         )
-        ordered = sort_items(
-            EXAMPLES,
-            direction="vertical",
-            custom_style=SORTABLE_CSS,
-            key="query-starters",
-        )
+        ordered = EXAMPLES
+        if st.toggle("Enable drag organizer", value=False, key="enable-drag"):
+            from streamlit_sortables import sort_items
+
+            ordered = sort_items(
+                EXAMPLES,
+                direction="vertical",
+                custom_style=SORTABLE_CSS,
+                key="query-starters",
+            )
         starter = st.selectbox("Use a starter", ["Write my own", *ordered])
     with left:
         with st.form("query-form"):
@@ -279,29 +342,17 @@ def query_studio() -> None:
                 st.caption(
                     "Correction remains opt-in after Gate P4 because local model runs can vary."
                 )
-            submitted = st.form_submit_button("Run query", type="primary", use_container_width=True)
+            submitted = st.form_submit_button("Run query", type="primary", width="stretch")
         if submitted:
             try:
                 accepted = client.submit(db_id, question, correction)
                 run_id = accepted["run_id"]
                 st.session_state["active_run_id"] = run_id
-                status = st.status("Observing six-layer workflow…", expanded=True)
-                deadline = time.monotonic() + 75
-                while time.monotonic() < deadline:
-                    run = client.run(run_id)
-                    status.write(f"State: `{run['status']}`")
-                    if run["status"] in {"COMPLETED", "FAILED"}:
-                        status.update(label="Workflow complete", state="complete")
-                        st.session_state["active_run"] = run
-                        break
-                    time.sleep(0.5)
-                else:
-                    status.update(label="Run continues in background", state="running")
+                st.session_state.pop("active_run", None)
+                st.rerun()
             except (httpx.HTTPError, ValueError) as exc:
                 api_error(exc)
-    if run := st.session_state.get("active_run"):
-        st.divider()
-        render_result(run)
+    active_run_panel()
 
 
 def run_inspector() -> None:
@@ -321,6 +372,7 @@ def run_inspector() -> None:
     labels = {f"{item['question'][:70]} · {item['run_id'][:8]}": item for item in runs}
     selected = labels[st.selectbox("Run", list(labels))]
     try:
+        selected = client.run(selected["run_id"])
         events = client.events(selected["run_id"])
     except httpx.HTTPError as exc:
         api_error(exc)
@@ -356,18 +408,24 @@ def history() -> None:
     except httpx.HTTPError as exc:
         api_error(exc)
         return
-    st.caption(f"{len(runs)} run(s) · stored locally")
+    st.caption(f"{len(runs)} run(s) · lightweight summaries loaded")
     for run in runs:
-        result = run.get("result") or {}
-        with st.expander(f"{run['question']} · {result.get('status', run['status'])}"):
+        with st.expander(f"{run['question']} · {run['status']}"):
             a, b, c = st.columns(3)
             a.code(run["run_id"])
             b.write(run["db_id"])
             c.write(run["updated_at"][:19])
-            if result:
-                st.code(
-                    (result.get("candidate") or {}).get("normalized_sql", "No SQL"), language="sql"
-                )
+    if runs:
+        labels = {f"{item['question'][:70]} · {item['run_id'][:8]}": item for item in runs}
+        detail_label = st.selectbox("Open one run", ["None", *labels], key="history-detail")
+        if detail_label != "None":
+            try:
+                detail = client.run(labels[detail_label]["run_id"])
+            except httpx.HTTPError as exc:
+                api_error(exc)
+                return
+            result = detail.get("result") or {}
+            st.code((result.get("candidate") or {}).get("normalized_sql", "No SQL"), language="sql")
 
 
 def benchmark_lab() -> None:
@@ -377,7 +435,7 @@ def benchmark_lab() -> None:
         "Olist application fitness and cross-domain benchmarks stay explicitly separated.",
     )
     try:
-        reports = client.reports()
+        reports = cached_reports()
     except httpx.HTTPError as exc:
         api_error(exc)
         return
@@ -438,31 +496,20 @@ def benchmark_lab() -> None:
             )
             with failures:
                 if categories:
-                    frame = pd.DataFrame(
-                        [{"category": key, "count": value} for key, value in categories.items()]
-                    )
-                    st.plotly_chart(
-                        px.bar(
-                            frame, x="count", y="category", orientation="h", template="plotly_dark"
-                        ),
-                        use_container_width=True,
-                    )
+                    frame = [{"category": key, "count": value} for key, value in categories.items()]
+                    horizontal_bars(frame, "category", "count")
                 else:
                     st.success("No failures in this report.")
             with slices:
                 st.dataframe(
-                    pd.DataFrame(
-                        [{"complexity": key, **value} for key, value in complexity.items()]
-                    ),
-                    use_container_width=True,
+                    [{"complexity": key, **value} for key, value in complexity.items()],
+                    width="stretch",
                     hide_index=True,
                 )
             with partition_view:
                 st.dataframe(
-                    pd.DataFrame(
-                        [{"partition": key, **value} for key, value in partitions.items()]
-                    ),
-                    use_container_width=True,
+                    [{"partition": key, **value} for key, value in partitions.items()],
+                    width="stretch",
                     hide_index=True,
                 )
             with provenance:
@@ -482,9 +529,9 @@ def system_center() -> None:
         "Inspect registered data, pinned models, safety defaults, and service health without exposing secrets.",
     )
     try:
-        health = client.health()
+        health = cached_health()
         models = client.models()
-        catalogs = client.catalogs()
+        catalogs = cached_catalogs()
     except httpx.HTTPError as exc:
         api_error(exc)
         return

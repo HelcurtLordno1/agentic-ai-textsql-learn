@@ -29,6 +29,21 @@ Open `http://127.0.0.1:8501`. The UI intentionally talks only to
 `http://127.0.0.1:8000`; override it with `TEXT2SQL_API_URL` when using a different local port.
 Do not expose either service publicly without adding authentication and deployment hardening.
 
+The API lazily stages each registered database into
+`/tmp/agentic-text2sql-runtime` (override with `TEXT2SQL_RUNTIME_CACHE_DIR`). Cache identity includes
+the canonical source path, size, and nanosecond modification time; publication is atomic and the
+copy is read-only. Keep this cache on the WSL/Linux filesystem, not `/mnt/c` or `/mnt/d`, because
+SQLite scans across the Windows mount are substantially slower. It contains generated databases
+and must never be committed. A changed source automatically gets a new cache identity.
+
+Query submission is asynchronous. Query Studio polls only its active result fragment and does not
+hold the whole Streamlit script in a sleep loop, so users may switch workspaces while inference is
+running. History intentionally fetches lightweight summaries and loads only the selected run. The
+drag organizer is opt-in; leave it disabled for the fastest initial render.
+The tracked Streamlit config disables source-file watching: WSL polling across this repository can
+starve even the health endpoint, while production-like local use does not need hot reload. Restart
+Streamlit manually after editing UI source.
+
 For the verified 16 GiB laptop GPU, start Ollama through the fail-closed monitor. It binds locally,
 limits Ollama to one request, pins 12 low-priority logical CPU cores, uses Flash Attention and a
 quantized KV cache, and terminates the whole Ollama process group on a threshold breach:

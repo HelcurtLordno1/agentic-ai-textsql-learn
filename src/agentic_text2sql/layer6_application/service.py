@@ -13,6 +13,7 @@ from agentic_text2sql.contracts.sql import DirectRunResult
 from agentic_text2sql.contracts.trace import RunRecord, RunStatus, TraceEvent
 from agentic_text2sql.layer6_application.catalog_registry import CatalogRegistry
 from agentic_text2sql.layer6_application.run_store import SQLiteRunStore
+from agentic_text2sql.layer6_application.runtime_database import stage_runtime_database
 from agentic_text2sql.settings import Settings
 
 
@@ -68,6 +69,9 @@ class ApplicationQueryService:
     def execute(self, run_id: str, *, correction_enabled: bool = False) -> DirectRunResult:
         record = self.runs.get(run_id)
         database, catalog = self.registry.resolve(record.db_id)
+        runtime_database = stage_runtime_database(
+            database, self.settings.resolved_runtime_cache_dir, record.db_id
+        )
         self.runs.set_status(run_id, RunStatus.RUNNING)
         self.runs.append_event(
             TraceEvent(run_id=run_id, layer="0", event="RUN_STARTED", elapsed_ms=0)
@@ -79,7 +83,7 @@ class ApplicationQueryService:
                 provenance = getattr(runtime, "provenance", None)
                 if isinstance(provenance, dict):
                     self.runs.update_config(run_id, provenance)
-                result = runtime.run(record.question, database, catalog)
+                result = runtime.run(record.question, runtime_database, catalog)
         except Exception as exc:
             self.runs.append_event(
                 TraceEvent(

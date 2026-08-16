@@ -13,12 +13,15 @@ class LocalAPIClient:
         resolved = base_url or os.environ.get("TEXT2SQL_API_URL") or "http://127.0.0.1:8000"
         self.base_url = resolved.rstrip("/")
         self.timeout = timeout
+        self.client = httpx.Client(base_url=self.base_url, timeout=self.timeout)
 
     def _request(self, method: str, path: str, **kwargs: Any) -> Any:
-        with httpx.Client(base_url=self.base_url, timeout=self.timeout) as client:
-            response = client.request(method, path, **kwargs)
-            response.raise_for_status()
-            return response.json()
+        response = self.client.request(method, path, **kwargs)
+        response.raise_for_status()
+        return response.json()
+
+    def close(self) -> None:
+        self.client.close()
 
     def health(self) -> dict[str, Any]:
         return cast(dict[str, Any], self._request("GET", "/health"))
@@ -52,7 +55,9 @@ class LocalAPIClient:
         return cast(dict[str, Any], self._request("GET", f"/queries/{run_id}"))
 
     def runs(self, search: str | None = None) -> list[dict[str, Any]]:
-        params = {"search": search} if search else None
+        params: dict[str, str | bool] = {"include_result": False}
+        if search:
+            params["search"] = search
         return cast(list[dict[str, Any]], self._request("GET", "/queries", params=params))
 
     def events(self, run_id: str) -> list[dict[str, Any]]:

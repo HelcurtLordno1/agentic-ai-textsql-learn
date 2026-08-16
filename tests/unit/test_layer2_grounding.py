@@ -8,7 +8,12 @@ import httpx
 import pytest
 
 from agentic_text2sql.adapters.embeddings.ollama_embeddings import OllamaEmbeddingClient
-from agentic_text2sql.contracts.catalog import CatalogSnapshot
+from agentic_text2sql.contracts.catalog import (
+    CatalogSnapshot,
+    ColumnInfo,
+    ForeignKeyInfo,
+    TableInfo,
+)
 from agentic_text2sql.contracts.planning import LogicalPlan
 from agentic_text2sql.contracts.retrieval import (
     CatalogDocument,
@@ -153,6 +158,48 @@ def test_plan_aware_linker_enforces_final_budget(tmp_path: Path) -> None:
         for equality in join.split(" AND ")
         for side in equality.split(" = ")
     }
+
+
+def test_join_closure_drops_disconnected_schema_decoys() -> None:
+    from agentic_text2sql.layer2_grounding.fk_graph import minimal_join_closure
+
+    catalog = CatalogSnapshot(
+        db_id="coherent",
+        tables=(
+            TableInfo(
+                name="items",
+                columns=(ColumnInfo(name="product_id", data_type="TEXT"),),
+                foreign_keys=(
+                    ForeignKeyInfo(
+                        from_columns=("product_id",),
+                        target_table="products",
+                        target_columns=("product_id",),
+                    ),
+                ),
+            ),
+            TableInfo(
+                name="products",
+                columns=(ColumnInfo(name="product_id", data_type="TEXT"),),
+            ),
+            TableInfo(
+                name="order_totals",
+                kind="view",
+                columns=(ColumnInfo(name="revenue", data_type="INTEGER"),),
+            ),
+        ),
+        catalog_hash="coherent-catalog",
+    )
+
+    tables, joins = minimal_join_closure(catalog, ["items", "order_totals", "products"], max_hops=2)
+
+    assert tables == {"items", "products"}
+    assert joins == ["items.product_id = products.product_id"]
+
+    reversed_tables, reversed_joins = minimal_join_closure(
+        catalog, ["order_totals", "items", "products"], max_hops=2
+    )
+    assert reversed_tables == {"items", "products"}
+    assert reversed_joins == ["items.product_id = products.product_id"]
 
 
 def test_failed_rebuild_keeps_previous_active_bundle(tmp_path: Path) -> None:

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import tempfile
 from pathlib import Path
 
 from pydantic import Field, field_validator
@@ -25,6 +26,10 @@ class Settings(BaseSettings):
     project_root: Path = Field(default_factory=discover_project_root, alias="PROJECT_ROOT")
     data_dir: Path | None = Field(default=None, alias="TEXT2SQL_DATA_DIR")
     artifact_dir: Path | None = Field(default=None, alias="TEXT2SQL_ARTIFACT_DIR")
+    runtime_cache_dir: Path = Field(
+        default_factory=lambda: Path(tempfile.gettempdir()) / "agentic-text2sql-runtime",
+        alias="TEXT2SQL_RUNTIME_CACHE_DIR",
+    )
     ollama_base_url: str = Field(default="http://127.0.0.1:11434", alias="OLLAMA_BASE_URL")
     ollama_model: str = Field(default="qwen3:14b-q4_K_M", alias="TEXT2SQL_OLLAMA_MODEL")
     ollama_num_gpu: int | None = Field(default=None, alias="TEXT2SQL_OLLAMA_NUM_GPU", ge=0)
@@ -51,3 +56,7 @@ class Settings(BaseSettings):
     @property
     def resolved_artifact_dir(self) -> Path:
         return (self.artifact_dir or self.resolved_data_dir / "artifacts").resolve()
+
+    @property
+    def resolved_runtime_cache_dir(self) -> Path:
+        return self.runtime_cache_dir.resolve()

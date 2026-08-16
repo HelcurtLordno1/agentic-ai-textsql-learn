@@ -58,6 +58,15 @@ def test_run_search_escapes_sql_wildcards(tmp_path: Path) -> None:
     assert [item.run_id for item in store.list(query="100%")] == ["one"]
 
 
+def test_run_list_can_omit_heavy_results(tmp_path: Path) -> None:
+    store = SQLiteRunStore(tmp_path / "application.sqlite")
+    store.create("one", "tiny", "Count")
+    store.set_status("one", RunStatus.COMPLETED, {"result_rows": [[1] for _ in range(200)]})
+
+    assert store.list(include_result=False)[0].result is None
+    assert store.get("one").result is not None
+
+
 def test_restart_fails_incomplete_work_closed_and_keeps_trace(tmp_path: Path) -> None:
     store = SQLiteRunStore(tmp_path / "application.sqlite")
     store.create("queued", "tiny", "Count")

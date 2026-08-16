@@ -19,12 +19,15 @@ from agentic_text2sql.layer1_reasoning.router import QueryRouter
 from agentic_text2sql.layer2_grounding.service import GroundingService, IndexService
 from agentic_text2sql.layer3_generation.generator import GeneratorAgent
 from agentic_text2sql.layer3_generation.normalizer import CandidateNormalizer
-from agentic_text2sql.layer3_generation.prompt_builder import PromptBuilder
+from agentic_text2sql.layer3_generation.prompt_builder import (
+    GENERATOR_PROMPT_VERSION,
+    PromptBuilder,
+)
 from agentic_text2sql.layer3_generation.service import GenerationService
 from agentic_text2sql.layer4_validation.executor import ReadOnlySQLiteExecutor
 from agentic_text2sql.layer4_validation.policy import SQLSafetyPolicy
 from agentic_text2sql.layer4_validation.service import ValidationService
-from agentic_text2sql.layer5_correction.corrector import CorrectorAgent
+from agentic_text2sql.layer5_correction.corrector import CORRECTOR_PROMPT_VERSION, CorrectorAgent
 from agentic_text2sql.layer5_correction.service import CorrectionService
 from agentic_text2sql.layer6_application.query_service import DirectBaselineService
 from agentic_text2sql.settings import Settings
@@ -67,8 +70,8 @@ class RuntimeBundle(AbstractContextManager["RuntimeBundle"]):
             },
             "prompt_versions": {
                 "planner": "planner_v2",
-                "generator": "generator_v4_cross_domain",
-                "corrector": "corrector_v3_cross_domain",
+                "generator": GENERATOR_PROMPT_VERSION,
+                "corrector": CORRECTOR_PROMPT_VERSION,
             },
             "retrieval": {"mode": "hybrid", "top_k": 20, "token_budget": 1200},
             "correction": {
@@ -112,7 +115,7 @@ class RuntimeBundle(AbstractContextManager["RuntimeBundle"]):
                 corrector=CorrectorAgent(
                     self.provider,
                     normalizer,
-                    root / "configs/prompts/corrector_v3_cross_domain.j2",
+                    root / "configs/prompts/corrector_v4_schema_coherent.j2",
                     root / "datasets/olist/business_glossary.yaml",
                     settings.ollama_model,
                 ),
@@ -126,7 +129,7 @@ class RuntimeBundle(AbstractContextManager["RuntimeBundle"]):
             planner=PlannerAgent(self.provider, root / "configs/prompts/planner_v2.j2"),
             generation=GenerationService(
                 PromptBuilder(
-                    root / "configs/prompts/generator_v4_cross_domain.j2",
+                    root / "configs/prompts/generator_v5_schema_coherent.j2",
                     root / "datasets/olist/business_glossary.yaml",
                 ),
                 GeneratorAgent(self.provider),
