@@ -14,6 +14,7 @@ GIB = 1024**3
 
 class ProfileName(StrEnum):
     INTERACTIVE = "interactive-balanced"
+    BENCHMARK = "research-benchmark-safe"
     ACCEPTANCE = "acceptance-safe"
     CPU_FALLBACK = "cpu-fallback"
 
@@ -82,6 +83,28 @@ PROFILES = {
         kv_cache_type="q8_0",
         batch_size=1,
         cooldown_seconds=20,
+    ),
+    ProfileName.BENCHMARK: HardwareProfile(
+        name=ProfileName.BENCHMARK,
+        description=(
+            "Short resumable research batches with both local models resident and stricter "
+            "thermal, power, memory, and swap limits."
+        ),
+        ollama_num_gpu=6,
+        cpu_cores=12,
+        max_loaded_models=2,
+        keep_alive="2m",
+        flash_attention=True,
+        kv_cache_type="q8_0",
+        batch_size=3,
+        cooldown_seconds=20,
+        limits=ResourceLimits(
+            minimum_available_ram_gib=12,
+            maximum_swap_used_gib=0.5,
+            maximum_gpu_memory_mib=10240,
+            maximum_gpu_temperature_c=72,
+            maximum_gpu_power_w=100,
+        ),
     ),
     ProfileName.CPU_FALLBACK: HardwareProfile(
         name=ProfileName.CPU_FALLBACK,

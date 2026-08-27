@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import signal
 import subprocess
 import time
 from pathlib import Path
@@ -31,29 +32,47 @@ def unload_models(base_url: str) -> None:
                 pass
 
 
+def stop_process_group(process: subprocess.Popen[bytes]) -> None:
+    if process.poll() is not None:
+        return
+    os.killpg(process.pid, signal.SIGINT)
+    try:
+        process.wait(timeout=10)
+    except subprocess.TimeoutExpired:
+        os.killpg(process.pid, signal.SIGTERM)
+        process.wait(timeout=10)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "--profile", choices=[item.value for item in ProfileName], default=ProfileName.INTERACTIVE
+        "--profile", choices=[item.value for item in ProfileName], default=ProfileName.BENCHMARK
     )
-    parser.add_argument("--batch-size", type=int, default=10)
-    parser.add_argument("--cooldown-seconds", type=int, default=20)
+    parser.add_argument("--batch-size", type=int)
+    parser.add_argument("--cooldown-seconds", type=int)
+    parser.add_argument("--sample-seconds", type=float, default=0.5)
     parser.add_argument("--max-batches", type=int)
     parser.add_argument("--predictions", type=Path, required=True)
     parser.add_argument("--report", type=Path, required=True)
     parser.add_argument("--manifest", type=Path, required=True)
     args = parser.parse_args()
-    if not 1 <= args.batch_size <= 20:
+    profile = PROFILES[ProfileName(args.profile)]
+    batch_size = args.batch_size if args.batch_size is not None else profile.batch_size
+    cooldown_seconds = (
+        args.cooldown_seconds if args.cooldown_seconds is not None else profile.cooldown_seconds
+    )
+    if not 1 <= batch_size <= 20:
         raise SystemExit("batch-size must be between 1 and 20")
-    if not 0 <= args.cooldown_seconds <= 300:
+    if not 0 <= cooldown_seconds <= 300:
         raise SystemExit("cooldown-seconds must be between 0 and 300")
+    if not 0.5 <= args.sample_seconds <= 10:
+        raise SystemExit("sample-seconds must be between 0.5 and 10")
 
     root = Path(__file__).resolve().parents[1]
     manifest_payload = json.loads(args.manifest.read_text(encoding="utf-8"))
     total_cases = int(manifest_payload["case_count"])
     if total_cases < 1:
         raise SystemExit("manifest case_count must be positive")
-    profile = PROFILES[ProfileName(args.profile)]
     base_url = os.environ.get("OLLAMA_BASE_URL", "http://127.0.0.1:11434").rstrip("/")
     environment = {
         **os.environ,
@@ -63,6 +82,9 @@ def main() -> None:
     }
     batches = 0
     observed_peak = sample_resources()
+    preflight_reason = unsafe_reason(observed_peak, profile.limits)
+    if preflight_reason:
+        raise SystemExit(f"RESOURCE_GUARD_REFUSED_START: {preflight_reason}")
     while count_predictions(args.predictions) < total_cases:
         before = count_predictions(args.predictions)
         command = [
@@ -73,7 +95,7 @@ def main() -> None:
             "--correction",
             "--resume",
             "--max-new-cases",
-            str(args.batch_size),
+            str(batch_size),
             "--predictions",
             str(args.predictions),
             "--report",
@@ -81,15 +103,14 @@ def main() -> None:
             "--manifest",
             str(args.manifest),
         ]
-        process = subprocess.Popen(command, cwd=root, env=environment)
+        process = subprocess.Popen(command, cwd=root, env=environment, start_new_session=True)
         reason: str | None = None
         while process.poll() is None:
             try:
                 current = sample_resources()
             except (OSError, subprocess.SubprocessError, ValueError) as exc:
                 reason = f"monitor failure: {type(exc).__name__}"
-                process.terminate()
-                process.wait(timeout=10)
+                stop_process_group(process)
                 break
             observed_peak = type(current)(
                 available_ram_gib=min(observed_peak.available_ram_gib, current.available_ram_gib),
@@ -103,10 +124,9 @@ def main() -> None:
             )
             reason = unsafe_reason(current, profile.limits)
             if reason:
-                process.terminate()
-                process.wait(timeout=10)
+                stop_process_group(process)
                 break
-            time.sleep(1)
+            time.sleep(args.sample_seconds)
         after = count_predictions(args.predictions)
         if reason:
             unload_models(base_url)
@@ -134,7 +154,7 @@ def main() -> None:
         if args.max_batches is not None and batches >= args.max_batches:
             return
         if after < total_cases:
-            time.sleep(args.cooldown_seconds)
+            time.sleep(cooldown_seconds)
 
 
 if __name__ == "__main__":

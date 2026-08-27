@@ -119,7 +119,7 @@ The server refuses to start if preflight resources are already unsafe.
 
 ```bash
 uv run python scripts/serve_ollama_guarded.py \
-  --profile interactive-balanced \
+  --profile research-benchmark-safe --sample-seconds 0.5 \
   --models-dir data/artifacts/ollama-models
 
 uv run python scripts/create_spider_laptop_manifest.py
@@ -131,8 +131,8 @@ OLLAMA_BASE_URL=http://127.0.0.1:11434 TEXT2SQL_OLLAMA_NUM_GPU=6 \
   --correction --resume --max-new-cases 1
 OLLAMA_BASE_URL=http://127.0.0.1:11434 TEXT2SQL_OLLAMA_NUM_GPU=6 \
   uv run python scripts/run_guarded_spider.py \
-  --profile interactive-balanced \
-  --batch-size 10 --cooldown-seconds 20 \
+  --profile research-benchmark-safe \
+  --batch-size 3 --cooldown-seconds 20 --sample-seconds 0.5 \
   --manifest evals/configs/spider-laptop-200.json \
   --predictions evals/predictions/spider-p6-200-gpu6.jsonl \
   --report evals/reports/spider-p6-200.json
@@ -146,8 +146,9 @@ OLLAMA_BASE_URL=http://127.0.0.1:11434 uv run python scripts/run_guarded_accepta
 
 The pilot must produce one atomic prediction and the supervisor must remain alive before removing
 `--max-new-cases`. The laptop profile is 200 cases across 20 databases, so interruption/resume is
-the normal operating mode. The guarded runner unloads both models every ten cases and cools for 20
-seconds, bounding prompt-cache growth and accumulated load. Full Spider-1034 remains available via
+the normal operating mode. The research profile samples every 0.5 seconds, refuses an unsafe
+preflight, runs three-case atomic batches, unloads both models after each batch, and cools for 20
+seconds. Full Spider-1034 remains available via
 `spider-release-1034.json` as optional P6.1 on stronger hardware; never present the laptop score as
 full dev. Never commit predictions, detailed reports, indexes, model blobs, raw Spider data, or
 databases. When complete, export only the gold-free portfolio summary:

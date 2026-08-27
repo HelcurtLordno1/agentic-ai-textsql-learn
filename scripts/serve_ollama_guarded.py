@@ -34,7 +34,7 @@ def main() -> None:
     )
     parser.add_argument("--models-dir", type=Path)
     parser.add_argument("--host", default="127.0.0.1:11434")
-    parser.add_argument("--sample-seconds", type=float, default=1.0)
+    parser.add_argument("--sample-seconds", type=float, default=0.5)
     args = parser.parse_args()
     if not 0.5 <= args.sample_seconds <= 10:
         raise SystemExit("sample-seconds must be between 0.5 and 10")

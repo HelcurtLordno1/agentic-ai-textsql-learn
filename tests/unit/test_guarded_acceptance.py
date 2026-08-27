@@ -20,10 +20,18 @@ def test_resource_guard_fails_closed_for_each_threshold() -> None:
 
 def test_profiles_bound_parallelism_and_long_run_unloads() -> None:
     interactive = PROFILES[ProfileName.INTERACTIVE]
+    benchmark = PROFILES[ProfileName.BENCHMARK]
     acceptance = PROFILES[ProfileName.ACCEPTANCE]
     assert interactive.ollama_environment()["OLLAMA_NUM_PARALLEL"] == "1"
     assert interactive.max_loaded_models == 2
     assert interactive.ollama_num_gpu == 6
+    assert benchmark.ollama_num_gpu == 6
+    assert benchmark.batch_size == 3
+    assert benchmark.max_loaded_models == 2
+    assert benchmark.limits.minimum_available_ram_gib == 12
+    assert benchmark.limits.maximum_swap_used_gib == 0.5
+    assert benchmark.limits.maximum_gpu_temperature_c == 72
+    assert benchmark.limits.maximum_gpu_power_w == 100
     assert acceptance.batch_size == 1
     assert acceptance.keep_alive == "0"
     assert acceptance.cooldown_seconds == 20
