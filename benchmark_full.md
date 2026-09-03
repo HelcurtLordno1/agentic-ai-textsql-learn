@@ -10,6 +10,11 @@ Trạng thái: `GATE_P6_VERIFIED`
 > prompt và runtime/UI để sửa các lỗi join/scope/scalar thực tế. Không được coi 95%/65% là accuracy
 > đã đo của generator v6/corrector v5; muốn công bố score mới phải chạy lại manifest khóa độc lập. Kết quả cũ
 > vẫn là historical release evidence hợp lệ, không bị sửa ngược.
+>
+> Cảnh báo hardware hiện hành (2026-09-03): các profile P5/P6 100–105 W trong dossier này chỉ là
+> provenance lịch sử, không được dùng cho run laptop mới. R1 Olist v1 đã dừng ở 5/60 khi đạt
+> 78,68 W. Xem `docs/hardware_safety_and_server_reproduction.md` cho hard-cap/pilot rule và cách tái
+> lập full benchmark trên server.
 
 ## 1. Phạm vi và nguyên tắc
 

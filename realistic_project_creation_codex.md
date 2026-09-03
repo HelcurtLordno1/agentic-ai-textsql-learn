@@ -927,6 +927,13 @@ Core code không import OpenAI/Anthropic/Google SDK. Không có API key trong `.
 
 Không hard-code `D:\...`, `/mnt/d/...` hoặc Ollama host IP trong code. Mọi path đi qua settings (`PROJECT_ROOT`, `TEXT2SQL_DATA_DIR`, `TEXT2SQL_ARTIFACT_DIR`). Repo có thể nằm trên ổ D; nếu full benchmark/index I/O chậm trên `/mnt/d`, đặt generated data/artifacts ở WSL ext4 và giữ source trong workspace. Doctor phải in resolved paths, free disk và quyền read/write nhưng không in secrets.
 
+### 12.7 Hardware incident và reproduction runbook hiện hành
+
+Quy trình hiện hành sau R1 power breach, hard-cap/pilot rule, lệnh Olist-60 v2 và đường tái lập full
+benchmark trên server nằm tại `docs/hardware_safety_and_server_reproduction.md`. Các profile P5/P6
+100–105 W được giữ làm provenance lịch sử nhưng không còn là permission cho run mới trên laptop.
+Không thay đổi trạng thái `R1-M1`: Olist-60 v2 và PRACTIQ-100 vẫn chưa hoàn tất.
+
 ---
 
 ## 13. Technology stack theo layer
@@ -1578,6 +1585,9 @@ Gate P6 — Core Complete:
 
 Chỉ chọn từng experiment một:
 
+- R0 khóa baseline/failure intelligence trước khi promote thuật toán mới;
+- R1 question reliability theo PRACTIQ: normalize → interpretations → answerability, chỉ nhánh
+  `ANSWER` được vào SQL pipeline;
 - verified example retrieval;
 - LLM reranking;
 - multi-candidate selection;
@@ -1701,6 +1711,7 @@ Mỗi bug quan trọng cần:
 | E-M5 | Retrieval ablation | Yes | L2 | VERIFIED | qualified k=5/10/20, raw/semantic, mini + disjoint holdout; `docs/evidence/p3_1_gate.md` |
 | E-M6 | Correction ablation | Yes | L5 | VERIFIED | frozen Olist 14/18 off vs 17/18 on; `docs/evidence/p4_gate.md` |
 | E-M7 | BIRD Mini-Dev | No | core complete | NOT_STARTED | — |
+| R1-M1 | PRACTIQ question reliability | No | R0 baseline lock | IN_PROGRESS | Typed/glossary-grounded gate, early-exit và clarification đã có; 3 lỗi P6 Olist development/regression đều được sửa và rerun đúng riêng lẻ, nhưng Olist-60 v1 dừng an toàn ở 5/60 do 78.68 W (prefix 4/5), sau đó entity-owner regression được sửa nên v2 phải chạy mới dưới hard hardware cap; chưa có final macro-F1/Olist-60 và chưa `VERIFIED`; `docs/evidence/r1_question_reliability.md`, `docs/evidence/r1_olist_benchmark.md`, `docs/evidence/r1_resource_guard_incident.md` |
 | X-M1 | PostgreSQL adapter | No | core complete | NOT_STARTED | — |
 
 Overall project status tại thời điểm cập nhật master plan: `GATE_P6_VERIFIED`. P0

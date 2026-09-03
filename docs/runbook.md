@@ -1,5 +1,12 @@
 # Runbook
 
+Trước mọi model benchmark, đọc
+[`hardware_safety_and_server_reproduction.md`](hardware_safety_and_server_reproduction.md). Các giá
+trị profile 100–105 W của P5/P6 trong phần lịch sử bên dưới không còn được phép cho run mới trên
+laptop hiện tại; profile trong code đã được siết về policy mới. Olist Qwen3-14B chỉ có ngoại lệ
+`olist-paper1-ultrasafe` sau hard cap + one-case pilot; full Spider phải chạy trên server với profile
+được hiệu chuẩn riêng.
+
 Run Phase 0 checks and build the Phase 1 data foundation:
 
 ```bash
@@ -59,10 +66,11 @@ uv run text2sql hardware-health --profile interactive-balanced
 uv run python scripts/serve_ollama_guarded.py --profile interactive-balanced
 ```
 
-The interactive profile keeps at most two models resident; Qwen receives a bounded six-layer GPU
-offload while the much smaller BGE model may use a small amount of VRAM. The acceptance command
-below instead unloads checkpoints, runs one case per batch, and cools for 20 seconds. It checkpoints
-each case, so `--resume` continues from the exact persisted prefix after an interruption.
+The current interactive profile keeps at most one model resident and uses the conservative default
+resource limits; Qwen receives a bounded six-layer GPU offload. The historical acceptance command
+below unloads checkpoints, runs one case per batch, and cools for 20 seconds. It checkpoints each
+case, so `--resume` continues from the exact persisted prefix after an interruption when policy
+permits that workload to resume.
 
 Only download requires Internet. The public Kaggle endpoint works without embedding credentials;
 manual placement of the pinned ZIP at `data/raw/olist/olist_brazilian_ecommerce.zip` is also valid.
@@ -78,13 +86,14 @@ different digest. It builds immutable versioned bundles, validates the active po
 qualified mini/holdout reports under ignored `data/artifacts/p3_1/`. `run_smoke.py --mode full` and
 `--mode grounded` write separate predictions/reports for a same-prompt ablation.
 
-Gate P5 acceptance is resumable and writes a checkpoint after every case:
+Gate P5 acceptance command below is preserved as historical provenance and writes a checkpoint after
+every case. Do not invoke it directly for a new laptop run:
 
 ```bash
 uv run python scripts/run_olist_acceptance.py --correction --resume
 ```
 
-For a long acceptance, start a second terminal with the acceptance profile:
+Historical P5 profile (not approved for a new laptop run):
 
 ```bash
 uv run python scripts/serve_ollama_guarded.py --profile acceptance-safe
@@ -113,6 +122,9 @@ evaluator opens the reviewed Olist-60 gold SQL on a read-only database copy. Pre
 reports remain ignored; `docs/evidence/p5_gate.md` is the tracked summary.
 
 ## Gate P6 laptop release
+
+This section reproduces the historical P6 procedure only. It is superseded for new work by
+[`hardware_safety_and_server_reproduction.md`](hardware_safety_and_server_reproduction.md).
 
 Use a persistent `--models-dir` when a model cache must survive OS cleanup; `/tmp` is disposable.
 The server refuses to start if preflight resources are already unsafe.

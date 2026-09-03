@@ -58,6 +58,66 @@ def test_valid_scalar_aggregate_has_no_semantic_suspicion() -> None:
     assert semantic_report.accepted
 
 
+def test_full_distribution_rejects_accidental_limit() -> None:
+    question = "List order counts by status ordered from highest count, breaking ties by status."
+    report = validate_semantics(
+        question,
+        aggregate_plan("order count"),
+        "SELECT order_status, COUNT(*) AS n FROM orders "
+        "GROUP BY order_status ORDER BY n DESC, order_status ASC LIMIT 1",
+    )
+
+    assert not report.accepted
+    assert "FULL_DISTRIBUTION_LIMITED" in report.signals
+
+    valid = validate_semantics(
+        question,
+        aggregate_plan("order count"),
+        "SELECT order_status, COUNT(*) AS n FROM orders "
+        "GROUP BY order_status ORDER BY n DESC, order_status ASC",
+    )
+    assert valid.accepted
+
+    safety_limited = validate_semantics(
+        question,
+        aggregate_plan("order count"),
+        "SELECT order_status, COUNT(*) AS n FROM orders "
+        "GROUP BY order_status ORDER BY n DESC, order_status ASC LIMIT 200",
+    )
+    assert safety_limited.accepted
+
+
+def test_canonical_order_status_filter_rejects_translated_or_timestamp_proxy() -> None:
+    plan = LogicalPlan(
+        question_language="vi",
+        task_type="aggregation",
+        metrics=["order count"],
+        filters=["order status delivered"],
+    )
+    translated = validate_semantics(
+        "Có bao nhiêu đơn hàng đã được giao?",
+        plan,
+        "SELECT COUNT(*) FROM orders WHERE order_status = 'đã được giao'",
+        db_id="olist",
+    )
+    timestamp_proxy = validate_semantics(
+        "Có bao nhiêu đơn hàng đã được giao?",
+        plan,
+        "SELECT COUNT(*) FROM orders WHERE order_delivered_customer_date IS NOT NULL",
+        db_id="olist",
+    )
+    valid = validate_semantics(
+        "Có bao nhiêu đơn hàng đã được giao?",
+        plan,
+        "SELECT COUNT(*) FROM orders WHERE order_status = 'delivered'",
+        db_id="olist",
+    )
+
+    assert "ORDER_STATUS_DELIVERED_FILTER_MISMATCH" in translated.signals
+    assert "ORDER_STATUS_DELIVERED_FILTER_MISMATCH" in timestamp_proxy.signals
+    assert valid.accepted
+
+
 def test_returning_customer_semantic_view_is_validated_at_its_declared_grain() -> None:
     plan = aggregate_plan("returning customer count")
     valid = validate_semantics(

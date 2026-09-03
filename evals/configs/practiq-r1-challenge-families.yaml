@@ -1,0 +1,180 @@
+evaluation_id: practiq-r1-challenge-100-v5
+status: LOCKED_PILOT
+db_id: olist
+construction: project-authored paired families; no PRACTIQ rows or benchmark gold SQL
+review_status: single_reviewer_pending_independent_review
+families:
+  - id: answer_order_count
+    expected: ANSWER
+    questions:
+      - How many orders are in the database?
+      - Có bao nhiêu đơn hàng trong dữ liệu?
+      - Co bao nhieu don hang trong du lieu?
+      - Count all oder records.
+  - id: answer_delivered
+    expected: ANSWER
+    questions:
+      - How many orders have delivered status?
+      - Có bao nhiêu đơn hàng đã được giao?
+      - Co bao nhieu don hang da duoc giao?
+      - Count delivered oder records.
+  - id: answer_canceled
+    expected: ANSWER
+    questions:
+      - How many orders were canceled?
+      - Có bao nhiêu đơn hàng đã hủy?
+      - Co bao nhieu don hang da huy?
+      - Count canceled oder records.
+  - id: answer_payment_types
+    expected: ANSWER
+    questions:
+      - List order counts by payment type.
+      - Liệt kê số đơn theo phương thức thanh toán.
+      - Liet ke so don theo phuong thuc thanh toan.
+      - Count orders by payment type nhé.
+  - id: answer_review_average
+    expected: ANSWER
+    questions:
+      - What is the average review score?
+      - Điểm review trung bình là bao nhiêu?
+      - Diem review trung binh la bao nhieu?
+      - Show avg review score.
+  - id: answer_product_revenue
+    expected: ANSWER
+    questions:
+      - Show the top 5 categories by product revenue.
+      - Top 5 danh mục theo doanh thu sản phẩm.
+      - Top 5 danh muc theo doanh thu san pham.
+      - Top 5 catagory by product revenue.
+  - id: answer_freight_state
+    expected: ANSWER
+    questions:
+      - Show total freight by seller state.
+      - Tổng phí vận chuyển theo bang người bán.
+      - Tong phi van chuyen theo bang nguoi ban.
+      - Freight total by seller state nhé.
+  - id: answer_monthly_orders
+    expected: ANSWER
+    questions:
+      - Show monthly order counts for 2017.
+      - Số đơn từng tháng trong năm 2017.
+      - So don tung thang trong nam 2017.
+      - Monthly oder count for 2017.
+  - id: answer_unique_customers
+    expected: ANSWER
+    questions:
+      - How many unique customers placed an order?
+      - Có bao nhiêu khách hàng duy nhất đã đặt đơn?
+      - Co bao nhieu khach hang duy nhat da dat don?
+      - Count unique custumer IDs with orders.
+  - id: answer_top_seller
+    expected: ANSWER
+    questions:
+      - Which seller has the most sold items?
+      - Người bán nào có nhiều sản phẩm bán nhất?
+      - Nguoi ban nao co nhieu san pham ban nhat?
+      - Top seller by sold item count.
+
+  - id: ambiguous_revenue
+    expected: CLARIFY
+    clarification: Use product revenue, excluding freight and payments.
+    questions:
+      - Show revenue by month.
+      - Cho tôi doanh thu theo tháng.
+      - Cho toi doanh thu theo thang.
+      - Monthly revanue please.
+      - Revenue theo month.
+  - id: ambiguous_state
+    expected: CLARIFY
+    clarification: Use the customer's state.
+    questions:
+      - Count orders by state.
+      - Đếm đơn hàng theo bang.
+      - Dem don hang theo bang.
+      - Orders by state nhé.
+      - Count oder per state.
+  - id: ambiguous_recent
+    expected: CLARIFY
+    clarification: Recent means calendar year 2018.
+    questions:
+      - How many recent orders are there?
+      - Có bao nhiêu đơn hàng gần đây?
+      - Co bao nhieu don hang gan day?
+      - Count recent oder records.
+      - Recent orders là bao nhiêu?
+  - id: ambiguous_active_customer
+    expected: CLARIFY
+    clarification: Active means at least one order in 2018.
+    questions:
+      - How many active customers do we have?
+      - Có bao nhiêu khách hàng đang hoạt động?
+      - Co bao nhieu khach hang dang hoat dong?
+      - Count active custumers.
+      - Active customer count là bao nhiêu?
+  - id: ambiguous_successful_order
+    expected: CLARIFY
+    clarification: Successful means order_status is delivered.
+    questions:
+      - How many successful orders are there?
+      - Có bao nhiêu đơn hàng thành công?
+      - Co bao nhieu don hang thanh cong?
+      - Count successful oder records.
+      - Successful orders là bao nhiêu?
+  - id: ambiguous_top_product
+    expected: CLARIFY
+    clarification: Rank products by sold item quantity.
+    questions:
+      - Show the top products.
+      - Cho tôi các sản phẩm hàng đầu.
+      - Cho toi cac san pham hang dau.
+      - Show top product nhé.
+      - List best products.
+
+  - id: cannot_refund
+    expected: CANNOT_ANSWER
+    questions:
+      - What was the total refunded amount?
+      - Tổng số tiền hoàn lại là bao nhiêu?
+      - Tong so tien hoan lai la bao nhieu?
+      - Show refund amount nhé.
+      - How much money was refunded to customers?
+  - id: cannot_return_reason
+    expected: CANNOT_ANSWER
+    questions:
+      - List the reasons customers returned products.
+      - Liệt kê lý do khách trả hàng.
+      - Liet ke ly do khach tra hang.
+      - Show product return reasons.
+      - Why were items returned?
+  - id: cannot_profit
+    expected: CANNOT_ANSWER
+    questions:
+      - What is net profit after product costs?
+      - Lợi nhuận ròng sau giá vốn là bao nhiêu?
+      - Loi nhuan rong sau gia von la bao nhieu?
+      - Show profit margin nhé.
+      - Calculate revenue minus supplier cost.
+  - id: cannot_customer_age
+    expected: CANNOT_ANSWER
+    questions:
+      - What is the average customer age?
+      - Tuổi trung bình của khách hàng là bao nhiêu?
+      - Tuoi trung binh cua khach hang la bao nhieu?
+      - Show custumer age distribution.
+      - Count customers younger than 30.
+  - id: cannot_income
+    expected: CANNOT_ANSWER
+    questions:
+      - Compare orders by customer income band.
+      - So sánh đơn hàng theo thu nhập khách hàng.
+      - So sanh don hang theo thu nhap khach hang.
+      - Orders by customer salary nhé.
+      - Which income group buys the most?
+  - id: cannot_support_ticket
+    expected: CANNOT_ANSWER
+    questions:
+      - How many customer support tickets were resolved?
+      - Có bao nhiêu yêu cầu hỗ trợ đã xử lý?
+      - Co bao nhieu yeu cau ho tro da xu ly?
+      - Count resolved support tickets.
+      - Show complaint resolution time.

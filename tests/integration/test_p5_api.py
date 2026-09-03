@@ -7,7 +7,16 @@ from types import TracebackType
 
 from fastapi.testclient import TestClient
 
+from agentic_text2sql.contracts.planning import (
+    AnswerabilityDecision,
+    AnswerabilityOutcome,
+    ClarificationContext,
+    ClarificationOption,
+    Interpretation,
+    QuestionCategory,
+)
 from agentic_text2sql.contracts.sql import DirectRunResult, DirectStatus
+from agentic_text2sql.contracts.trace import RunStatus
 from agentic_text2sql.interfaces.api.app import create_app
 from agentic_text2sql.interfaces.api.dependencies import ApplicationContainer
 from agentic_text2sql.settings import Settings
@@ -25,7 +34,14 @@ class FakeRuntime:
     ) -> None:
         del exc_type, exc_value, traceback
 
-    def run(self, question: str, database: Path, catalog: object) -> DirectRunResult:
+    def run(
+        self,
+        question: str,
+        database: Path,
+        catalog: object,
+        *,
+        clarification_context: ClarificationContext | None = None,
+    ) -> DirectRunResult:
         del database, catalog
         return DirectRunResult(
             run_id="runtime",
@@ -33,6 +49,7 @@ class FakeRuntime:
             status=DirectStatus.SUCCEEDED,
             route_reason="query",
             prompt_versions={},
+            clarification_context=clarification_context,
             result_columns=["answer"],
             result_rows=[[42]],
             latency_ms={"route": 1, "planning": 1, "generation": 1, "execution": 1, "total": 4},
@@ -117,6 +134,58 @@ def test_api_rejects_arbitrary_ingest_and_unknown_database(tmp_path: Path) -> No
             "/queries", json={"db_id": "unknown", "question": "Count", "correction_enabled": False}
         )
         assert response.status_code == 404
+    container.close()
+
+
+def test_api_links_clarification_follow_up_to_parent_run(tmp_path: Path) -> None:
+    container = make_container(tmp_path)
+    with TestClient(create_app(container)) as client:
+        assert client.post("/catalogs/ingest", json={"dataset": "olist"}).status_code == 201
+        options = (
+            ClarificationOption(option_id="o1", label="Placed orders"),
+            ClarificationOption(option_id="o2", label="Delivered orders"),
+        )
+        parent = container.runs.create("clarify-parent", "olist", "How many recent orders?")
+        decision = AnswerabilityDecision(
+            outcome=AnswerabilityOutcome.CLARIFY,
+            reason_code=QuestionCategory.AMBIGUOUS_FILTER_CRITERIA,
+            rationale="Recent needs a reporting definition.",
+            interpretations=(
+                Interpretation(interpretation_id="i1", business_label="Placed orders"),
+                Interpretation(interpretation_id="i2", business_label="Delivered orders"),
+            ),
+            clarification_question="Which order population?",
+            clarification_options=options,
+            source="local_llm",
+        )
+        result = DirectRunResult(
+            run_id=parent.run_id,
+            question=parent.question,
+            status=DirectStatus.CLARIFY,
+            route_reason=decision.rationale,
+            prompt_versions={"question_analyst": "question_analyst_v1"},
+            answerability=decision,
+        )
+        container.runs.set_status(
+            parent.run_id, RunStatus.COMPLETED, result.model_dump(mode="json")
+        )
+
+        response = client.post(
+            "/queries",
+            json={
+                "db_id": "olist",
+                "question": "Delivered orders",
+                "clarification_run_id": parent.run_id,
+                "correction_enabled": False,
+            },
+        )
+        assert response.status_code == 202
+        run_id = response.json()["run_id"]
+        with client.stream("GET", f"/queries/{run_id}/events") as stream:
+            assert "event: terminal" in "".join(stream.iter_text())
+        persisted = client.get(f"/queries/{run_id}").json()
+        assert persisted["parent_run_id"] == parent.run_id
+        assert persisted["result"]["clarification_context"]["user_response"] == "Delivered orders"
     container.close()
 
 

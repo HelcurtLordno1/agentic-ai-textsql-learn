@@ -61,10 +61,12 @@ def main() -> None:
     cooldown_seconds = (
         args.cooldown_seconds if args.cooldown_seconds is not None else profile.cooldown_seconds
     )
-    if not 1 <= batch_size <= 20:
-        raise SystemExit("batch-size must be between 1 and 20")
-    if not 0 <= cooldown_seconds <= 300:
-        raise SystemExit("cooldown-seconds must be between 0 and 300")
+    if not 1 <= batch_size <= profile.batch_size:
+        raise SystemExit(f"batch-size must be between 1 and profile maximum {profile.batch_size}")
+    if not profile.cooldown_seconds <= cooldown_seconds <= 300:
+        raise SystemExit(
+            f"cooldown-seconds must be between profile minimum {profile.cooldown_seconds} and 300"
+        )
     if not 0.5 <= args.sample_seconds <= 10:
         raise SystemExit("sample-seconds must be between 0.5 and 10")
 

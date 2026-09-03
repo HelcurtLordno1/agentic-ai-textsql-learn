@@ -226,18 +226,45 @@ def render_result(run: dict[str, Any]) -> None:
             st.warning(f"🛡️ {message}")
         elif status == "CLARIFY":
             st.info(message)
+        elif status == "CANNOT_ANSWER":
+            st.warning(f"The available data cannot answer this request. {message}")
         else:
             st.error(message)
-        with st.expander("Attempted output and diagnostics", expanded=True):
-            st.code(candidate_record.get("normalized_sql", "No SQL candidate"), language="sql")
-            st.write(f"Validation error: `{result.get('error_class') or status}`")
-            if result.get("schema_context"):
-                st.code(
-                    result["schema_context"].get("rendered_context", "No schema context"),
-                    language="text",
+        answerability = result.get("answerability") or {}
+        if status == "CLARIFY" and answerability.get("clarification_options"):
+            st.subheader(answerability.get("clarification_question", "Please clarify"))
+            options = answerability["clarification_options"]
+            labels = [str(item["label"]) for item in options]
+            with st.form(f"clarification-{run['run_id']}"):
+                selected = st.radio("Business choice", labels)
+                detail = st.text_input(
+                    "Optional detail",
+                    placeholder="Add a threshold, date range, or population if needed",
+                    max_chars=1000,
                 )
-            if result.get("correction"):
-                st.json(result["correction"])
+                follow_up = st.form_submit_button("Continue with this choice", type="primary")
+            if follow_up:
+                response = selected if not detail else f"{selected}. {detail}"
+                try:
+                    accepted = client.submit(
+                        run["db_id"], response, True, clarification_run_id=run["run_id"]
+                    )
+                    st.session_state["active_run_id"] = accepted["run_id"]
+                    st.session_state.pop("active_run", None)
+                    st.rerun()
+                except httpx.HTTPError as exc:
+                    api_error(exc)
+        if candidate_record or result.get("schema_context") or result.get("correction"):
+            with st.expander("Attempted output and diagnostics", expanded=True):
+                st.code(candidate_record.get("normalized_sql", "No SQL candidate"), language="sql")
+                st.write(f"Validation error: `{result.get('error_class') or status}`")
+                if result.get("schema_context"):
+                    st.code(
+                        result["schema_context"].get("rendered_context", "No schema context"),
+                        language="text",
+                    )
+                if result.get("correction"):
+                    st.json(result["correction"])
 
     st.subheader("Was this answer useful?")
     st.caption("Feedback stays on this machine and is linked to the immutable run ID.")

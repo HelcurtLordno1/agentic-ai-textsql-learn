@@ -461,6 +461,175 @@ def test_plan_terms_change_single_table_selection() -> None:
     assert context.selected_tables == ["products"]
 
 
+def test_filter_terms_beat_higher_ranked_metric_only_decoy() -> None:
+    from agentic_text2sql.layer2_grounding.schema_linker import link_schema
+
+    catalog = CatalogSnapshot(
+        db_id="status_filter",
+        tables=(
+            TableInfo(
+                name="customer_order_facts",
+                kind="view",
+                columns=(ColumnInfo(name="order_count", data_type="INTEGER"),),
+            ),
+            TableInfo(
+                name="orders",
+                columns=(
+                    ColumnInfo(name="order_id", data_type="TEXT"),
+                    ColumnInfo(name="order_status", data_type="TEXT"),
+                ),
+            ),
+        ),
+        catalog_hash="12345678",
+    )
+    documents = (
+        CatalogDocument(
+            document_id="status_filter.customer_order_facts.order_count",
+            db_id="status_filter",
+            kind="column",
+            table="customer_order_facts",
+            column="order_count",
+            description="order count",
+            catalog_hash=catalog.catalog_hash,
+        ),
+        CatalogDocument(
+            document_id="status_filter.orders.order_status",
+            db_id="status_filter",
+            kind="column",
+            table="orders",
+            column="order_status",
+            description="delivered canceled status",
+            catalog_hash=catalog.catalog_hash,
+        ),
+    )
+    retrieval = RetrievalResult(
+        db_id="status_filter",
+        mode="hybrid",
+        candidates=(
+            RankedDocument(document=documents[0], score=1.0, sources=("dense",)),
+            RankedDocument(document=documents[1], score=0.5, sources=("bm25",)),
+        ),
+        estimated_tokens=10,
+        catalog_hash=catalog.catalog_hash,
+    )
+    plan = LogicalPlan(
+        question_language="en",
+        task_type="aggregation",
+        metrics=["order count"],
+        filters=["order status delivered"],
+        required_concepts=["orders"],
+    )
+
+    context = link_schema(plan, retrieval, catalog, max_tables=2)
+
+    assert context.selected_tables == ["orders"]
+    assert "orders.order_status" in context.selected_columns
+
+
+def test_interpretation_concept_beats_customer_identity_decoy() -> None:
+    from agentic_text2sql.layer2_grounding.schema_linker import link_schema
+
+    catalog = CatalogSnapshot(
+        db_id="olist",
+        tables=(
+            TableInfo(
+                name="customer_order_facts",
+                kind="view",
+                columns=(ColumnInfo(name="customer_unique_id", data_type="TEXT"),),
+            ),
+            TableInfo(
+                name="olist_customers_dataset",
+                columns=(ColumnInfo(name="customer_state", data_type="TEXT"),),
+            ),
+        ),
+        catalog_hash="12345678",
+    )
+    identity = CatalogDocument(
+        document_id="olist.customer_order_facts.customer_unique_id",
+        db_id="olist",
+        kind="column",
+        table="customer_order_facts",
+        column="customer_unique_id",
+        description="customer identity",
+        catalog_hash=catalog.catalog_hash,
+    )
+    state = CatalogDocument(
+        document_id="olist.olist_customers_dataset.customer_state",
+        db_id="olist",
+        kind="column",
+        table="olist_customers_dataset",
+        column="customer_state",
+        description="customer state",
+        catalog_hash=catalog.catalog_hash,
+    )
+    retrieval = RetrievalResult(
+        db_id="olist",
+        mode="hybrid",
+        candidates=(
+            RankedDocument(document=identity, score=1.0, sources=("dense",)),
+            RankedDocument(document=state, score=0.5, sources=("bm25",)),
+        ),
+        estimated_tokens=10,
+        catalog_hash=catalog.catalog_hash,
+    )
+    plan = LogicalPlan(
+        question_language="vi",
+        task_type="aggregation",
+        metrics=["distinct count"],
+        required_concepts=["Customer state (customer_state)"],
+    )
+
+    context = link_schema(plan, retrieval, catalog, max_tables=2)
+
+    assert context.selected_tables == ["olist_customers_dataset"]
+    assert context.selected_columns == ["olist_customers_dataset.customer_state"]
+
+
+def test_entity_count_prefers_base_owner_over_child_fact() -> None:
+    from agentic_text2sql.layer2_grounding.schema_linker import link_schema
+
+    catalog = CatalogSnapshot(
+        db_id="shop",
+        tables=(
+            TableInfo(
+                name="orders",
+                columns=(ColumnInfo(name="order_id", data_type="TEXT"),),
+            ),
+            TableInfo(
+                name="order_payments",
+                columns=(ColumnInfo(name="order_id", data_type="TEXT"),),
+            ),
+        ),
+        catalog_hash="12345678",
+    )
+    payment = CatalogDocument(
+        document_id="shop.order_payments.order_id",
+        db_id="shop",
+        kind="column",
+        table="order_payments",
+        column="order_id",
+        description="order payment event",
+        catalog_hash=catalog.catalog_hash,
+    )
+    retrieval = RetrievalResult(
+        db_id="shop",
+        mode="dense",
+        candidates=(RankedDocument(document=payment, score=1.0, sources=("dense",)),),
+        estimated_tokens=10,
+        catalog_hash=catalog.catalog_hash,
+    )
+    plan = LogicalPlan(
+        question_language="en",
+        task_type="aggregation",
+        metrics=["order count"],
+        required_concepts=["all orders"],
+    )
+
+    context = link_schema(plan, retrieval, catalog, max_tables=2)
+
+    assert context.selected_tables == ["orders"]
+
+
 def test_qualified_metric_rejects_same_name_from_wrong_table() -> None:
     catalog = fixture_catalog()
     gold = extract_gold_schema("SELECT customer_id FROM customers", catalog)

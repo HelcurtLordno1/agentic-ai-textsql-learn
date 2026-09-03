@@ -38,6 +38,7 @@ class RunRecord(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
     run_id: str
     db_id: str
+    parent_run_id: str | None = None
     question: str
     status: RunStatus
     created_at: str

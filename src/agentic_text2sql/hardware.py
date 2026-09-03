@@ -17,15 +17,17 @@ class ProfileName(StrEnum):
     BENCHMARK = "research-benchmark-safe"
     ACCEPTANCE = "acceptance-safe"
     CPU_FALLBACK = "cpu-fallback"
+    R1_RELIABILITY = "r1-reliability-ultrasafe"
+    OLIST_PAPER1 = "olist-paper1-ultrasafe"
 
 
 class ResourceLimits(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
-    minimum_available_ram_gib: float = Field(default=10, gt=0)
-    maximum_swap_used_gib: float = Field(default=1, gt=0)
-    maximum_gpu_memory_mib: int = Field(default=11776, gt=0)
-    maximum_gpu_temperature_c: int = Field(default=76, gt=0)
-    maximum_gpu_power_w: float = Field(default=105, gt=0)
+    minimum_available_ram_gib: float = Field(default=14, gt=0)
+    maximum_swap_used_gib: float = Field(default=0.25, gt=0)
+    maximum_gpu_memory_mib: int = Field(default=6144, gt=0)
+    maximum_gpu_temperature_c: int = Field(default=68, gt=0)
+    maximum_gpu_power_w: float = Field(default=70, gt=0)
 
 
 class HardwareProfile(BaseModel):
@@ -65,7 +67,7 @@ PROFILES = {
         ),
         ollama_num_gpu=6,
         cpu_cores=12,
-        max_loaded_models=2,
+        max_loaded_models=1,
         keep_alive="5m",
         flash_attention=True,
         kv_cache_type="q8_0",
@@ -87,24 +89,17 @@ PROFILES = {
     ProfileName.BENCHMARK: HardwareProfile(
         name=ProfileName.BENCHMARK,
         description=(
-            "Short resumable research batches with both local models resident and stricter "
-            "thermal, power, memory, and swap limits."
+            "One-case resumable research batches with model unload and conservative current "
+            "laptop resource limits."
         ),
         ollama_num_gpu=6,
         cpu_cores=12,
-        max_loaded_models=2,
-        keep_alive="2m",
+        max_loaded_models=1,
+        keep_alive="0",
         flash_attention=True,
         kv_cache_type="q8_0",
-        batch_size=3,
-        cooldown_seconds=20,
-        limits=ResourceLimits(
-            minimum_available_ram_gib=12,
-            maximum_swap_used_gib=0.5,
-            maximum_gpu_memory_mib=10240,
-            maximum_gpu_temperature_c=72,
-            maximum_gpu_power_w=100,
-        ),
+        batch_size=1,
+        cooldown_seconds=60,
     ),
     ProfileName.CPU_FALLBACK: HardwareProfile(
         name=ProfileName.CPU_FALLBACK,
@@ -117,6 +112,48 @@ PROFILES = {
         kv_cache_type="f16",
         batch_size=1,
         cooldown_seconds=30,
+    ),
+    ProfileName.R1_RELIABILITY: HardwareProfile(
+        name=ProfileName.R1_RELIABILITY,
+        description=(
+            "One classification at a time with conservative GPU offload, unload, and cooldown."
+        ),
+        ollama_num_gpu=4,
+        cpu_cores=6,
+        max_loaded_models=1,
+        keep_alive="0",
+        flash_attention=True,
+        kv_cache_type="q8_0",
+        batch_size=1,
+        cooldown_seconds=45,
+        limits=ResourceLimits(
+            minimum_available_ram_gib=14,
+            maximum_swap_used_gib=0.25,
+            maximum_gpu_memory_mib=6144,
+            maximum_gpu_temperature_c=68,
+            maximum_gpu_power_w=70,
+        ),
+    ),
+    ProfileName.OLIST_PAPER1: HardwareProfile(
+        name=ProfileName.OLIST_PAPER1,
+        description=(
+            "Qwen3-14B Olist evaluation with minimal GPU offload and hard circuit breakers."
+        ),
+        ollama_num_gpu=1,
+        cpu_cores=6,
+        max_loaded_models=1,
+        keep_alive="0",
+        flash_attention=True,
+        kv_cache_type="q8_0",
+        batch_size=1,
+        cooldown_seconds=60,
+        limits=ResourceLimits(
+            minimum_available_ram_gib=13,
+            maximum_swap_used_gib=0.25,
+            maximum_gpu_memory_mib=4096,
+            maximum_gpu_temperature_c=65,
+            maximum_gpu_power_w=78,
+        ),
     ),
 }
 

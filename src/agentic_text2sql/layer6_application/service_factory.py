@@ -12,9 +12,16 @@ import yaml
 from agentic_text2sql.adapters.embeddings.ollama_embeddings import OllamaEmbeddingClient
 from agentic_text2sql.adapters.llm.ollama_provider import OllamaProvider
 from agentic_text2sql.contracts.catalog import CatalogSnapshot
+from agentic_text2sql.contracts.planning import ClarificationContext
 from agentic_text2sql.contracts.sql import DirectRunResult
 from agentic_text2sql.layer1_reasoning.decomposer import Decomposer
 from agentic_text2sql.layer1_reasoning.planner import PlannerAgent
+from agentic_text2sql.layer1_reasoning.question_analyst import (
+    QUESTION_ANALYST_PROMPT_VERSION,
+    QuestionAnalyst,
+)
+from agentic_text2sql.layer1_reasoning.question_normalizer import QuestionNormalizer
+from agentic_text2sql.layer1_reasoning.question_reliability import QuestionReliabilityService
 from agentic_text2sql.layer1_reasoning.router import QueryRouter
 from agentic_text2sql.layer2_grounding.service import GroundingService, IndexService
 from agentic_text2sql.layer3_generation.generator import GeneratorAgent
@@ -69,6 +76,7 @@ class RuntimeBundle(AbstractContextManager["RuntimeBundle"]):
                 "seed": settings.ollama_seed,
             },
             "prompt_versions": {
+                "question_analyst": QUESTION_ANALYST_PROMPT_VERSION,
                 "planner": "planner_v2",
                 "generator": GENERATOR_PROMPT_VERSION,
                 "corrector": CORRECTOR_PROMPT_VERSION,
@@ -140,6 +148,15 @@ class RuntimeBundle(AbstractContextManager["RuntimeBundle"]):
             executor=executor,
             grounding=grounding,
             correction=correction,
+            reliability=QuestionReliabilityService(
+                QuestionNormalizer(),
+                QueryRouter(),
+                QuestionAnalyst(
+                    self.provider,
+                    root / "configs/prompts/question_analyst_v1.j2",
+                    root / "datasets/olist/business_glossary.yaml",
+                ),
+            ),
             run_deadline_seconds=settings.run_deadline_seconds,
         )
 
@@ -148,10 +165,22 @@ class RuntimeBundle(AbstractContextManager["RuntimeBundle"]):
             raise RuntimeError("Embedding client is not configured")
         return self.embedding.embed(texts, batch_size=32)
 
-    def run(self, question: str, database: Path, catalog: CatalogSnapshot) -> DirectRunResult:
+    def run(
+        self,
+        question: str,
+        database: Path,
+        catalog: CatalogSnapshot,
+        *,
+        clarification_context: ClarificationContext | None = None,
+    ) -> DirectRunResult:
         provider_before = self.provider.telemetry.milliseconds()
         embedding_before = dict(self.embedding.telemetry) if self.embedding is not None else {}
-        result = self.service.run(question, database, catalog)
+        result = self.service.run(
+            question,
+            database,
+            catalog,
+            clarification_context=clarification_context,
+        )
         telemetry = {
             key: value - provider_before.get(key, 0)
             for key, value in self.provider.telemetry.milliseconds().items()

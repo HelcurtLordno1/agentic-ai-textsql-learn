@@ -50,9 +50,16 @@ class Decomposer:
             lowered,
         )
         limit = int(next(value for value in limit_match.groups() if value)) if limit_match else None
-        asks_superlative = bool(re.search(r"\bnhiều\b.{0,40}\bnhất\b", lowered)) or any(
+        asks_ordering_only = any(
             value in lowered
-            for value in ("most", "highest", "nhiều nhất", "cao nhất", "xuất hiện nhiều nhất")
+            for value in ("ordered from highest", "order from highest", "sorted from highest")
+        )
+        asks_superlative = not asks_ordering_only and (
+            bool(re.search(r"\bnhiều\b.{0,40}\bnhất\b", lowered))
+            or any(
+                value in lowered
+                for value in ("most", "highest", "nhiều nhất", "cao nhất", "xuất hiện nhiều nhất")
+            )
         )
         asks_scalar_maximum = any(
             value in lowered for value in ("what is the maximum", "lớn nhất từng")
@@ -60,13 +67,22 @@ class Decomposer:
         if asks_superlative and not asks_scalar_maximum and limit is None:
             limit = 1
         filters = []
-        for value in ("delivered", "canceled", "unavailable", "giao thành công", "đã hủy"):
-            if value in lowered:
-                filters.append(value)
+        status_filters = {
+            "order status delivered": ("delivered", "giao thành công", "đã được giao"),
+            "order status canceled": ("canceled", "cancelled", "đã hủy"),
+            "order status unavailable": ("unavailable", "không khả dụng"),
+        }
+        for canonical, aliases in status_filters.items():
+            if any(value in lowered for value in aliases):
+                filters.append(canonical)
         if any(value in lowered for value in ("delivered late", "late delivery", "giao trễ")):
-            filters = [value for value in filters if value != "delivered"]
-        sort = ["metric descending"] if ("top" in lowered or asks_superlative) else []
-        if any(value in lowered for value in ("tie-break", "hòa thì")):
+            filters = [value for value in filters if value != "order status delivered"]
+        sort = (
+            ["metric descending"]
+            if ("top" in lowered or asks_superlative or asks_ordering_only)
+            else []
+        )
+        if any(value in lowered for value in ("tie-break", "breaking ties", "hòa thì")):
             sort.append("dimension ascending tie-break")
         time_hints = re.findall(r"\b20\d{2}\b", lowered)
         return DecomposedQuestion(

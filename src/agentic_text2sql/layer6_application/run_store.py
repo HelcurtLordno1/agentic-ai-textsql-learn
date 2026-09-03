@@ -34,6 +34,7 @@ class SQLiteRunStore:
                 CREATE TABLE IF NOT EXISTS runs (
                     run_id TEXT PRIMARY KEY,
                     db_id TEXT NOT NULL,
+                    parent_run_id TEXT,
                     question TEXT NOT NULL,
                     status TEXT NOT NULL,
                     created_at TEXT NOT NULL,
@@ -61,6 +62,8 @@ class SQLiteRunStore:
                 connection.execute(
                     "ALTER TABLE runs ADD COLUMN config_json TEXT NOT NULL DEFAULT '{}'"
                 )
+            if "parent_run_id" not in columns:
+                connection.execute("ALTER TABLE runs ADD COLUMN parent_run_id TEXT")
 
     def create(
         self,
@@ -68,16 +71,18 @@ class SQLiteRunStore:
         db_id: str,
         question: str,
         config: dict[str, object] | None = None,
+        parent_run_id: str | None = None,
     ) -> RunRecord:
         timestamp = _now()
         with self._connect() as connection:
             connection.execute(
                 "INSERT INTO runs "
-                "(run_id, db_id, question, status, created_at, updated_at, config_json) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?)",
+                "(run_id, db_id, parent_run_id, question, status, created_at, updated_at, "
+                "config_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
                 (
                     run_id,
                     db_id,
+                    parent_run_id,
                     question,
                     RunStatus.QUEUED.value,
                     timestamp,
@@ -214,7 +219,7 @@ class SQLiteRunStore:
             if include_result
             else (
                 "run_id, db_id, question, status, created_at, updated_at, config_json, "
-                "NULL AS result_json"
+                "parent_run_id, NULL AS result_json"
             )
         )
         with self._connect() as connection:
@@ -230,6 +235,7 @@ class SQLiteRunStore:
         return RunRecord(
             run_id=str(row["run_id"]),
             db_id=str(row["db_id"]),
+            parent_run_id=(str(row["parent_run_id"]) if row["parent_run_id"] is not None else None),
             question=str(row["question"]),
             status=RunStatus(str(row["status"])),
             created_at=str(row["created_at"]),

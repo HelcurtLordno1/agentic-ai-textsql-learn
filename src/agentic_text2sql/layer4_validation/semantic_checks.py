@@ -27,6 +27,16 @@ def validate_semantics(
     ordered = list(order.expressions) if isinstance(order, exp.Order) else []
     sql_lower = sql.casefold()
     olist_rules = db_id in {None, "olist"}
+    asks_full_descending_distribution = any(
+        phrase in normalized_question
+        for phrase in ("ordered from highest", "order from highest", "sorted from highest")
+    )
+
+    for status in ("delivered", "canceled", "unavailable"):
+        expects_status = any(f"order status {status}" in value.casefold() for value in plan.filters)
+        has_status = bool(re.search(rf"order_status\s*=\s*['\"]{status}['\"]", sql_lower))
+        if olist_rules and expects_status and not has_status:
+            signals.append(f"ORDER_STATUS_{status.upper()}_FILTER_MISMATCH")
 
     ranking_language = bool(re.search(r"\bnhiều\b.{0,40}\bnhất\b", normalized_question)) or any(
         phrase in normalized_question
@@ -40,9 +50,13 @@ def validate_semantics(
         )
     )
     requested_top = re.search(r"\btop\s+(\d+)\b", normalized_question)
-    expects_ranked_rows = ranking_language and not any(
-        phrase in normalized_question
-        for phrase in ("là bao nhiêu", "what is the maximum", "maximum number")
+    expects_ranked_rows = (
+        ranking_language
+        and not asks_full_descending_distribution
+        and not any(
+            phrase in normalized_question
+            for phrase in ("là bao nhiêu", "what is the maximum", "maximum number")
+        )
     )
     if expects_ranked_rows:
         if not ordered:
@@ -61,10 +75,24 @@ def validate_semantics(
 
     asks_alphabetical_tie_break = any(
         phrase in normalized_question
-        for phrase in ("alphabetical tie-break", "hòa thì", "tie-break by")
+        for phrase in ("alphabetical tie-break", "breaking ties by", "hòa thì", "tie-break by")
     )
     if asks_alphabetical_tie_break and (len(ordered) < 2 or bool(ordered[1].args.get("desc"))):
         signals.append("ALPHABETICAL_TIE_BREAK_MISSING")
+
+    if asks_full_descending_distribution:
+        distribution_limit = statement.args.get("limit")
+        distribution_limit_value = (
+            distribution_limit.expression if isinstance(distribution_limit, exp.Limit) else None
+        )
+        explicit_distribution_limit = (
+            int(distribution_limit_value.this)
+            if isinstance(distribution_limit_value, exp.Literal) and distribution_limit_value.is_int
+            else None
+        )
+        # SQLSafetyPolicy appends LIMIT 200 as a resource cap; it is not a user top-k request.
+        if explicit_distribution_limit not in {None, 200}:
+            signals.append("FULL_DISTRIBUTION_LIMITED")
 
     if plan.task_type == "ranking" or plan.limit is not None:
         if statement.args.get("order") is None:

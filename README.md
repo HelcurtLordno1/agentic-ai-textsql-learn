@@ -40,7 +40,7 @@ gold benchmark data. Dữ liệu, database, index, trace, prediction, report chi
 ## Trạng thái đã kiểm chứng
 
 - Gate P0–P6 đã verified; bonus hardening P3.1, P5.1, P6.2 và P6.3 đã có evidence.
-- `make check` gần nhất: Ruff lint/format sạch, mypy strict 105 source files, **175 tests pass** và
+- `make check` gần nhất: Ruff lint/format sạch, mypy strict 110 source files, **217 tests pass** và
   một live-Ollama test được deselect đúng chủ ý.
 - CI của commit `68fde00`: GitHub Actions run `31962809864` thành công.
 - Live incident returning-customer hiện trả `2997` bằng SQL scalar đúng; revenue/freight ranking trả
@@ -81,7 +81,7 @@ Source repository có thể ở đó, nhưng SQLite random I/O nhanh hơn rất 
 git clone https://github.com/HelcurtLordno1/agentic-ai-textsql-learn.git
 cd agentic-ai-textsql-learn
 uv python install 3.12
-uv sync --frozen --extra ui --group dev
+uv sync --frozen --extra ui --extra eval --group dev
 make check
 ```
 
@@ -154,9 +154,10 @@ uv run text2sql hardware-health --profile interactive-balanced
 uv run python scripts/serve_ollama_guarded.py --profile interactive-balanced
 ```
 
-Profile này dùng 6 GPU layers, 12 low-priority logical CPU cores, context 4096, parallelism 1,
-Flash Attention, q8_0 KV cache và monitor fail-closed. Không tăng GPU layers chỉ dựa trên snapshot:
-12/14/10/8-layer pilots từng chạm 108,02/137,65/101,93/113,77 W trong run dài.
+Profile này dùng 6 GPU layers, một model resident, 12 low-priority logical CPU cores, context 4096,
+parallelism 1, Flash Attention, q8_0 KV cache và monitor fail-closed ở policy 70 W hiện hành. Nếu
+workload chạm guard, dừng và chọn CPU fallback/hard cap phù hợp; không tăng GPU layers chỉ dựa trên
+snapshot. Các pilot 12/14/10/8-layer lịch sử từng chạm 108,02/137,65/101,93/113,77 W trong run dài.
 
 Profile `cpu-fallback` vẫn dùng supervisor NVIDIA để quan sát máy đã kiểm chứng; nó chỉ đặt model
 offload về CPU. Vì vậy chỉ dùng lệnh sau khi máy vẫn có `nvidia-smi` nhưng muốn tránh GPU compute:
@@ -229,6 +230,14 @@ không cần kill GPU process thủ công.
 
 ## Cheatsheet — kiểm thử và benchmark
 
+> **Safety update:** các giá trị profile P5/P6 100–105 W trong evidence cũ chỉ là provenance lịch sử
+> và không còn được phép cho run mới trên laptop hiện tại; profile trong code hiện đã được siết về
+> policy mới. Đọc
+> [hardware safety và fresh-server reproduction](docs/hardware_safety_and_server_reproduction.md)
+> trước mọi local-model benchmark. Olist Qwen3-14B chỉ được chạy lại bằng
+> `olist-paper1-ultrasafe` sau khi hard clock/power cap đã được bật và pilot một case thành công;
+> full Spider phải chuyển sang server với profile được hiệu chuẩn riêng.
+
 ```bash
 # Gate kiểm tra bắt buộc trước commit
 make check
@@ -240,30 +249,17 @@ uv run text2sql ollama-smoke
 # Direct/grounded Olist smoke
 uv run python scripts/run_smoke.py --mode grounded --correction on
 
-# Olist-60 checkpointed
-uv run python scripts/serve_ollama_guarded.py --profile acceptance-safe
-uv run python scripts/run_guarded_acceptance.py --profile acceptance-safe
+# Olist-60 laptop: chỉ sau hard cap + one-case pilot theo tài liệu hardware
+uv run python scripts/serve_ollama_guarded.py --profile olist-paper1-ultrasafe
+uv run python scripts/run_guarded_acceptance.py --profile olist-paper1-ultrasafe --max-batches 1
 
-# Spider-200: luôn pilot đúng một case trước
+# Spider-200/1.034: không chạy trực tiếp; dùng server profile + dual guard theo runbook hardware
 uv run python scripts/create_spider_laptop_manifest.py
-OLLAMA_BASE_URL=http://127.0.0.1:11434 TEXT2SQL_OLLAMA_NUM_GPU=6 \
-  uv run python scripts/run_benchmark.py \
-  --manifest evals/configs/spider-laptop-200.json \
-  --predictions evals/predictions/spider-p6-200-gpu6.jsonl \
-  --report evals/reports/spider-p6-200.json \
-  --correction --resume --max-new-cases 1
-
-# Sau khi pilot và supervisor đều khỏe
-OLLAMA_BASE_URL=http://127.0.0.1:11434 TEXT2SQL_OLLAMA_NUM_GPU=6 \
-  uv run python scripts/run_guarded_spider.py \
-  --profile interactive-balanced --batch-size 10 --cooldown-seconds 20 \
-  --manifest evals/configs/spider-laptop-200.json \
-  --predictions evals/predictions/spider-p6-200-gpu6.jsonl \
-  --report evals/reports/spider-p6-200.json
 ```
 
-Không chạy full Spider-1.034 liên tục trên laptop này. Profile full có tại
-`evals/configs/spider-release-1034.json` cho workstation/server hoặc nhiều phiên cooled-resume.
+Không chạy full Spider-1.034 trên laptop này. Manifest full có tại
+`evals/configs/spider-release-1034.json` cho workstation/server đã được hiệu chuẩn và pilot bằng hai
+guard độc lập.
 Prediction được atomic-checkpoint sau từng case; guard stop rồi `--resume` là hành vi bình thường.
 
 ## Biến môi trường hữu ích

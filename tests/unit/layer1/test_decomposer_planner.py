@@ -3,7 +3,7 @@ from typing import Any
 
 from pydantic import BaseModel
 
-from agentic_text2sql.contracts.planning import LogicalPlan
+from agentic_text2sql.contracts.planning import Interpretation, LogicalPlan
 from agentic_text2sql.layer1_reasoning.decomposer import Decomposer
 from agentic_text2sql.layer1_reasoning.planner import (
     PLANNER_PROMPT_VERSION,
@@ -60,6 +60,27 @@ def test_planner_uses_versioned_schema_agnostic_prompt() -> None:
     assert "olist_orders_dataset" not in provider.prompt
 
 
+def test_planner_preserves_accepted_interpretation_for_scalar_grounding() -> None:
+    provider = RecordingProvider()
+    planner = PlannerAgent(provider, ROOT / "configs/prompts/planner_v2.j2")
+    interpretation = Interpretation(
+        interpretation_id="i1",
+        metric="distinct count",
+        dimensions=("Customer state (customer_state)",),
+        grain="customer state",
+        business_label="Number of distinct customer states",
+    )
+
+    plan = planner.plan(
+        "Có bao nhiêu bang khách hàng khác nhau?",
+        Decomposer().decompose("Có bao nhiêu bang khách hàng khác nhau?"),
+        accepted_interpretation=interpretation,
+    )
+
+    assert plan.dimensions == []
+    assert "Customer state (customer_state)" in plan.required_concepts
+
+
 def test_superlative_and_late_delivery_hints_are_deterministic() -> None:
     ranking = Decomposer().decompose(
         "Which seller state has the most records with alphabetical tie-break?"
@@ -69,7 +90,46 @@ def test_superlative_and_late_delivery_hints_are_deterministic() -> None:
     )
     assert ranking.limit_hint == 1
     assert ranking.sort_hints == ["metric descending", "dimension ascending tie-break"]
-    assert "delivered" not in late.filter_hints
+    assert "order status delivered" not in late.filter_hints
+
+
+def test_ordered_distribution_does_not_become_top_one() -> None:
+    question = "List order counts by status ordered from highest count, breaking ties by status."
+    decomposition = Decomposer().decompose(question)
+
+    assert decomposition.limit_hint is None
+    assert decomposition.sort_hints == [
+        "metric descending",
+        "dimension ascending tie-break",
+    ]
+
+    generated = LogicalPlan(
+        question_language="en",
+        task_type="ranking",
+        metrics=["order count"],
+        dimensions=["status"],
+        sort=["metric descending"],
+        limit=1,
+    )
+    aligned = align_plan(question, decomposition, generated)
+    assert aligned.limit is None
+
+
+def test_vietnamese_delivered_status_is_canonical_and_cannot_be_dropped() -> None:
+    question = "Có bao nhiêu đơn hàng đã được giao?"
+    decomposition = Decomposer().decompose(question)
+    generated = LogicalPlan(
+        question_language="vi",
+        task_type="aggregation",
+        metrics=["order count"],
+        filters=["Đơn hàng đã được giao"],
+    )
+
+    aligned = align_plan(question, decomposition, generated)
+
+    assert decomposition.filter_hints == ["order status delivered"]
+    assert aligned.filters == ["Đơn hàng đã được giao", "order status delivered"]
+    assert "order count" in aligned.required_concepts
 
 
 def test_plan_alignment_preserves_scalar_and_ranking_constraints() -> None:

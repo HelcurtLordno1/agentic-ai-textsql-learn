@@ -3,6 +3,13 @@ version: 1
 timezone: unknown
 unsupported_concepts: [returns, refunds]
 concepts:
+  order_status:
+    definition: Canonical Olist lifecycle value; preserve the English stored literal exactly.
+    allowed_values: [approved, canceled, created, delivered, invoiced, processing, shipped, unavailable]
+    canonical_filter_examples:
+      delivered: "order_status = 'delivered'"
+      canceled: "order_status = 'canceled'"
+      unavailable: "order_status = 'unavailable'"
   product_revenue:
     definition: Sum item price at order-item grain for the population/status requested.
     canonical_expression: SUM(olist_order_items_dataset.price_cents)
@@ -28,3 +35,13 @@ concepts:
     definition: Canceled orders divided by an explicitly stated order population; not return rate.
   review_score:
     definition: Review aggregate after reducing review rows to order grain.
+  order_count_by_payment_type:
+    definition: Count distinct order_id values associated with each payment_type; an order may appear in more than one payment type.
+  monthly_order_count:
+    definition: Count distinct orders grouped by month of order_purchase_timestamp unless another order event is explicitly requested.
+  unique_customer:
+    definition: A real customer identity is customer_unique_id; customer_id identifies an order-scoped customer record.
+  seller_state:
+    definition: The seller location state is olist_sellers_dataset.seller_state.
+  sold_item_count:
+    definition: Count order-item rows at order-item grain; use seller_id when ranking sellers.

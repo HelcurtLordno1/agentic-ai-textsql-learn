@@ -177,11 +177,17 @@ def ask(
     db_id: Annotated[str, typer.Option("--db-id")],
     question: Annotated[str, typer.Option("--question")],
     correction: Annotated[bool, typer.Option("--correction/--no-correction")] = False,
+    clarification_run_id: Annotated[str | None, typer.Option("--clarification-run-id")] = None,
 ) -> None:
     """Run the shared read-only workflow and persist its trace."""
     service, _, _ = _application()
     try:
-        record = service.run(db_id, question, correction_enabled=correction)
+        record = service.run(
+            db_id,
+            question,
+            correction_enabled=correction,
+            clarification_run_id=clarification_run_id,
+        )
     except (KeyError, OSError, ValueError, Text2SQLError) as exc:
         typer.echo(f"FAIL query: {exc}", err=True)
         raise typer.Exit(code=1) from exc

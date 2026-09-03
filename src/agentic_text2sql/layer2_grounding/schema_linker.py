@@ -9,6 +9,33 @@ from agentic_text2sql.layer2_grounding.context_packer import estimate_tokens, re
 from agentic_text2sql.layer2_grounding.fk_graph import minimal_join_closure
 from agentic_text2sql.layer2_grounding.keyword_index import normalize_tokens
 
+_TABLE_BOILERPLATE = frozenset({"dataset", "fact", "facts", "olist", "table", "view"})
+
+
+def _entity_owner_tables(plan: LogicalPlan, catalog: CatalogSnapshot) -> list[str]:
+    """Prefer the base entity relation for unqualified entity-count metrics."""
+    metric_tokens = set(normalize_tokens(" ".join([*plan.metrics, *plan.required_concepts])))
+    if "count" not in metric_tokens and not metric_tokens & {"number", "quantity", "so", "luong"}:
+        return []
+    entities = metric_tokens & {
+        "order",
+        "orders",
+        "customer",
+        "customers",
+        "product",
+        "products",
+        "seller",
+        "sellers",
+    }
+    singular_entities = {value.removesuffix("s") for value in entities}
+    owners: list[str] = []
+    for table in catalog.tables:
+        core = set(normalize_tokens(table.name)) - _TABLE_BOILERPLATE
+        singular_core = {value.removesuffix("s") for value in core}
+        if len(singular_core) == 1 and singular_core & singular_entities:
+            owners.append(table.name)
+    return sorted(owners)
+
 
 def _plan_terms(plan: LogicalPlan) -> set[str]:
     values = [
@@ -22,13 +49,16 @@ def _plan_terms(plan: LogicalPlan) -> set[str]:
     return set(normalize_tokens(" ".join(values)))
 
 
-def _intent_terms(plan: LogicalPlan) -> tuple[set[str], set[str], set[str]]:
+def _intent_terms(plan: LogicalPlan) -> tuple[set[str], set[str], set[str], set[str]]:
     dimensions = set(normalize_tokens(" ".join(plan.dimensions)))
     metrics = set(normalize_tokens(" ".join(plan.metrics)))
+    filters = set(normalize_tokens(" ".join(plan.filters)))
     intent = set(
-        normalize_tokens(" ".join([*plan.metrics, *plan.dimensions, *plan.required_concepts]))
+        normalize_tokens(
+            " ".join([*plan.metrics, *plan.dimensions, *plan.filters, *plan.required_concepts])
+        )
     )
-    return dimensions, metrics, intent
+    return dimensions, metrics, filters, intent
 
 
 def link_schema(
@@ -44,7 +74,7 @@ def link_schema(
     if token_budget < 1 or max_tables < 1:
         raise ValueError("schema budget and max_tables must be positive")
     terms = _plan_terms(plan)
-    dimension_terms, metric_terms, intent_terms = _intent_terms(plan)
+    dimension_terms, metric_terms, filter_terms, intent_terms = _intent_terms(plan)
     ranked = sorted(
         retrieval.candidates,
         key=lambda item: (
@@ -53,7 +83,7 @@ def link_schema(
             item.document.document_id,
         ),
     )
-    table_order: list[str] = []
+    table_order: list[str] = _entity_owner_tables(plan, catalog)
     for item in ranked:
         related_tables = [item.document.table]
         if item.document.kind == "relationship":
@@ -72,7 +102,7 @@ def link_schema(
     if not table_order:
         raise ValueError("schema linker received no retrieval candidates")
     best: SchemaContext | None = None
-    best_score: tuple[int, int, int, float, int, int] | None = None
+    best_score: tuple[int, int, int, int, float, int, int] | None = None
     closure_candidates: list[tuple[set[str], list[str]]] = [
         minimal_join_closure(catalog, [seed], fk_hops) for seed in table_order
     ]
@@ -141,6 +171,7 @@ def link_schema(
         evidence_quality = sum(item.score for item in evidence) / max(1, len(evidence))
         score = (
             len(dimension_terms & schema_terms),
+            len(filter_terms & schema_terms),
             len(metric_terms & schema_terms),
             len(intent_terms & schema_terms),
             evidence_quality,

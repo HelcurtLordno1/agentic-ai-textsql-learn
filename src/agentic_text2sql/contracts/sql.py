@@ -5,6 +5,12 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from agentic_text2sql.contracts.planning import (
+    AnswerabilityDecision,
+    ClarificationContext,
+    NormalizedQuestion,
+)
+
 
 class SqlCandidate(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -29,6 +35,7 @@ class CandidateRecord(BaseModel):
 class DirectStatus(StrEnum):
     SUCCEEDED = "SUCCEEDED"
     CLARIFY = "CLARIFY"
+    CANNOT_ANSWER = "CANNOT_ANSWER"
     UNSUPPORTED = "UNSUPPORTED"
     WRITE_BLOCKED = "WRITE_BLOCKED"
     MODEL_ERROR = "MODEL_ERROR"
@@ -46,6 +53,9 @@ class DirectRunResult(BaseModel):
     status: DirectStatus
     route_reason: str
     prompt_versions: dict[str, str]
+    normalized_question: NormalizedQuestion | None = None
+    answerability: AnswerabilityDecision | None = None
+    clarification_context: ClarificationContext | None = None
     plan: dict[str, Any] | None = None
     schema_context: dict[str, Any] | None = None
     candidate: CandidateRecord | None = None

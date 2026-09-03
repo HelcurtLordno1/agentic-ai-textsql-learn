@@ -1,0 +1,32 @@
+evaluation_id: practiq-r1-challenge-v1
+status: PROPOSED
+source: project-authored-bilingual-challenge-set
+paper_mechanism: PRACTIQ question category classification and conversational clarification
+runtime_data_path: null
+splits:
+  development:
+    total: 100
+  locked_test:
+    total: 100
+    answerable: 40
+    ambiguous: 30
+    unanswerable: 30
+required_variants:
+  - vi
+  - en
+  - vi_en_mix
+  - typo
+  - vietnamese_without_diacritics
+review:
+  independent_reviewers: 2
+  adjudicate_after_initial_agreement: true
+  pii_allowed: false
+promotion_thresholds:
+  macro_f1: 0.80
+  ambiguity_recall: 0.85
+  answerable_false_refusal_max: 0.03
+  clarification_success: 0.80
+  confident_wrong_relative_reduction: 0.30
+notes:
+  - The labeled JSONL and predictions remain ignored artifacts and are not runtime dependencies.
+  - No metric is claimed until runtime_data_path, hashes, reviewer provenance, and reports are locked.

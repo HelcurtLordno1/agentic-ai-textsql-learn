@@ -9,7 +9,7 @@ from pathlib import Path
 from jinja2 import Environment, StrictUndefined
 
 from agentic_text2sql.adapters.llm.base import StructuredLLM
-from agentic_text2sql.contracts.planning import DecomposedQuestion, LogicalPlan
+from agentic_text2sql.contracts.planning import DecomposedQuestion, Interpretation, LogicalPlan
 
 PLANNER_PROMPT_VERSION = "planner_v2"
 
@@ -19,17 +19,47 @@ class PlannerAgent:
         self.provider = provider
         self.template_path = template_path
 
-    def plan(self, question: str, decomposition: DecomposedQuestion) -> LogicalPlan:
+    def plan(
+        self,
+        question: str,
+        decomposition: DecomposedQuestion,
+        *,
+        accepted_interpretation: Interpretation | None = None,
+    ) -> LogicalPlan:
         template = Environment(undefined=StrictUndefined, autoescape=False).from_string(
             self.template_path.read_text(encoding="utf-8")
         )
         prompt = template.render(
             question=question,
             decomposition=decomposition.model_dump_json(indent=2),
+            accepted_interpretation=(
+                accepted_interpretation.model_dump_json(indent=2)
+                if accepted_interpretation is not None
+                else "null"
+            ),
             output_schema=json.dumps(LogicalPlan.model_json_schema(), ensure_ascii=False),
         )
         generated = self.provider.generate_structured(prompt=prompt, response_model=LogicalPlan)
-        return align_plan(question, decomposition, generated)
+        aligned = align_plan(question, decomposition, generated)
+        return preserve_interpretation_concepts(aligned, accepted_interpretation)
+
+
+def preserve_interpretation_concepts(
+    plan: LogicalPlan, interpretation: Interpretation | None
+) -> LogicalPlan:
+    """Keep analyst-grounded concepts available after scalar output dimensions are removed."""
+    if interpretation is None:
+        return plan
+    concepts = [
+        *plan.required_concepts,
+        *([interpretation.metric] if interpretation.metric else []),
+        *interpretation.dimensions,
+        *interpretation.filters,
+        *([interpretation.grain] if interpretation.grain else []),
+    ]
+    return plan.model_copy(
+        update={"required_concepts": list(dict.fromkeys(value for value in concepts if value))[:16]}
+    )
 
 
 def align_plan(
@@ -37,20 +67,43 @@ def align_plan(
 ) -> LogicalPlan:
     """Apply deterministic question constraints that the model is not allowed to weaken."""
     lowered = question.casefold()
-    updates: dict[str, object] = {}
+    updates: dict[str, object] = {
+        "required_concepts": list(
+            dict.fromkeys(
+                [
+                    *generated.required_concepts,
+                    *decomposition.metric_hints,
+                    *decomposition.dimension_hints,
+                ]
+            )
+        )
+    }
+    asks_ordering_only = any(
+        phrase in lowered
+        for phrase in ("ordered from highest", "order from highest", "sorted from highest")
+    )
     if decomposition.limit_hint is not None:
         updates["limit"] = decomposition.limit_hint
     if decomposition.sort_hints:
         updates["sort"] = decomposition.sort_hints
+    if decomposition.filter_hints:
+        updates["filters"] = list(dict.fromkeys([*generated.filters, *decomposition.filter_hints]))
     asks_ranked_rows = (
-        bool(re.search(r"\bnhiều\b.{0,40}\bnhất\b", lowered))
-        or any(
-            phrase in lowered
-            for phrase in ("most ", "top ", "nhiều nhất", "cao nhất", "xuất hiện nhiều nhất")
+        not asks_ordering_only
+        and (
+            bool(re.search(r"\bnhiều\b.{0,40}\bnhất\b", lowered))
+            or any(
+                phrase in lowered
+                for phrase in ("most ", "top ", "nhiều nhất", "cao nhất", "xuất hiện nhiều nhất")
+            )
         )
-    ) and not any(phrase in lowered for phrase in ("what is the maximum", "lớn nhất từng"))
+        and not any(phrase in lowered for phrase in ("what is the maximum", "lớn nhất từng"))
+    )
     if asks_ranked_rows:
         updates["task_type"] = "ranking"
+    elif asks_ordering_only:
+        updates["sort"] = decomposition.sort_hints or ("metric descending",)
+        updates["limit"] = None
 
     asks_scalar = any(
         phrase in lowered

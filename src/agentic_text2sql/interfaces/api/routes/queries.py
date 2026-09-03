@@ -28,7 +28,12 @@ def create_query(
     container: ContainerDep,
 ) -> QueryAccepted:
     try:
-        run_id = container.submit(request.db_id, request.question, request.correction_enabled)
+        run_id = container.submit(
+            request.db_id,
+            request.question,
+            request.correction_enabled,
+            request.clarification_run_id,
+        )
     except (KeyError, FileNotFoundError) as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except ValueError as exc:

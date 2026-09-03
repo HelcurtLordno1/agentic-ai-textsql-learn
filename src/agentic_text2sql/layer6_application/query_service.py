@@ -7,12 +7,20 @@ import uuid
 from pathlib import Path
 
 from agentic_text2sql.contracts.catalog import CatalogSnapshot
-from agentic_text2sql.contracts.planning import RouteIntent
+from agentic_text2sql.contracts.planning import (
+    AnswerabilityOutcome,
+    ClarificationContext,
+    Interpretation,
+    RouteDecision,
+    RouteIntent,
+)
 from agentic_text2sql.contracts.sql import DirectRunResult, DirectStatus
 from agentic_text2sql.contracts.validation import ErrorClass, ValidationReport
 from agentic_text2sql.exceptions import StructuredOutputError, Text2SQLError
 from agentic_text2sql.layer1_reasoning.decomposer import Decomposer
 from agentic_text2sql.layer1_reasoning.planner import PLANNER_PROMPT_VERSION, PlannerAgent
+from agentic_text2sql.layer1_reasoning.question_analyst import QUESTION_ANALYST_PROMPT_VERSION
+from agentic_text2sql.layer1_reasoning.question_reliability import QuestionReliabilityService
 from agentic_text2sql.layer1_reasoning.router import QueryRouter
 from agentic_text2sql.layer2_grounding.service import GroundingService
 from agentic_text2sql.layer3_generation.prompt_builder import GENERATOR_PROMPT_VERSION
@@ -39,6 +47,7 @@ class DirectBaselineService:
         executor: ReadOnlySQLiteExecutor,
         grounding: GroundingService | None = None,
         correction: CorrectionService | None = None,
+        reliability: QuestionReliabilityService | None = None,
         run_deadline_seconds: float = 60.0,
     ) -> None:
         self.router = router
@@ -49,9 +58,94 @@ class DirectBaselineService:
         self.executor = executor
         self.grounding = grounding
         self.correction = correction
+        self.reliability = reliability
         self.run_deadline_seconds = run_deadline_seconds
 
-    def run(self, question: str, database: Path, catalog: CatalogSnapshot) -> DirectRunResult:
+    def run(
+        self,
+        question: str,
+        database: Path,
+        catalog: CatalogSnapshot,
+        *,
+        clarification_context: ClarificationContext | None = None,
+    ) -> DirectRunResult:
+        if self.reliability is None:
+            return self._run_answer(question, database, catalog)
+        run_started = time.monotonic()
+        gate_started = run_started
+        normalized, decision = self.reliability.evaluate(question, catalog, clarification_context)
+        gate_ms = (time.monotonic() - gate_started) * 1000
+        if decision.outcome is not AnswerabilityOutcome.ANSWER:
+            status = {
+                AnswerabilityOutcome.CLARIFY: DirectStatus.CLARIFY,
+                AnswerabilityOutcome.CANNOT_ANSWER: DirectStatus.CANNOT_ANSWER,
+                AnswerabilityOutcome.SAFE_REJECT: (
+                    DirectStatus.WRITE_BLOCKED
+                    if decision.reason_code.value == "WRITE_REQUEST"
+                    else DirectStatus.UNSUPPORTED
+                ),
+            }[decision.outcome]
+            return DirectRunResult(
+                run_id=str(uuid.uuid4()),
+                question=question,
+                status=status,
+                route_reason=decision.rationale,
+                prompt_versions={"question_analyst": QUESTION_ANALYST_PROMPT_VERSION},
+                normalized_question=normalized,
+                answerability=decision,
+                clarification_context=clarification_context,
+                safe_message=decision.rationale,
+                latency_ms={"answerability": gate_ms, "total": gate_ms},
+            )
+        pipeline_question = normalized.normalized_text
+        retrieval_question = (
+            f"{normalized.normalized_text}\nRetrieval aliases: {normalized.search_text}"
+        )
+        if clarification_context is not None:
+            pipeline_question = (
+                f"{clarification_context.original_question}\n"
+                f"User clarification: {normalized.normalized_text}"
+            )
+            retrieval_question = (
+                f"{clarification_context.original_question}\n"
+                f"User clarification: {normalized.normalized_text}\n"
+                f"Retrieval aliases: {normalized.search_text}"
+            )
+        result = self._run_answer(
+            pipeline_question,
+            database,
+            catalog,
+            accepted_interpretation=decision.interpretations[0],
+            retrieval_question=retrieval_question,
+            started_at=run_started,
+        )
+        return result.model_copy(
+            update={
+                "question": question,
+                "normalized_question": normalized,
+                "answerability": decision,
+                "clarification_context": clarification_context,
+                "prompt_versions": {
+                    "question_analyst": QUESTION_ANALYST_PROMPT_VERSION,
+                    **result.prompt_versions,
+                },
+                "latency_ms": {
+                    **result.latency_ms,
+                    "answerability": gate_ms,
+                },
+            }
+        )
+
+    def _run_answer(
+        self,
+        question: str,
+        database: Path,
+        catalog: CatalogSnapshot,
+        *,
+        accepted_interpretation: Interpretation | None = None,
+        retrieval_question: str | None = None,
+        started_at: float | None = None,
+    ) -> DirectRunResult:
         run_id = str(uuid.uuid4())
         versions = {
             "planner": PLANNER_PROMPT_VERSION,
@@ -60,13 +154,21 @@ class DirectBaselineService:
         if self.correction is not None:
             versions["corrector"] = CORRECTOR_PROMPT_VERSION
         timings: dict[str, float] = {}
-        started = time.monotonic()
+        started = started_at if started_at is not None else time.monotonic()
 
         def finish_timings() -> None:
             timings["total"] = (time.monotonic() - started) * 1000
 
-        route = self.router.route(question)
-        timings["route"] = (time.monotonic() - started) * 1000
+        route_started = time.monotonic()
+        route = (
+            RouteDecision(
+                intent=RouteIntent.QUERY,
+                reason="Accepted by the authoritative question-reliability gate",
+            )
+            if accepted_interpretation is not None
+            else self.router.route(question)
+        )
+        timings["route"] = (time.monotonic() - route_started) * 1000
         if route.intent is not RouteIntent.QUERY:
             status = {
                 RouteIntent.CLARIFY: DirectStatus.CLARIFY,
@@ -87,7 +189,9 @@ class DirectBaselineService:
         decomposition = self.decomposer.decompose(question)
         planning_started = time.monotonic()
         try:
-            plan = self.planner.plan(question, decomposition)
+            plan = self.planner.plan(
+                question, decomposition, accepted_interpretation=accepted_interpretation
+            )
         except (StructuredOutputError, Text2SQLError) as exc:
             timings["planning"] = (time.monotonic() - planning_started) * 1000
             finish_timings()
@@ -106,7 +210,7 @@ class DirectBaselineService:
         if self.grounding is not None:
             grounding_started = time.monotonic()
             try:
-                schema_context = self.grounding.ground(question, plan)
+                schema_context = self.grounding.ground(retrieval_question or question, plan)
             except (ValueError, Text2SQLError) as exc:
                 timings["grounding"] = (time.monotonic() - grounding_started) * 1000
                 finish_timings()

@@ -38,6 +38,13 @@ def present_result(result: DirectRunResult) -> Presentation:
         return Presentation(
             headline="More detail is needed", tone="clarify", visualization="none", rows=[]
         )
+    if result.status is DirectStatus.CANNOT_ANSWER:
+        return Presentation(
+            headline="Required data is unavailable",
+            tone="blocked",
+            visualization="none",
+            rows=[],
+        )
     if result.status in {DirectStatus.WRITE_BLOCKED, DirectStatus.POLICY_BLOCKED}:
         return Presentation(
             headline="Request blocked safely", tone="blocked", visualization="none", rows=[]

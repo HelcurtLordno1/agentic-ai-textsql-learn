@@ -14,6 +14,7 @@ class QueryRequest(BaseModel):
     db_id: str = Field(min_length=1, max_length=100)
     question: str = Field(min_length=1, max_length=2000)
     correction_enabled: bool = True
+    clarification_run_id: str | None = Field(default=None, min_length=1, max_length=100)
 
 
 class QueryAccepted(BaseModel):
@@ -27,6 +28,7 @@ class QueryResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
     run_id: str
     db_id: str
+    parent_run_id: str | None = None
     question: str
     status: RunStatus
     created_at: str

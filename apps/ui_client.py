@@ -37,18 +37,23 @@ class LocalAPIClient:
             dict[str, Any], self._request("POST", "/catalogs/ingest", json={"dataset": dataset})
         )
 
-    def submit(self, db_id: str, question: str, correction_enabled: bool) -> dict[str, Any]:
+    def submit(
+        self,
+        db_id: str,
+        question: str,
+        correction_enabled: bool,
+        clarification_run_id: str | None = None,
+    ) -> dict[str, Any]:
+        payload: dict[str, Any] = {
+            "db_id": db_id,
+            "question": question,
+            "correction_enabled": correction_enabled,
+        }
+        if clarification_run_id is not None:
+            payload["clarification_run_id"] = clarification_run_id
         return cast(
             dict[str, Any],
-            self._request(
-                "POST",
-                "/queries",
-                json={
-                    "db_id": db_id,
-                    "question": question,
-                    "correction_enabled": correction_enabled,
-                },
-            ),
+            self._request("POST", "/queries", json=payload),
         )
 
     def run(self, run_id: str) -> dict[str, Any]:

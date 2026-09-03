@@ -9,7 +9,8 @@ from pathlib import Path
 from typing import Protocol
 
 from agentic_text2sql.contracts.catalog import CatalogSnapshot
-from agentic_text2sql.contracts.sql import DirectRunResult
+from agentic_text2sql.contracts.planning import ClarificationContext
+from agentic_text2sql.contracts.sql import DirectRunResult, DirectStatus
 from agentic_text2sql.contracts.trace import RunRecord, RunStatus, TraceEvent
 from agentic_text2sql.layer6_application.catalog_registry import CatalogRegistry
 from agentic_text2sql.layer6_application.run_store import SQLiteRunStore
@@ -18,7 +19,14 @@ from agentic_text2sql.settings import Settings
 
 
 class QueryRuntime(Protocol):
-    def run(self, question: str, database: Path, catalog: CatalogSnapshot) -> DirectRunResult: ...
+    def run(
+        self,
+        question: str,
+        database: Path,
+        catalog: CatalogSnapshot,
+        *,
+        clarification_context: ClarificationContext | None = None,
+    ) -> DirectRunResult: ...
 
 
 RuntimeFactory = Callable[..., AbstractContextManager[QueryRuntime]]
@@ -44,26 +52,32 @@ class ApplicationQueryService:
         run_id: str | None = None,
         *,
         correction_enabled: bool = False,
+        clarification_run_id: str | None = None,
     ) -> RunRecord:
         normalized = " ".join(question.split())
         if not 1 <= len(normalized) <= 2000:
             raise ValueError("question must contain between 1 and 2000 characters")
         self.registry.resolve(db_id)
+        clarification = self._clarification_context(db_id, normalized, clarification_run_id)
+        config: dict[str, object] = {
+            "generation_model": self.settings.ollama_model,
+            "ollama_num_gpu": self.settings.ollama_num_gpu,
+            "embedding_model": "bge-m3:latest",
+            "correction_enabled": correction_enabled,
+            "max_repairs": 1,
+            "max_correction_llm_calls": 1,
+            "executor_timeout_seconds": 10,
+            "max_result_rows": 200,
+            "run_deadline_seconds": self.settings.run_deadline_seconds,
+        }
+        if clarification is not None:
+            config["clarification_context"] = clarification.model_dump(mode="json")
         return self.runs.create(
             run_id or str(uuid.uuid4()),
             db_id,
             normalized,
-            {
-                "generation_model": self.settings.ollama_model,
-                "ollama_num_gpu": self.settings.ollama_num_gpu,
-                "embedding_model": "bge-m3:latest",
-                "correction_enabled": correction_enabled,
-                "max_repairs": 1,
-                "max_correction_llm_calls": 1,
-                "executor_timeout_seconds": 10,
-                "max_result_rows": 200,
-                "run_deadline_seconds": self.settings.run_deadline_seconds,
-            },
+            config,
+            parent_run_id=clarification_run_id,
         )
 
     def execute(self, run_id: str, *, correction_enabled: bool = False) -> DirectRunResult:
@@ -83,7 +97,16 @@ class ApplicationQueryService:
                 provenance = getattr(runtime, "provenance", None)
                 if isinstance(provenance, dict):
                     self.runs.update_config(run_id, provenance)
-                result = runtime.run(record.question, runtime_database, catalog)
+                raw_context = record.config.get("clarification_context")
+                if isinstance(raw_context, dict):
+                    result = runtime.run(
+                        record.question,
+                        runtime_database,
+                        catalog,
+                        clarification_context=ClarificationContext.model_validate(raw_context),
+                    )
+                else:
+                    result = runtime.run(record.question, runtime_database, catalog)
         except Exception as exc:
             self.runs.append_event(
                 TraceEvent(
@@ -101,14 +124,55 @@ class ApplicationQueryService:
         self.runs.set_status(run_id, RunStatus.COMPLETED, result.model_dump(mode="json"))
         return result
 
-    def run(self, db_id: str, question: str, *, correction_enabled: bool = False) -> RunRecord:
-        prepared = self.prepare(db_id, question, correction_enabled=correction_enabled)
+    def run(
+        self,
+        db_id: str,
+        question: str,
+        *,
+        correction_enabled: bool = False,
+        clarification_run_id: str | None = None,
+    ) -> RunRecord:
+        prepared = self.prepare(
+            db_id,
+            question,
+            correction_enabled=correction_enabled,
+            clarification_run_id=clarification_run_id,
+        )
         self.execute(prepared.run_id, correction_enabled=correction_enabled)
         return self.runs.get(prepared.run_id)
 
+    def _clarification_context(
+        self, db_id: str, response: str, parent_run_id: str | None
+    ) -> ClarificationContext | None:
+        if parent_run_id is None:
+            return None
+        parent = self.runs.get(parent_run_id)
+        if parent.db_id != db_id:
+            raise ValueError("clarification must use the same database as the parent run")
+        if parent.result is None:
+            raise ValueError("parent run has no completed clarification decision")
+        result = DirectRunResult.model_validate(parent.result)
+        if result.status is not DirectStatus.CLARIFY or result.answerability is None:
+            raise ValueError("parent run is not awaiting clarification")
+        decision = result.answerability
+        if decision.clarification_question is None or len(decision.clarification_options) < 2:
+            raise ValueError("parent run has no usable clarification contract")
+        original = (
+            result.clarification_context.original_question
+            if result.clarification_context is not None
+            else parent.question
+        )
+        return ClarificationContext(
+            parent_run_id=parent_run_id,
+            original_question=original,
+            assistant_question=decision.clarification_question,
+            options=decision.clarification_options,
+            user_response=response,
+        )
+
     def _persist_layer_events(self, run_id: str, result: DirectRunResult) -> None:
         mappings = (
-            ("1", "PLANNED", ("route", "planning")),
+            ("1", "PLANNED", ("answerability", "route", "planning")),
             ("2", "GROUNDED", ("grounding",)),
             ("3", "GENERATED", ("generation",)),
             ("4", "VALIDATED", ("policy", "execution", "validation")),
@@ -117,6 +181,9 @@ class ApplicationQueryService:
         for layer, event, keys in mappings:
             elapsed = sum(result.latency_ms.get(key, 0.0) for key in keys)
             details = {"status": result.status.value}
+            if layer == "1" and result.answerability is not None:
+                details["answerability"] = result.answerability.outcome.value
+                details["reason_code"] = result.answerability.reason_code.value
             if layer == "5":
                 details["state"] = "USED" if result.correction else "SKIPPED"
             elif elapsed == 0:

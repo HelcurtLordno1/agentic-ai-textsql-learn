@@ -39,8 +39,19 @@ class ApplicationContainer:
             return "synthetic_tiny", path
         raise KeyError(dataset)
 
-    def submit(self, db_id: str, question: str, correction_enabled: bool) -> str:
-        record = self.query_service.prepare(db_id, question, correction_enabled=correction_enabled)
+    def submit(
+        self,
+        db_id: str,
+        question: str,
+        correction_enabled: bool,
+        clarification_run_id: str | None = None,
+    ) -> str:
+        record = self.query_service.prepare(
+            db_id,
+            question,
+            correction_enabled=correction_enabled,
+            clarification_run_id=clarification_run_id,
+        )
         future = self.executor.submit(
             self.query_service.execute,
             record.run_id,
