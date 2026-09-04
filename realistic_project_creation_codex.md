@@ -927,6 +927,13 @@ Core code không import OpenAI/Anthropic/Google SDK. Không có API key trong `.
 
 Không hard-code `D:\...`, `/mnt/d/...` hoặc Ollama host IP trong code. Mọi path đi qua settings (`PROJECT_ROOT`, `TEXT2SQL_DATA_DIR`, `TEXT2SQL_ARTIFACT_DIR`). Repo có thể nằm trên ổ D; nếu full benchmark/index I/O chậm trên `/mnt/d`, đặt generated data/artifacts ở WSL ext4 và giữ source trong workspace. Doctor phải in resolved paths, free disk và quyền read/write nhưng không in secrets.
 
+### 12.7 Hardware incident và reproduction runbook hiện hành
+
+Quy trình hiện hành sau R1 power breach, hard-cap/pilot rule, lệnh Olist-60 v2 và đường tái lập full
+benchmark trên server nằm tại `docs/hardware_safety_and_server_reproduction.md`. Các profile P5/P6
+100–105 W được giữ làm provenance lịch sử nhưng không còn là permission cho run mới trên laptop.
+Không thay đổi trạng thái `R1-M1`: Olist-60 v2 và PRACTIQ-100 vẫn chưa hoàn tất.
+
 ---
 
 ## 13. Technology stack theo layer
@@ -1578,6 +1585,9 @@ Gate P6 — Core Complete:
 
 Chỉ chọn từng experiment một:
 
+- R0 khóa baseline/failure intelligence trước khi promote thuật toán mới;
+- R1 question reliability theo PRACTIQ: normalize → interpretations → answerability, chỉ nhánh
+  `ANSWER` được vào SQL pipeline;
 - verified example retrieval;
 - LLM reranking;
 - multi-candidate selection;
@@ -1671,27 +1681,27 @@ Mỗi bug quan trọng cần:
 | L2-M3 | Embedding Indexer | Yes | L2-M1, P0-M2 | VERIFIED | immutable FAISS bundles, digest/cache/shape/checksum/rollback; `docs/evidence/p3_1_gate.md` |
 | L2-M4 | Keyword Indexer | Yes | L2-M1 | VERIFIED | JSON artifact, identifier/Vietnamese BM25 and exact boost tests |
 | L2-M5 | Hybrid Retriever | Yes | L2-M3, L2-M4 | VERIFIED | equal-weight RRF wins qualified column recall on disjoint holdout; db isolation |
-| L2-M6 | Schema Linker | Yes | L1-M3, L2-M5 | VERIFIED | plan-aware minimal FK closure, join columns, final serialized budget |
-| L3-M1 | Prompt Builder | Yes | L1-M3, L2-M6 | VERIFIED | cross-domain prompt v4 validates column ownership/minimal shape and prevents Olist glossary leakage |
+| L2-M6 | Schema Linker | Yes | L1-M3, L2-M5 | VERIFIED | metric/dimension/intent-aware component selection; semantic singleton vs connected raw regressions; `docs/evidence/p6_3_query_recovery.md` |
+| L3-M1 | Prompt Builder | Yes | L1-M3, L2-M6 | VERIFIED | generator v6 validates owner/scope/FK and scalar-over-group result shape; `docs/evidence/p6_3_query_recovery.md` |
 | L3-M2 | Generator Agent | Yes | L3-M1, P0-M2 | VERIFIED | 20-case live typed baseline, one candidate budget; `docs/evidence/p2_gate.md` |
 | L3-M3 | Candidate Normalizer | Yes | L3-M2 | VERIFIED | fence/semicolon/multi-statement/non-query/fingerprint tests |
 | L3-M4 | Candidate Selector | No | baseline complete | NOT_STARTED | — |
-| L4-M1 | Parser + Safety Policy | Yes | P0-M3 | VERIFIED | `tests/unit/layer4/test_policy.py`, `tests/safety/test_sql_safety.py` |
-| L4-M2 | Read-only Executor | Yes | L4-M1 | VERIFIED | RO URI/query_only/authorizer, timeout/caps/checksum tests; canonical Olist queries |
+| L4-M1 | Parser + Safety Policy | Yes | P0-M3 | VERIFIED | subquery-local unqualified-column resolution plus existing AST safety; `tests/unit/layer4/test_policy.py` |
+| L4-M2 | Read-only Executor | Yes | L4-M1 | VERIFIED | RO URI/query_only/authorizer plus atomic read-only WSL-native runtime cache, timeout/caps/checksum tests |
 | L4-M3 | Execution Validator | Yes | L4-M2 | VERIFIED | typed shape/warning reports; `tests/unit/layer4/test_semantic_validation.py`; `docs/evidence/p4_gate.md` |
-| L4-M4 | Semantic Validator | Yes | L4-M3 | VERIFIED | gold-blind intent/shape/business signals; frozen P5 replay + P5.1 rerun |
+| L4-M4 | Semantic Validator | Yes | L4-M3 | VERIFIED | gold-blind intent/shape/business signals including semantic-view grain/filter validation |
 | L4-M5 | Error Normalizer | Yes | L4-M1 | VERIFIED | `tests/unit/layer4/test_error_normalizer.py` |
 | L5-M1 | Error Classifier | Yes | L4-M5 | VERIFIED | rule-first eligibility; policy/timeout no-repair tests |
 | L5-M2 | Correction Planner | Yes | L5-M1 | VERIFIED | typed plan and signal-specific deterministic guidance |
-| L5-M3 | Corrector Agent | Yes | L5-M2, P0-M2 | VERIFIED | structured full-candidate local repair; gold separation test |
+| L5-M3 | Corrector Agent | Yes | L5-M2, P0-M2 | VERIFIED | corrector v5 enforces owner/scope and scalar grouped-result repair; gold separation test |
 | L5-M4 | Feedback Loop Controller | Yes | L5-M3, L4 | VERIFIED | call/repair/deadline/fingerprint stops; full L4 revalidation |
 | L6-M1 | Query State/short memory | Yes | L1–L5 contracts | VERIFIED | typed persistent run/config state + restart recovery; P5 unit/integration tests |
 | L6-M2 | Verified Example Store | No | baseline complete | NOT_STARTED | — |
 | L6-M3 | Trace Store | Yes | L6-M1 | VERIFIED | WAL SQLite layer 0–6 trace, SSE replay, restart persistence; `docs/evidence/p5_gate.md` |
 | L6-M4 | Benchmark Harness | Yes | L4, L6-M3 | VERIFIED | filtered/resumable gold-blind inference, checkpoint then evaluator; P5/P5.1 reports |
 | L6-M5 | CLI | Yes | workflow | VERIFIED | ingest/ask/trace/serve commands + CLI integration test |
-| L6-M6 | FastAPI | Yes | L6-M5 | VERIFIED | registered-db API, one-worker queue, SSE/trace/report/feedback; API restart test |
-| L6-M7 | Streamlit UI | Yes | L6-M6 | VERIFIED | five-workspace SQL Observatory, drag/keyboard UX, AppTest/live health evidence |
+| L6-M6 | FastAPI | Yes | L6-M5 | VERIFIED | registered-db API, one-worker queue, summary projection, SSE/trace/report/feedback; API restart test |
+| L6-M7 | Streamlit UI | Yes | L6-M6 | VERIFIED | correction-on default, confidence/accuracy distinction and failed-attempt diagnostics; `docs/evidence/p6_3_query_recovery.md` |
 | L6-M8 | Documentation/portfolio | Yes | reports/demo | VERIFIED | README, architecture, runbook, demo script, sanitized UI artifact and `docs/evidence/p6_gate.md` |
 | E-M1 | Olist smoke/UAT report | Yes | D-M6, L1–L6 | VERIFIED | P6 Olist-60: 57/60 result correct, 60/60 typed terminal; `docs/evidence/p6_gate.md` |
 | E-M2 | Spider smoke-20 | Yes | L1–L6 | VERIFIED | subsumed by the completed deterministic Spider-200 run; exact-gold evaluator self-test 1,034/1,034 |
@@ -1701,6 +1711,7 @@ Mỗi bug quan trọng cần:
 | E-M5 | Retrieval ablation | Yes | L2 | VERIFIED | qualified k=5/10/20, raw/semantic, mini + disjoint holdout; `docs/evidence/p3_1_gate.md` |
 | E-M6 | Correction ablation | Yes | L5 | VERIFIED | frozen Olist 14/18 off vs 17/18 on; `docs/evidence/p4_gate.md` |
 | E-M7 | BIRD Mini-Dev | No | core complete | NOT_STARTED | — |
+| R1-M1 | PRACTIQ question reliability | No | R0 baseline lock | IN_PROGRESS | Typed/glossary-grounded gate, early-exit và clarification đã có, nhưng source-locked Olist v3 bị dừng tại 35/60 theo accuracy kill criterion: prefix 30/35 so với paired baseline 33/35 và full-suite upper bound chỉ 55/60 < champion 57/60. Current integrated variant bị reject promotion; chưa có final macro-F1 và không `VERIFIED`; `comparison_new_to_baseline.md`, `docs/evidence/r1_question_reliability.md`, `docs/evidence/r1_olist_benchmark.md`, `docs/evidence/r1_resource_guard_incident.md` |
 | X-M1 | PostgreSQL adapter | No | core complete | NOT_STARTED | — |
 
 Overall project status tại thời điểm cập nhật master plan: `GATE_P6_VERIFIED`. P0
@@ -1712,6 +1723,25 @@ Spider-200 đạt 130/200 (65,00%; holdout 67%, regression 63%) và Olist-60 đ�
 evidence tại `docs/evidence/p6_gate.md`. Latency p95 85,29 giây (Spider) và 91,62 giây (Olist) còn
 vượt target interactive 60 giây nên được giữ như limitation. Full Spider-1.034 vẫn là P6.1 optional
 `NOT_STARTED`, không được suy diễn từ score Spider-200.
+
+Post-P6 usability hardening ngày 2026-08-16 đã sửa lỗi thực tế trong câu hỏi Olist “Top 5 danh mục
+theo doanh thu sản phẩm, tách phí vận chuyển, giải thích”. Nguyên nhân không phải từ “giải thích” mà
+do retrieval trộn raw tables với disconnected aggregate view, khiến model bịa
+`order_item_totals.product_id`. Schema linker nay chọn connected component phủ nhiều evidence nhất,
+không phụ thuộc thứ tự rank; generator v5/corrector v4 bắt buộc kiểm tra owner/FK. Runtime SQLite
+được stage atomic/read-only sang filesystem WSL và Streamlit không còn block toàn app trong polling
+loop. Evidence tái hiện, kiểm thử và giới hạn benchmark nằm tại
+`docs/evidence/p6_2_hardening.md`. Score P6 lịch sử vẫn gắn với revision cũ; chưa tuyên bố accuracy
+mới nếu chưa rerun manifest.
+
+Post-P6 query-recovery hardening ngày 2026-08-17 xử lý incident returning-customer
+`e4e905f4...`: generator dùng column ngoài subquery scope; correction sau đó trả một dòng `1` cho
+mỗi group; semantic validator lại false-positive với canonical semantic view. Schema linker nay
+đánh giá đồng thời dimension/metric/intent và mọi singleton component, policy chặn implicit outer
+column, generator v6/corrector v5 bắt buộc scalar shape, validator hiểu grain của
+`customer_order_facts`, và correction được bật mặc định cho interactive API/UI. Live run
+`170c567e...` trả scalar `2997` ngay first pass. Chi tiết tại
+`docs/evidence/p6_3_query_recovery.md`. Đây không phải accuracy benchmark mới.
 
 ---
 
