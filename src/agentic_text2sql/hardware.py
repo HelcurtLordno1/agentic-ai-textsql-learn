@@ -28,6 +28,7 @@ class ResourceLimits(BaseModel):
     maximum_gpu_memory_mib: int = Field(default=6144, gt=0)
     maximum_gpu_temperature_c: int = Field(default=68, gt=0)
     maximum_gpu_power_w: float = Field(default=70, gt=0)
+    maximum_gpu_graphics_clock_mhz: int = Field(default=1800, gt=0)
 
 
 class HardwareProfile(BaseModel):
@@ -153,6 +154,7 @@ PROFILES = {
             maximum_gpu_memory_mib=4096,
             maximum_gpu_temperature_c=65,
             maximum_gpu_power_w=78,
+            maximum_gpu_graphics_clock_mhz=650,
         ),
     ),
 }
@@ -166,6 +168,7 @@ class ResourceSample:
     gpu_temperature_c: int
     gpu_power_w: float
     gpu_utilization_pct: int
+    gpu_graphics_clock_mhz: int = 0
 
 
 def sample_resources() -> ResourceSample:
@@ -176,13 +179,15 @@ def sample_resources() -> ResourceSample:
     output = subprocess.check_output(
         [
             "nvidia-smi",
-            "--query-gpu=memory.used,temperature.gpu,power.draw,utilization.gpu",
+            "--query-gpu=memory.used,temperature.gpu,power.draw,utilization.gpu,clocks.current.graphics",
             "--format=csv,noheader,nounits",
         ],
         text=True,
         timeout=5,
     ).strip()
-    memory, temperature, power, utilization = [item.strip() for item in output.split(",")]
+    memory, temperature, power, utilization, graphics_clock = [
+        item.strip() for item in output.split(",")
+    ]
     return ResourceSample(
         available_ram_gib=values["MemAvailable"] / GIB,
         swap_used_gib=(values["SwapTotal"] - values["SwapFree"]) / GIB,
@@ -190,6 +195,7 @@ def sample_resources() -> ResourceSample:
         gpu_temperature_c=int(temperature),
         gpu_power_w=float(power),
         gpu_utilization_pct=int(utilization),
+        gpu_graphics_clock_mhz=int(graphics_clock),
     )
 
 
@@ -212,5 +218,9 @@ def unsafe_reason(sample: ResourceSample, limits: ResourceLimits) -> str | None:
             f"GPU temperature {sample.gpu_temperature_c} C",
         ),
         (sample.gpu_power_w >= limits.maximum_gpu_power_w, f"GPU power {sample.gpu_power_w:.1f} W"),
+        (
+            sample.gpu_graphics_clock_mhz >= limits.maximum_gpu_graphics_clock_mhz,
+            f"GPU graphics clock {sample.gpu_graphics_clock_mhz} MHz",
+        ),
     )
     return next((message for failed, message in checks if failed), None)

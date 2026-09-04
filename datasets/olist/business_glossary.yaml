@@ -34,7 +34,9 @@ concepts:
   cancellation_rate:
     definition: Canceled orders divided by an explicitly stated order population; not return rate.
   review_score:
-    definition: Review aggregate after reducing review rows to order grain.
+    definition: Aggregate raw review rows unless the user explicitly requests per-order deduplication.
+    canonical_relation: olist_order_reviews_dataset
+    canonical_expression: AVG(olist_order_reviews_dataset.review_score)
   order_count_by_payment_type:
     definition: Count distinct order_id values associated with each payment_type; an order may appear in more than one payment type.
   monthly_order_count:

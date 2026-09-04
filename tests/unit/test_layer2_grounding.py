@@ -592,23 +592,23 @@ def test_entity_count_prefers_base_owner_over_child_fact() -> None:
         db_id="shop",
         tables=(
             TableInfo(
-                name="orders",
+                name="olist_orders_dataset",
                 columns=(ColumnInfo(name="order_id", data_type="TEXT"),),
             ),
             TableInfo(
-                name="order_payments",
-                columns=(ColumnInfo(name="order_id", data_type="TEXT"),),
+                name="customer_order_facts",
+                columns=(ColumnInfo(name="order_count", data_type="INTEGER"),),
             ),
         ),
         catalog_hash="12345678",
     )
     payment = CatalogDocument(
-        document_id="shop.order_payments.order_id",
+        document_id="shop.customer_order_facts.order_count",
         db_id="shop",
         kind="column",
-        table="order_payments",
-        column="order_id",
-        description="order payment event",
+        table="customer_order_facts",
+        column="order_count",
+        description="orders per customer",
         catalog_hash=catalog.catalog_hash,
     )
     retrieval = RetrievalResult(
@@ -627,7 +627,72 @@ def test_entity_count_prefers_base_owner_over_child_fact() -> None:
 
     context = link_schema(plan, retrieval, catalog, max_tables=2)
 
-    assert context.selected_tables == ["orders"]
+    assert context.selected_tables == ["olist_orders_dataset"]
+
+
+def test_exact_dimension_and_scalar_measure_beat_partial_semantic_matches() -> None:
+    from agentic_text2sql.layer2_grounding.schema_linker import link_schema
+
+    catalog = CatalogSnapshot(
+        db_id="olist",
+        tables=(
+            TableInfo(
+                name="olist_order_payments_dataset",
+                columns=(ColumnInfo(name="payment_type", data_type="TEXT"),),
+            ),
+            TableInfo(
+                name="order_payment_totals",
+                columns=(ColumnInfo(name="distinct_payment_type_count", data_type="INTEGER"),),
+            ),
+            TableInfo(
+                name="olist_order_reviews_dataset",
+                columns=(ColumnInfo(name="review_score", data_type="INTEGER"),),
+            ),
+            TableInfo(
+                name="order_review_summary",
+                columns=(ColumnInfo(name="average_review_score", data_type="REAL"),),
+            ),
+        ),
+        catalog_hash="12345678",
+    )
+
+    def result(table: str, column: str) -> RetrievalResult:
+        document = CatalogDocument(
+            document_id=f"olist.{table}.{column}",
+            db_id="olist",
+            kind="column",
+            table=table,
+            column=column,
+            description=column,
+            catalog_hash=catalog.catalog_hash,
+        )
+        return RetrievalResult(
+            db_id="olist",
+            mode="dense",
+            candidates=(RankedDocument(document=document, score=1.0, sources=("dense",)),),
+            estimated_tokens=10,
+            catalog_hash=catalog.catalog_hash,
+        )
+
+    payment_plan = LogicalPlan(
+        question_language="en",
+        task_type="ranking",
+        metrics=["count of payment records"],
+        dimensions=["payment type"],
+        limit=1,
+    )
+    payment_context = link_schema(
+        payment_plan, result("order_payment_totals", "distinct_payment_type_count"), catalog
+    )
+    review_plan = LogicalPlan(
+        question_language="en", task_type="aggregation", metrics=["average review score"]
+    )
+    review_context = link_schema(
+        review_plan, result("order_review_summary", "average_review_score"), catalog
+    )
+
+    assert payment_context.selected_tables == ["olist_order_payments_dataset"]
+    assert review_context.selected_tables == ["olist_order_reviews_dataset"]
 
 
 def test_qualified_metric_rejects_same_name_from_wrong_table() -> None:

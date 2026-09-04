@@ -220,6 +220,49 @@ def test_malformed_local_analysis_fails_closed_before_sql() -> None:
     assert decision.source == "fail_closed"
 
 
+def test_physical_table_choice_is_not_exposed_as_business_clarification() -> None:
+    interpretations = (
+        Interpretation(
+            interpretation_id="i1",
+            metric="product count",
+            filters=("product_category_name IS NULL",),
+            grain="product_id",
+            assumptions=("use products table",),
+            business_label="Products missing category",
+        ),
+        Interpretation(
+            interpretation_id="i2",
+            metric="product count",
+            filters=("product_category_name IS NULL",),
+            grain="product_id",
+            assumptions=("use semantic products view",),
+            business_label="Products missing category",
+        ),
+    )
+    prediction = QuestionAnalysisPrediction(
+        category=QuestionCategory.AMBIGUOUS_SELECT_COLUMN,
+        interpretations=interpretations,
+        rationale="Two physical relations expose the same business attribute.",
+        clarification_question="Which table?",
+        clarification_options=(
+            ClarificationOption(option_id="o1", label="Raw table"),
+            ClarificationOption(option_id="o2", label="Semantic view"),
+        ),
+    )
+    provider = StubProvider(prediction)
+    service = QuestionReliabilityService(
+        QuestionNormalizer(),
+        QueryRouter(),
+        QuestionAnalyst(provider, ROOT / "configs/prompts/question_analyst_v1.j2"),
+    )
+
+    _, decision = service.evaluate("How many products lack a category?", catalog("olist"))
+
+    assert decision.outcome is AnswerabilityOutcome.ANSWER
+    assert decision.reason_code is QuestionCategory.ANSWERABLE
+    assert len(decision.interpretations) == 1
+
+
 def test_answerability_decision_rejects_clarification_payload_on_answer() -> None:
     with pytest.raises(ValidationError):
         AnswerabilityDecision(

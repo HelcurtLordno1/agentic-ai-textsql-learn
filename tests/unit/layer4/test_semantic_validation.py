@@ -33,6 +33,19 @@ def test_average_intent_requires_average_aggregate() -> None:
     assert "AVERAGE_AGGREGATE_MISSING" in report.signals
 
 
+def test_raw_review_average_rejects_unrequested_order_deduplication() -> None:
+    report = validate_semantics(
+        "What is the average review score?",
+        aggregate_plan("average review score"),
+        "SELECT AVG(review_score) FROM "
+        "(SELECT DISTINCT order_id, review_score FROM olist_order_reviews_dataset)",
+        db_id="olist",
+    )
+
+    assert not report.accepted
+    assert "REVIEW_ROWS_MUST_NOT_BE_DEDUPLICATED" in report.signals
+
+
 def test_late_delivery_rule_rejects_status_population_narrowing() -> None:
     report = validate_semantics(
         "Có bao nhiêu đơn giao trễ?",

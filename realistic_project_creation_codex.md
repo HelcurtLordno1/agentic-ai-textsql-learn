@@ -1711,7 +1711,7 @@ Mỗi bug quan trọng cần:
 | E-M5 | Retrieval ablation | Yes | L2 | VERIFIED | qualified k=5/10/20, raw/semantic, mini + disjoint holdout; `docs/evidence/p3_1_gate.md` |
 | E-M6 | Correction ablation | Yes | L5 | VERIFIED | frozen Olist 14/18 off vs 17/18 on; `docs/evidence/p4_gate.md` |
 | E-M7 | BIRD Mini-Dev | No | core complete | NOT_STARTED | — |
-| R1-M1 | PRACTIQ question reliability | No | R0 baseline lock | IN_PROGRESS | Typed/glossary-grounded gate, early-exit và clarification đã có; 3 lỗi P6 Olist development/regression đều được sửa và rerun đúng riêng lẻ, nhưng Olist-60 v1 dừng an toàn ở 5/60 do 78.68 W (prefix 4/5), sau đó entity-owner regression được sửa nên v2 phải chạy mới dưới hard hardware cap; chưa có final macro-F1/Olist-60 và chưa `VERIFIED`; `docs/evidence/r1_question_reliability.md`, `docs/evidence/r1_olist_benchmark.md`, `docs/evidence/r1_resource_guard_incident.md` |
+| R1-M1 | PRACTIQ question reliability | No | R0 baseline lock | IN_PROGRESS | Typed/glossary-grounded gate, early-exit và clarification đã có, nhưng source-locked Olist v3 bị dừng tại 35/60 theo accuracy kill criterion: prefix 30/35 so với paired baseline 33/35 và full-suite upper bound chỉ 55/60 < champion 57/60. Current integrated variant bị reject promotion; chưa có final macro-F1 và không `VERIFIED`; `comparison_new_to_baseline.md`, `docs/evidence/r1_question_reliability.md`, `docs/evidence/r1_olist_benchmark.md`, `docs/evidence/r1_resource_guard_incident.md` |
 | X-M1 | PostgreSQL adapter | No | core complete | NOT_STARTED | — |
 
 Overall project status tại thời điểm cập nhật master plan: `GATE_P6_VERIFIED`. P0

@@ -123,6 +123,10 @@ def main() -> None:
                 gpu_utilization_pct=max(
                     observed_peak.gpu_utilization_pct, current.gpu_utilization_pct
                 ),
+                gpu_graphics_clock_mhz=max(
+                    observed_peak.gpu_graphics_clock_mhz,
+                    current.gpu_graphics_clock_mhz,
+                ),
             )
             reason = unsafe_reason(current, profile.limits)
             if reason:

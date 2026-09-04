@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import re
+
 from agentic_text2sql.contracts.catalog import CatalogSnapshot
 from agentic_text2sql.contracts.planning import LogicalPlan
 from agentic_text2sql.contracts.retrieval import EvidenceItem, RetrievalResult, SchemaContext
@@ -10,12 +12,61 @@ from agentic_text2sql.layer2_grounding.fk_graph import minimal_join_closure
 from agentic_text2sql.layer2_grounding.keyword_index import normalize_tokens
 
 _TABLE_BOILERPLATE = frozenset({"dataset", "fact", "facts", "olist", "table", "view"})
+_AGGREGATE_PREFIX = re.compile(
+    r"^(?:average|avg|mean|total|sum|minimum|min|maximum|max|count|number\s+of)\s+"
+)
+
+
+def _identifier(value: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "_", value.casefold()).strip("_")
+
+
+def _exact_metric_owner_tables(plan: LogicalPlan, catalog: CatalogSnapshot) -> set[str]:
+    """Find raw columns that exactly implement a scalar aggregate measure."""
+    if plan.dimensions or plan.filters or plan.task_type != "aggregation":
+        return set()
+    measures = {
+        _identifier(_AGGREGATE_PREFIX.sub("", metric.casefold()))
+        for metric in plan.metrics
+        if _AGGREGATE_PREFIX.match(metric.casefold())
+    } - {""}
+    return {
+        table.name
+        for table in catalog.tables
+        if any(column.name.casefold() in measures for column in table.columns)
+    }
+
+
+def _exact_dimension_matches(plan: LogicalPlan, catalog: CatalogSnapshot) -> dict[str, int]:
+    dimensions = {_identifier(value) for value in plan.dimensions} - {""}
+    return {
+        table.name: sum(column.name.casefold() in dimensions for column in table.columns)
+        for table in catalog.tables
+    }
 
 
 def _entity_owner_tables(plan: LogicalPlan, catalog: CatalogSnapshot) -> list[str]:
     """Prefer the base entity relation for unqualified entity-count metrics."""
     metric_tokens = set(normalize_tokens(" ".join([*plan.metrics, *plan.required_concepts])))
     if "count" not in metric_tokens and not metric_tokens & {"number", "quantity", "so", "luong"}:
+        return []
+    qualifiers = {
+        "average",
+        "avg",
+        "delivery",
+        "item",
+        "items",
+        "maximum",
+        "minimum",
+        "payment",
+        "payments",
+        "repeat",
+        "repeated",
+        "returning",
+        "review",
+        "revenue",
+    }
+    if plan.dimensions or plan.filters or metric_tokens & qualifiers:
         return []
     entities = metric_tokens & {
         "order",
@@ -30,7 +81,11 @@ def _entity_owner_tables(plan: LogicalPlan, catalog: CatalogSnapshot) -> list[st
     singular_entities = {value.removesuffix("s") for value in entities}
     owners: list[str] = []
     for table in catalog.tables:
-        core = set(normalize_tokens(table.name)) - _TABLE_BOILERPLATE
+        core = {
+            token
+            for token in normalize_tokens(table.name)
+            if "_" not in token and token not in _TABLE_BOILERPLATE
+        }
         singular_core = {value.removesuffix("s") for value in core}
         if len(singular_core) == 1 and singular_core & singular_entities:
             owners.append(table.name)
@@ -83,7 +138,14 @@ def link_schema(
             item.document.document_id,
         ),
     )
-    table_order: list[str] = _entity_owner_tables(plan, catalog)
+    owner_tables = set(_entity_owner_tables(plan, catalog)) | _exact_metric_owner_tables(
+        plan, catalog
+    )
+    exact_dimension_matches = _exact_dimension_matches(plan, catalog)
+    dimension_owner_tables = {
+        table for table, count in exact_dimension_matches.items() if count > 0
+    }
+    table_order: list[str] = sorted(owner_tables | dimension_owner_tables)
     for item in ranked:
         related_tables = [item.document.table]
         if item.document.kind == "relationship":
@@ -102,7 +164,7 @@ def link_schema(
     if not table_order:
         raise ValueError("schema linker received no retrieval candidates")
     best: SchemaContext | None = None
-    best_score: tuple[int, int, int, int, float, int, int] | None = None
+    best_score: tuple[int, int, int, int, int, int, float, int, int] | None = None
     closure_candidates: list[tuple[set[str], list[str]]] = [
         minimal_join_closure(catalog, [seed], fk_hops) for seed in table_order
     ]
@@ -170,6 +232,8 @@ def link_schema(
         schema_terms = set(normalize_tokens(rendered))
         evidence_quality = sum(item.score for item in evidence) / max(1, len(evidence))
         score = (
+            int(bool(owner_tables & tables)),
+            sum(exact_dimension_matches.get(table, 0) for table in tables),
             len(dimension_terms & schema_terms),
             len(filter_terms & schema_terms),
             len(metric_terms & schema_terms),

@@ -115,6 +115,8 @@ def align_plan(
     if asks_scalar and not explicitly_grouped and not asks_ranked_rows:
         updates["task_type"] = "aggregation"
         updates["dimensions"] = []
+        updates["sort"] = []
+        updates["limit"] = None
     asks_returning_customer = ("returning customer" in lowered or "quay lại" in lowered) and any(
         token in lowered for token in ("customer", "khách hàng")
     )

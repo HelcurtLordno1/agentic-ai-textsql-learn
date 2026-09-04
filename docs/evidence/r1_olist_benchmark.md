@@ -1,7 +1,7 @@
 # Paper I / PRACTIQ Olist benchmark evidence
 
-Status: `IN_PROGRESS — HARDWARE_CAP_REQUIRED`
-Date: 2026-09-01 (Asia/Bangkok)
+Status: `STOPPED — CURRENT VARIANT REJECTED BY OLIST ACCURACY KILL CRITERION`
+Date: 2026-09-03 (Asia/Bangkok)
 
 ## Research question
 
@@ -66,3 +66,12 @@ reported even if it fails that criterion.
 Latest repository verification after the hardware-policy hardening on 2026-09-03: Ruff pass, format
 pass, strict mypy pass for 110 source files, and 217 non-Ollama tests passed with one Ollama-marked
 test deselected. No local model or benchmark was started for this verification.
+
+## Final v3 stop result
+
+The source-locked v3 run was resumed safely from 28/60 and stopped after case 35. Offline evaluation
+found 30/35 correct. Five fixed failures in the denominator imply a best possible full result of
+55/60 even if every unrun case were correct, below the frozen 57/60 baseline. The current integrated
+variant is rejected for promotion; it is not a completed 60-case score. Full paired metrics, exact
+failure SQL, resource evidence, artifact hashes, and claim boundaries are recorded in
+`comparison_new_to_baseline.md`.

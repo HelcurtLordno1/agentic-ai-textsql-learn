@@ -81,6 +81,23 @@ def test_planner_preserves_accepted_interpretation_for_scalar_grounding() -> Non
     assert "Customer state (customer_state)" in plan.required_concepts
 
 
+def test_scalar_alignment_clears_spurious_top_one_controls() -> None:
+    question = "Có bao nhiêu đơn dùng nhiều hơn một phương thức thanh toán?"
+    generated = LogicalPlan(
+        question_language="vi",
+        task_type="aggregation",
+        metrics=["order count"],
+        filters=["distinct payment types > 1"],
+        sort=["count descending"],
+        limit=1,
+    )
+
+    aligned = align_plan(question, Decomposer().decompose(question), generated)
+
+    assert aligned.limit is None
+    assert aligned.sort == []
+
+
 def test_superlative_and_late_delivery_hints_are_deterministic() -> None:
     ranking = Decomposer().decompose(
         "Which seller state has the most records with alphabetical tie-break?"

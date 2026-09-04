@@ -41,7 +41,8 @@ class QuestionReliabilityService:
         if deterministic is not None:
             return normalized, deterministic
         try:
-            return normalized, self.analyst.analyze(normalized, catalog, clarification)
+            decision = self.analyst.analyze(normalized, catalog, clarification)
+            return normalized, _collapse_physical_only_ambiguity(decision)
         except (StructuredOutputError, Text2SQLError, ValueError):
             return normalized, _uncertain_decision(normalized.question_language)
 
@@ -111,6 +112,41 @@ class QuestionReliabilityService:
         if status_decision is not None:
             return status_decision
         return None
+
+
+def _collapse_physical_only_ambiguity(decision: AnswerabilityDecision) -> AnswerabilityDecision:
+    """Do not ask users to choose between physically equivalent schema implementations."""
+    if (
+        decision.outcome is not AnswerabilityOutcome.CLARIFY
+        or decision.reason_code is not QuestionCategory.AMBIGUOUS_SELECT_COLUMN
+        or len(decision.interpretations) < 2
+    ):
+        return decision
+    semantic_shapes = {
+        (
+            item.metric.casefold() if item.metric else None,
+            tuple(value.casefold() for value in item.dimensions),
+            tuple(value.casefold() for value in item.filters),
+            item.grain.casefold() if item.grain else None,
+        )
+        for item in decision.interpretations
+    }
+    if len(semantic_shapes) != 1:
+        return decision
+    accepted = decision.interpretations[0].model_copy(update={"assumptions": ()})
+    return decision.model_copy(
+        update={
+            "outcome": AnswerabilityOutcome.ANSWER,
+            "reason_code": QuestionCategory.ANSWERABLE,
+            "rationale": (
+                "The interpretations differ only by physical schema implementation; "
+                "the accepted business meaning is unchanged."
+            ),
+            "interpretations": (accepted,),
+            "clarification_question": None,
+            "clarification_options": (),
+        }
+    )
 
 
 def _asks_returns(value: str) -> bool:

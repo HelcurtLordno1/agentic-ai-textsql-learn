@@ -16,6 +16,9 @@ def test_resource_guard_fails_closed_for_each_threshold() -> None:
     assert "VRAM" in str(unsafe_reason(ResourceSample(15, 0, 6144, 60, 50, 100), limits))
     assert "temperature" in str(unsafe_reason(ResourceSample(15, 0, 2000, 68, 50, 100), limits))
     assert "power" in str(unsafe_reason(ResourceSample(15, 0, 2000, 60, 70, 100), limits))
+    assert "graphics clock" in str(
+        unsafe_reason(ResourceSample(15, 0, 2000, 60, 50, 100, 1800), limits)
+    )
 
 
 def test_r1_reliability_profile_is_ultrasafe() -> None:
@@ -41,6 +44,7 @@ def test_olist_paper1_profile_keeps_qwen14b_gpu_offload_minimal() -> None:
     assert profile.limits.maximum_gpu_memory_mib <= 4096
     assert profile.limits.maximum_gpu_temperature_c <= 65
     assert profile.limits.maximum_gpu_power_w <= 78
+    assert profile.limits.maximum_gpu_graphics_clock_mhz <= 650
 
 
 def test_profiles_bound_parallelism_and_long_run_unloads() -> None:

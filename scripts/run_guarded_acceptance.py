@@ -119,6 +119,7 @@ def main() -> None:
         "gpu_memory_mib": preflight.gpu_memory_mib,
         "gpu_temperature_c": preflight.gpu_temperature_c,
         "gpu_power_w": preflight.gpu_power_w,
+        "gpu_graphics_clock_mhz": preflight.gpu_graphics_clock_mhz,
     }
 
     batches = 0
@@ -174,6 +175,9 @@ def main() -> None:
                     peak["gpu_temperature_c"], current.gpu_temperature_c
                 )
                 peak["gpu_power_w"] = max(peak["gpu_power_w"], current.gpu_power_w)
+                peak["gpu_graphics_clock_mhz"] = max(
+                    peak["gpu_graphics_clock_mhz"], current.gpu_graphics_clock_mhz
+                )
                 reason = unsafe_reason(current, limits)
                 if reason:
                     break

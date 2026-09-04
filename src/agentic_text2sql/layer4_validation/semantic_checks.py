@@ -110,6 +110,15 @@ def validate_semantics(
     if asks_average and statement.find(exp.Avg) is None:
         signals.append("AVERAGE_AGGREGATE_MISSING")
 
+    asks_raw_review_average = (
+        olist_rules
+        and asks_average
+        and "review score" in normalized_question
+        and not any(phrase in normalized_question for phrase in ("per order", "order grain"))
+    )
+    if asks_raw_review_average and statement.find(exp.Distinct) is not None:
+        signals.append("REVIEW_ROWS_MUST_NOT_BE_DEDUPLICATED")
+
     asks_returning_customer = (
         "quay lại" in normalized_question or "returning customer" in normalized_question
     ) and any(token in normalized_question for token in ("customer", "khách hàng"))

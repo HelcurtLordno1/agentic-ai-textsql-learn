@@ -59,6 +59,7 @@ def update_peak(peak: ResourceSample, current: ResourceSample) -> ResourceSample
         gpu_temperature_c=max(peak.gpu_temperature_c, current.gpu_temperature_c),
         gpu_power_w=max(peak.gpu_power_w, current.gpu_power_w),
         gpu_utilization_pct=max(peak.gpu_utilization_pct, current.gpu_utilization_pct),
+        gpu_graphics_clock_mhz=max(peak.gpu_graphics_clock_mhz, current.gpu_graphics_clock_mhz),
     )
 
 
