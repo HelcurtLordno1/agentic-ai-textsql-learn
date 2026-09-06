@@ -38,7 +38,19 @@ ENTITIES = {
 def _language(question: str) -> Literal["vi", "en", "other"]:
     lowered = question.casefold()
     if any(
-        token in lowered for token in ("đơn", "hàng", "doanh thu", "khách", "phí", "điểm", "nhiều")
+        token in lowered
+        for token in (
+            "đơn",
+            "hàng",
+            "doanh thu",
+            "khách",
+            "phí",
+            "điểm",
+            "nhiều",
+            "bao nhiêu",
+            "người mua",
+            "duy nhất",
+        )
     ):
         return "vi"
     if re.search(r"\b(the|how|what|which|orders?|customers?)\b", lowered):

@@ -121,7 +121,10 @@ class PlannerAgent:
             distinct_column = next(
                 (
                     column
-                    for column in linked_columns[SemanticRole.DIMENSION]
+                    for column in [
+                        *linked_columns[SemanticRole.DIMENSION],
+                        *linked_columns[SemanticRole.METRIC],
+                    ]
                     if column.split(".", maxsplit=1)[0] in required_owners
                 ),
                 None,

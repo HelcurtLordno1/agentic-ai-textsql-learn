@@ -130,8 +130,12 @@ scalar semantic-view ownership, distinct customer count without an unnecessary j
 count grain. A first hybrid live snapshot passed `olist_acc_002`, then `olist_acc_005` reproduced a
 600-second structured-generation `ReadTimeout` twice while all resource guards remained safe. That
 artifact was stopped at 1/2 and retained as negative evidence. The EASY compiler removes that
-unnecessary model boundary; a new source-locked four-case smoke remains pending. This hybrid revision
-therefore remains `IN_PROGRESS`.
+unnecessary model boundary. A second source-locked smoke then passed cases 002 and 005, but case 007
+showed that a retrieved identity column can carry the `METRIC` role rather than `DIMENSION`; the
+planner consequently emitted `COUNT(*)` instead of `COUNT(DISTINCT customer_unique_id)`. That
+artifact stopped at 2/3. Distinct-count planning now checks both roles inside the proven population
+owner, and the live-shaped fixture passes. A new four-case smoke remains pending, so this hybrid
+revision remains `IN_PROGRESS`.
 
 The implementation is deliberately **not VERIFIED** and no accuracy gain is claimed. Promotion still
 requires the guarded, checkpointed paired experiment specified in the research plan:

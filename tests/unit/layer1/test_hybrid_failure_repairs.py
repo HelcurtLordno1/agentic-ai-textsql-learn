@@ -1,7 +1,6 @@
 from pathlib import Path
 
 from agentic_text2sql.contracts.planning import (
-    DecomposedQuestion,
     SemanticLink,
     SemanticLinkPlan,
     SemanticRole,
@@ -146,8 +145,8 @@ def test_unique_customer_count_is_scalar_distinct_without_orders_join() -> None:
         catalog_hash=context.catalog_hash,
         links=(
             SemanticLink(
-                mention="customer",
-                role=SemanticRole.DIMENSION,
+                mention="customers count",
+                role=SemanticRole.METRIC,
                 table="olist_customers_dataset",
                 column="customer_unique_id",
                 evidence_id="olist.olist_customers_dataset.customer_unique_id",
@@ -159,13 +158,9 @@ def test_unique_customer_count_is_scalar_distinct_without_orders_join() -> None:
         join_paths=tuple(context.joins),
     )
     question = "Có bao nhiêu người mua duy nhất theo customer_unique_id?"
-    decomposition = DecomposedQuestion(
-        question_language="vi",
-        metric_hints=["customers count"],
-        entity_hints=["customers"],
-        rationale="fixture",
-    )
+    decomposition = Decomposer().decompose(question)
     plan = _planner().plan_grounded(question, decomposition, links, context)
+    assert plan.question_language == "vi"
     assert plan.clauses.from_tables == ["olist_customers_dataset"]
     assert plan.clauses.select == ["COUNT DISTINCT olist_customers_dataset.customer_unique_id"]
     assert plan.clauses.output_grain == "one scalar row"
