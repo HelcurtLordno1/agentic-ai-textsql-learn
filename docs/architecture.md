@@ -34,8 +34,10 @@ prompts or multiple candidates. Exact-name lookup joins not declared as FKs are 
 both sides are raw tables and exactly one side is a primary/unique key, and are labeled
 `INFERRED_UNIQUE_LOOKUP` in provenance.
 
-`TEXT2SQL_PLANNING_MODE=baseline|din_sql` makes the A/B path explicit. Baseline mode selects the
-frozen v2/v4/v3 prompts. DIN-SQL mode selects v3/v5/v4 prompts and refuses to start without an active
+`TEXT2SQL_PLANNING_MODE=baseline|hybrid|din_sql` makes the ablation path explicit. Baseline mode
+selects the frozen v2/v4/v3 prompts. Hybrid uses deterministic grounded planning, sends EASY or
+advisory-conflict plans through compact baseline generation/correction, and reserves DIN prompts for
+validated multi-join/nested plans. DIN-SQL mode selects v3/v5/v4 prompts and refuses to start without an active
 semantic index. Routing, catalog hashing, retrieval fusion, graph closure, plan validation, budgets,
 policy and evaluation are deterministic. Every grounded candidate retains catalog/model/prompt
 identity, evidence IDs, planning mode and the plan-validation report.

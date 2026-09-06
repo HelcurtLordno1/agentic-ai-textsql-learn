@@ -163,4 +163,6 @@ class PlanValidationReport(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
     accepted: bool
     signals: tuple[str, ...] = ()
+    blocking_signals: tuple[str, ...] = ()
+    advisory_signals: tuple[str, ...] = ()
     safe_message: str | None = None

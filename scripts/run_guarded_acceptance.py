@@ -61,6 +61,8 @@ def main() -> None:
     parser.add_argument("--cooldown-seconds", type=int)
     parser.add_argument("--max-batches", type=int)
     parser.add_argument("--sample-seconds", type=float, default=0.5)
+    parser.add_argument("--cases", type=Path)
+    parser.add_argument("--only-case-id", action="append", default=[])
     parser.add_argument("--predictions", type=Path)
     parser.add_argument("--report", type=Path)
     parser.add_argument("--evaluation-id", default="olist-acceptance-60-p5-v1")
@@ -80,12 +82,20 @@ def main() -> None:
         )
     if not 0.5 <= args.sample_seconds <= 5:
         raise SystemExit("sample-seconds must be between 0.5 and 5")
-    if args.minimum_correct is not None and not 0 <= args.minimum_correct <= 60:
-        raise SystemExit("minimum-correct must be between 0 and 60")
     limits = profile.limits
 
     root = Path(__file__).resolve().parents[1]
-    total_cases = 60
+    cases_path = args.cases or root / "evals/configs/olist-acceptance-60.jsonl"
+    all_cases = load_olist_acceptance(cases_path)
+    selected_ids = set(args.only_case_id)
+    if unknown := selected_ids - {case.id for case in all_cases}:
+        raise SystemExit(f"unknown case IDs: {', '.join(sorted(unknown))}")
+    selected_cases = (
+        [case for case in all_cases if case.id in selected_ids] if selected_ids else all_cases
+    )
+    total_cases = len(selected_cases)
+    if args.minimum_correct is not None and not 0 <= args.minimum_correct <= total_cases:
+        raise SystemExit(f"minimum-correct must be between 0 and {total_cases}")
     predictions = args.predictions or root / "evals/predictions/olist-p5-60.jsonl"
     base_url = os.environ.get("OLLAMA_BASE_URL", "http://127.0.0.1:11434").rstrip("/")
     environment = {
@@ -132,7 +142,11 @@ def main() -> None:
             str(args.report or root / "evals/reports/olist-p5-60.json"),
             "--evaluation-id",
             args.evaluation_id,
+            "--cases",
+            str(cases_path),
         ]
+        for case_id in args.only_case_id:
+            command.extend(("--only-case-id", case_id))
         retrying = False
         if predictions.is_file() and retry_counts.get(before, 0) < 1:
             last_payload = json.loads(
@@ -173,7 +187,10 @@ def main() -> None:
         if reason:
             stop_process_group(process)
             unload_models(base_url)
-            print(f"RESOURCE_GUARD_STOP: {reason}; checkpoint={count_predictions(predictions)}/60")
+            print(
+                f"RESOURCE_GUARD_STOP: {reason}; "
+                f"checkpoint={count_predictions(predictions)}/{total_cases}"
+            )
             print(json.dumps({"observed_peak": peak}, indent=2))
             raise SystemExit(75)
         if process.returncode != 0:
@@ -182,18 +199,17 @@ def main() -> None:
         after = count_predictions(predictions)
         if retrying and after == before:
             retry_counts[before] = retry_counts.get(before, 0) + 1
-        elif after <= before and after < 60:
+        elif after <= before and after < total_cases:
             raise SystemExit("acceptance batch made no checkpoint progress")
         unload_models(base_url)
         batches += 1
         if args.minimum_correct is not None:
-            all_cases = load_olist_acceptance(root / "evals/configs/olist-acceptance-60.jsonl")
             persisted = [
                 SmokePrediction.model_validate_json(line)
                 for line in predictions.read_text(encoding="utf-8").splitlines()
                 if line.strip()
             ]
-            prefix_cases = all_cases[: len(persisted)]
+            prefix_cases = selected_cases[: len(persisted)]
             progress_report = args.progress_report or predictions.with_suffix(".progress.json")
             progress = evaluate_olist_acceptance(
                 cases=prefix_cases,
@@ -216,16 +232,16 @@ def main() -> None:
                 )
                 raise SystemExit(76)
         print(
-            f"guarded batch complete: {after}/60; cooling {cooldown_seconds}s; "
+            f"guarded batch complete: {after}/{total_cases}; cooling {cooldown_seconds}s; "
             f"observed_peak={json.dumps(peak, sort_keys=True)}"
         )
         if args.max_batches is not None and batches >= args.max_batches:
             print(json.dumps({"status": "pilot_complete", "checkpoint": after, "peak": peak}))
             return
-        if after < 60:
+        if after < total_cases:
             time.sleep(cooldown_seconds)
 
-    print(json.dumps({"status": "complete", "cases": 60, "observed_peak": peak}, indent=2))
+    print(json.dumps({"status": "complete", "cases": total_cases, "observed_peak": peak}, indent=2))
 
 
 if __name__ == "__main__":

@@ -21,6 +21,19 @@ _EQUALITY = re.compile(
     r"\b([A-Za-z_][A-Za-z0-9_]*\.[A-Za-z_][A-Za-z0-9_]*)\s*=\s*"
     r"([A-Za-z_][A-Za-z0-9_]*\.[A-Za-z_][A-Za-z0-9_]*)\b"
 )
+_BLOCKING_SIGNALS = frozenset(
+    {
+        "CATALOG_IDENTITY_MISMATCH",
+        "UNKNOWN_PLAN_TABLE",
+        "UNKNOWN_PLAN_COLUMN",
+        "COLUMN_OWNER_NOT_IN_FROM",
+        "SEMANTIC_OWNER_MISSING",
+        "JOIN_ENDPOINT_OUTSIDE_FROM",
+        "UNDECLARED_JOIN_CONDITION",
+        "DUPLICATE_SUBQUERY_ID",
+        "SUBQUERY_DEPENDENCY_NOT_PRIOR",
+    }
+)
 
 
 def _catalog_identifiers(catalog: CatalogSnapshot) -> tuple[set[str], set[str]]:
@@ -193,12 +206,16 @@ def validate_plan(
         signals.append("PLANNING_STRATEGY_MISMATCH")
 
     unique_signals = tuple(dict.fromkeys(signals))
+    blocking = tuple(signal for signal in unique_signals if signal in _BLOCKING_SIGNALS)
+    advisory = tuple(signal for signal in unique_signals if signal not in _BLOCKING_SIGNALS)
     return PlanValidationReport(
-        accepted=not unique_signals,
+        accepted=not blocking,
         signals=unique_signals,
+        blocking_signals=blocking,
+        advisory_signals=advisory,
         safe_message=(
             None
-            if not unique_signals
-            else "DIN-SQL plan conflicts with catalog evidence or clause dependencies"
+            if not blocking
+            else "DIN-SQL plan contains identifiers or joins that conflict with catalog evidence"
         ),
     )

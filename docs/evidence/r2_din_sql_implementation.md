@@ -109,11 +109,19 @@ inference and is not accuracy evidence.
 
 ## Ablation and promotion contract
 
-`TEXT2SQL_PLANNING_MODE=baseline|din_sql` selects a source-recorded variant. Baseline mode uses
+`TEXT2SQL_PLANNING_MODE=baseline|hybrid|din_sql` selects a source-recorded variant. Baseline mode uses
 planner v2, generator v4 and corrector v3. DIN mode uses planner v3, generator v5 and corrector v4,
 requires the active semantic index, and records plan validation in every result. Evaluators only
 compute DIN planning metrics when the prediction actually contains a typed clause plan, so historical
 reports remain readable.
+
+After the all-DIN Olist run hit the predefined accuracy stop at 4/8 correct (upper bound 56/60), the
+research implementation added a bounded hybrid route. EASY plans use the baseline generator and a
+compact `LogicalPlan`; only validated `NON_NESTED`/`NESTED` plans use DIN generation. Plan validation
+now separates blocking catalog/identifier violations from advisory shape/connectivity signals, which
+fall back to the baseline generator. Deterministic regression tests cover status-value ownership,
+scalar semantic-view ownership, distinct customer count without an unnecessary join, and seller
+count grain. This hybrid revision remains `IN_PROGRESS` pending guarded live smoke evidence.
 
 The implementation is deliberately **not VERIFIED** and no accuracy gain is claimed. Promotion still
 requires the guarded, checkpointed paired experiment specified in the research plan:

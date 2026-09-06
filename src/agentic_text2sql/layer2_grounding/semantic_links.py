@@ -28,9 +28,11 @@ def _best_document(
     selected_tables: set[str],
     *,
     table_only: bool = False,
+    role: SemanticRole | None = None,
+    value: str | None = None,
 ) -> RankedDocument | None:
     mention_tokens = _tokens(mention)
-    ranked: list[tuple[int, int, float, str, RankedDocument]] = []
+    ranked: list[tuple[int, int, int, float, str, RankedDocument]] = []
     for candidate in candidates:
         document = candidate.document
         if document.table not in selected_tables or document.kind == "relationship":
@@ -40,8 +42,15 @@ def _best_document(
         overlap = len(mention_tokens & _tokens(document.retrieval_text()))
         if overlap == 0:
             continue
+        status_match = int(
+            role is SemanticRole.FILTER
+            and value in {"delivered", "canceled", "unavailable", "giao thành công", "đã hủy"}
+            and document.column is not None
+            and document.column.casefold().endswith("status")
+        )
         ranked.append(
             (
+                status_match,
                 overlap,
                 int(document.kind == "column"),
                 candidate.score,
@@ -51,7 +60,7 @@ def _best_document(
         )
     if not ranked:
         return None
-    return max(ranked, key=lambda item: (item[0], item[1], item[2], item[3]))[4]
+    return max(ranked, key=lambda item: (item[0], item[1], item[2], item[3], item[4]))[5]
 
 
 def _is_unambiguous(
@@ -102,6 +111,8 @@ def build_semantic_link_plan(
             retrieval.candidates,
             selected,
             table_only=role is SemanticRole.ENTITY,
+            role=role,
+            value=value,
         )
         if candidate is None:
             unmatched.append(mention)
@@ -180,9 +191,18 @@ def build_semantic_link_plan(
             if table_tokens == entity_tokens:
                 population_candidates.append(table.name)
     population_owner = population_candidates[0] if len(population_candidates) == 1 else None
+    scalar_metric = bool(
+        decomposition.metric_hints
+        and not decomposition.dimension_hints
+        and not decomposition.filter_hints
+    )
     required_tables = tuple(
         sorted(
-            {link.table for link in ordered_links if link.required}
+            {
+                link.table
+                for link in ordered_links
+                if link.required and not (scalar_metric and link.role is SemanticRole.ENTITY)
+            }
             | ({population_owner} if population_owner is not None else set())
         )
     )

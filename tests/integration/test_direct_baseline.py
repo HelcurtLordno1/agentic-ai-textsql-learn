@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Any, cast
+from typing import Any, Literal, cast
 
 import pytest
 from pydantic import BaseModel
@@ -20,7 +20,11 @@ from agentic_text2sql.layer2_grounding.introspector import SQLiteIntrospector
 from agentic_text2sql.layer2_grounding.service import GroundingService
 from agentic_text2sql.layer3_generation.generator import GeneratorAgent
 from agentic_text2sql.layer3_generation.normalizer import CandidateNormalizer
-from agentic_text2sql.layer3_generation.prompt_builder import PromptBuilder
+from agentic_text2sql.layer3_generation.prompt_builder import (
+    BASELINE_GENERATOR_PROMPT_VERSION,
+    GENERATOR_PROMPT_VERSION,
+    PromptBuilder,
+)
 from agentic_text2sql.layer3_generation.service import GenerationService
 from agentic_text2sql.layer4_validation.executor import ReadOnlySQLiteExecutor
 from agentic_text2sql.layer4_validation.policy import SQLSafetyPolicy
@@ -149,7 +153,32 @@ class StubGrounding:
         return self.context, self.links
 
 
-def grounded_service(provider: QueueProvider, catalog_hash: str) -> DirectBaselineService:
+def grounded_service(
+    provider: QueueProvider,
+    catalog_hash: str,
+    planning_mode: Literal["baseline", "hybrid", "din_sql"] = "din_sql",
+) -> DirectBaselineService:
+    normalizer = CandidateNormalizer()
+    baseline_generation = GenerationService(
+        PromptBuilder(
+            ROOT / "configs/prompts/generator_v4_cross_domain.j2",
+            ROOT / "datasets/olist/business_glossary.yaml",
+        ),
+        GeneratorAgent(provider),
+        normalizer,
+        "fake-local",
+        BASELINE_GENERATOR_PROMPT_VERSION,
+    )
+    din_generation = GenerationService(
+        PromptBuilder(
+            ROOT / "configs/prompts/generator_v5_din_sql.j2",
+            ROOT / "datasets/olist/business_glossary.yaml",
+        ),
+        GeneratorAgent(provider),
+        normalizer,
+        "fake-local",
+        GENERATOR_PROMPT_VERSION,
+    )
     return DirectBaselineService(
         router=QueryRouter(),
         decomposer=Decomposer(),
@@ -158,19 +187,12 @@ def grounded_service(provider: QueueProvider, catalog_hash: str) -> DirectBaseli
             ROOT / "configs/prompts/planner_v2.j2",
             ROOT / "configs/prompts/planner_v3_din_sql.j2",
         ),
-        generation=GenerationService(
-            PromptBuilder(
-                ROOT / "configs/prompts/generator_v5_din_sql.j2",
-                ROOT / "datasets/olist/business_glossary.yaml",
-            ),
-            GeneratorAgent(provider),
-            CandidateNormalizer(),
-            "fake-local",
-        ),
+        generation=din_generation if planning_mode == "din_sql" else baseline_generation,
+        din_generation=din_generation if planning_mode == "hybrid" else None,
         policy=SQLSafetyPolicy(),
         executor=ReadOnlySQLiteExecutor(),
         grounding=cast(GroundingService, StubGrounding(catalog_hash)),
-        planning_mode="din_sql",
+        planning_mode=planning_mode,
     )
 
 
@@ -183,7 +205,26 @@ def test_din_sql_handoff_uses_one_model_call_and_records_plan_validation() -> No
     assert result.status is DirectStatus.SUCCEEDED
     assert result.result_rows == [[4]]
     assert result.plan is not None and result.plan["complexity"]["strategy"] == "EASY"
-    assert result.plan_validation == {"accepted": True, "signals": [], "safe_message": None}
+    assert result.plan_validation == {
+        "accepted": True,
+        "signals": [],
+        "blocking_signals": [],
+        "advisory_signals": [],
+        "safe_message": None,
+    }
+    assert provider.calls == 1
+
+
+def test_hybrid_easy_route_uses_compact_baseline_generator() -> None:
+    catalog = SQLiteIntrospector().inspect(DATABASE, "synthetic")
+    provider = QueueProvider([SqlCandidate(sql="SELECT COUNT(*) FROM orders", confidence=1)])
+    result = grounded_service(provider, catalog.catalog_hash, "hybrid").run(
+        "How many orders?", DATABASE, catalog
+    )
+    assert result.status is DirectStatus.SUCCEEDED
+    assert result.candidate is not None
+    assert result.candidate.prompt_version == BASELINE_GENERATOR_PROMPT_VERSION
+    assert result.prompt_versions["planner"] == "hybrid_deterministic_v1"
     assert provider.calls == 1
 
 

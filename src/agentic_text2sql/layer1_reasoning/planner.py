@@ -73,8 +73,39 @@ class PlannerAgent:
             ]
             for role in SemanticRole
         }
+        lowered = question.casefold()
+        asks_count = any(
+            phrase in lowered for phrase in ("how many", "có bao nhiêu", "number of", "số lượng")
+        )
+        asks_distinct = any(
+            phrase in lowered for phrase in ("distinct", "unique", "duy nhất", "khác nhau")
+        )
+        required_owners = {
+            link.table
+            for link in semantic_links.links
+            if link.role in {SemanticRole.METRIC, SemanticRole.DIMENSION, SemanticRole.FILTER}
+            and (link.role is not SemanticRole.DIMENSION or not asks_count)
+        }
+        if semantic_links.population_owner is not None:
+            required_owners.add(semantic_links.population_owner)
+        if not required_owners:
+            required_owners.update(semantic_links.required_tables)
+        if not required_owners:
+            required_owners.update(schema_context.selected_tables[:1])
+
+        selected_join_paths: list[str] = []
+        planned_tables = set(required_owners)
+        if len(required_owners) > 1:
+            for condition in semantic_links.join_paths:
+                left, _, right = condition.partition(" = ")
+                if not right:
+                    continue
+                selected_join_paths.append(condition)
+                planned_tables.update(
+                    (left.split(".", maxsplit=1)[0], right.split(".", maxsplit=1)[0])
+                )
         join_steps: list[JoinStep] = []
-        for condition in semantic_links.join_paths:
+        for condition in selected_join_paths:
             left, _, right = condition.partition(" = ")
             if not right:
                 continue
@@ -86,10 +117,26 @@ class PlannerAgent:
                     purpose="connect provenance-backed semantic owners",
                 )
             )
-        select = [
-            *linked_columns[SemanticRole.DIMENSION],
-            *linked_columns[SemanticRole.METRIC],
-        ]
+        if asks_count:
+            distinct_column = next(
+                (
+                    column
+                    for column in linked_columns[SemanticRole.DIMENSION]
+                    if column.split(".", maxsplit=1)[0] in required_owners
+                ),
+                None,
+            )
+            owner = semantic_links.population_owner or sorted(required_owners)[0]
+            select = [
+                f"COUNT DISTINCT {distinct_column}"
+                if asks_distinct and distinct_column is not None
+                else f"COUNT rows of {owner}"
+            ]
+        else:
+            select = [
+                *linked_columns[SemanticRole.DIMENSION],
+                *linked_columns[SemanticRole.METRIC],
+            ]
         if not select:
             select = list(schema_context.selected_columns[:1]) or ["row count"]
         task_type: Literal["lookup", "aggregation", "ranking", "comparison", "set"] = (
@@ -105,7 +152,7 @@ class PlannerAgent:
             question_language=decomposition.question_language,
             task_type=task_type,
             metrics=decomposition.metric_hints,
-            dimensions=decomposition.dimension_hints,
+            dimensions=[] if asks_count else decomposition.dimension_hints,
             filters=[*decomposition.filter_hints, *decomposition.time_hints],
             sort=decomposition.sort_hints,
             limit=decomposition.limit_hint,
@@ -121,19 +168,24 @@ class PlannerAgent:
             ),
             clauses=ClausePlan(
                 select=select,
-                from_tables=list(schema_context.selected_tables),
+                from_tables=sorted(planned_tables),
                 joins=join_steps,
                 where=[
-                    *linked_columns[SemanticRole.FILTER],
-                    *linked_columns[SemanticRole.VALUE],
+                    f"{link.table}.{link.column} = {link.value!r}"
+                    for link in semantic_links.links
+                    if link.role in {SemanticRole.FILTER, SemanticRole.VALUE}
+                    and link.column is not None
+                    and link.value is not None
                 ],
                 group_by=linked_columns[SemanticRole.DIMENSION]
-                if decomposition.metric_hints
+                if decomposition.metric_hints and not asks_count
                 else [],
                 order_by=decomposition.sort_hints,
                 limit=decomposition.limit_hint,
                 output_grain=(
-                    "one row per requested dimension"
+                    "one scalar row"
+                    if asks_count
+                    else "one row per requested dimension"
                     if decomposition.dimension_hints
                     else "one scalar row"
                     if decomposition.metric_hints

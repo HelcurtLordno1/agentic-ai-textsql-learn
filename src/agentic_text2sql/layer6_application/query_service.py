@@ -8,7 +8,12 @@ from pathlib import Path
 from typing import Literal
 
 from agentic_text2sql.contracts.catalog import CatalogSnapshot
-from agentic_text2sql.contracts.planning import DINSQLPlan, LogicalPlan, RouteIntent
+from agentic_text2sql.contracts.planning import (
+    DINSQLPlan,
+    LogicalPlan,
+    PlanningStrategy,
+    RouteIntent,
+)
 from agentic_text2sql.contracts.sql import DirectRunResult, DirectStatus
 from agentic_text2sql.contracts.validation import ErrorClass, ValidationReport
 from agentic_text2sql.exceptions import StructuredOutputError, Text2SQLError
@@ -39,31 +44,44 @@ class DirectBaselineService:
         decomposer: Decomposer,
         planner: PlannerAgent,
         generation: GenerationService,
+        din_generation: GenerationService | None = None,
         policy: SQLSafetyPolicy,
         executor: ReadOnlySQLiteExecutor,
         grounding: GroundingService | None = None,
         correction: CorrectionService | None = None,
+        din_correction: CorrectionService | None = None,
         run_deadline_seconds: float = 60.0,
-        planning_mode: Literal["baseline", "din_sql"] = "baseline",
+        planning_mode: Literal["baseline", "hybrid", "din_sql"] = "baseline",
     ) -> None:
         self.router = router
         self.decomposer = decomposer
         self.planner = planner
         self.generation = generation
+        self.din_generation = din_generation
         self.policy = policy
         self.executor = executor
         self.grounding = grounding
         self.correction = correction
+        self.din_correction = din_correction
         self.run_deadline_seconds = run_deadline_seconds
         self.planning_mode = planning_mode
-        if planning_mode == "din_sql" and grounding is None:
-            raise ValueError("DIN-SQL planning requires an active grounded schema index")
+        if planning_mode in {"hybrid", "din_sql"} and grounding is None:
+            raise ValueError("hybrid/DIN-SQL planning requires an active grounded schema index")
+        if planning_mode == "hybrid" and din_generation is None:
+            raise ValueError("hybrid planning requires both baseline and DIN generation paths")
 
     def run(self, question: str, database: Path, catalog: CatalogSnapshot) -> DirectRunResult:
         run_id = str(uuid.uuid4())
         din_sql = self.planning_mode == "din_sql"
+        hybrid = self.planning_mode == "hybrid"
         versions = {
-            "planner": PLANNER_PROMPT_VERSION if din_sql else BASELINE_PLANNER_PROMPT_VERSION,
+            "planner": (
+                "hybrid_deterministic_v1"
+                if hybrid
+                else PLANNER_PROMPT_VERSION
+                if din_sql
+                else BASELINE_PLANNER_PROMPT_VERSION
+            ),
             "generator": self.generation.prompt_version,
         }
         if self.correction is not None:
@@ -96,7 +114,7 @@ class DirectBaselineService:
         decomposition = self.decomposer.decompose(question)
         schema_context = None
         semantic_links = None
-        if self.grounding is not None and self.planning_mode == "din_sql":
+        if self.grounding is not None and self.planning_mode in {"hybrid", "din_sql"}:
             grounding_started = time.monotonic()
             try:
                 schema_context, semantic_links = self.grounding.prepare_for_planning(
@@ -120,7 +138,7 @@ class DirectBaselineService:
         plan: LogicalPlan
         try:
             if (
-                self.planning_mode == "din_sql"
+                self.planning_mode in {"hybrid", "din_sql"}
                 and schema_context is not None
                 and semantic_links is not None
             ):
@@ -184,9 +202,52 @@ class DirectBaselineService:
             plan_validation.model_dump(mode="json") if plan_validation is not None else None
         )
 
+        use_din_generation = bool(
+            isinstance(plan, DINSQLPlan)
+            and (
+                self.planning_mode == "din_sql"
+                or (
+                    self.planning_mode == "hybrid"
+                    and plan.complexity.strategy is not PlanningStrategy.EASY
+                    and not (plan_validation and plan_validation.advisory_signals)
+                )
+            )
+        )
+        active_generation = (
+            self.din_generation
+            if use_din_generation and self.din_generation is not None
+            else self.generation
+        )
+        active_correction = (
+            self.din_correction
+            if use_din_generation and self.din_correction is not None
+            else self.correction
+        )
+        generation_plan: LogicalPlan = plan
+        if isinstance(plan, DINSQLPlan) and not use_din_generation:
+            generation_plan = LogicalPlan.model_validate(
+                plan.model_dump(
+                    include={
+                        "question_language",
+                        "task_type",
+                        "metrics",
+                        "dimensions",
+                        "filters",
+                        "sort",
+                        "limit",
+                        "required_concepts",
+                        "ambiguities",
+                        "assumptions",
+                    }
+                )
+            )
+        versions["generator"] = active_generation.prompt_version
+        if active_correction is not None:
+            versions["corrector"] = active_correction.corrector.prompt_version
+
         generation_started = time.monotonic()
         try:
-            candidate = self.generation.run(question, plan, catalog, schema_context)
+            candidate = active_generation.run(question, generation_plan, catalog, schema_context)
         except SQLParseError as exc:
             timings["generation"] = (time.monotonic() - generation_started) * 1000
             finish_timings()
@@ -219,14 +280,14 @@ class DirectBaselineService:
             )
         timings["generation"] = (time.monotonic() - generation_started) * 1000
 
-        if self.correction is not None:
+        if active_correction is not None:
             validation_started = time.monotonic()
-            initial_report, initial_result = self.correction.validation.run(
+            initial_report, initial_result = active_correction.validation.run(
                 database,
                 candidate.normalized_sql,
                 catalog,
                 question=question,
-                plan=plan,
+                plan=generation_plan,
             )
             timings["validation"] = (time.monotonic() - validation_started) * 1000
             if initial_report.accepted and initial_result is not None:
@@ -248,9 +309,9 @@ class DirectBaselineService:
                     latency_ms=timings,
                 )
             correction_started = time.monotonic()
-            outcome, final_candidate, final_report, final_result = self.correction.run(
+            outcome, final_candidate, final_report, final_result = active_correction.run(
                 question=question,
-                plan=plan,
+                plan=generation_plan,
                 catalog=catalog,
                 database=database,
                 failed_candidate=candidate,

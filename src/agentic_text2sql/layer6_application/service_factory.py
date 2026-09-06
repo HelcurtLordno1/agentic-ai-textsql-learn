@@ -48,6 +48,8 @@ class RuntimeBundle(AbstractContextManager["RuntimeBundle"]):
     ) -> None:
         root = settings.project_root
         din_sql = settings.planning_mode == "din_sql"
+        hybrid = settings.planning_mode == "hybrid"
+        grounded_planning = din_sql or hybrid
         self.provider = OllamaProvider(settings)
         generation_digest = next(
             (
@@ -75,12 +77,26 @@ class RuntimeBundle(AbstractContextManager["RuntimeBundle"]):
                 "seed": settings.ollama_seed,
             },
             "prompt_versions": {
-                "planner": "planner_v3_din_sql" if din_sql else "planner_v2",
+                "planner": (
+                    "hybrid_deterministic_v1"
+                    if hybrid
+                    else "planner_v3_din_sql"
+                    if din_sql
+                    else "planner_v2"
+                ),
                 "generator": (
-                    GENERATOR_PROMPT_VERSION if din_sql else BASELINE_GENERATOR_PROMPT_VERSION
+                    "adaptive(generator_v4_cross_domain,generator_v5_din_sql)"
+                    if hybrid
+                    else GENERATOR_PROMPT_VERSION
+                    if din_sql
+                    else BASELINE_GENERATOR_PROMPT_VERSION
                 ),
                 "corrector": (
-                    CORRECTOR_PROMPT_VERSION if din_sql else BASELINE_CORRECTOR_PROMPT_VERSION
+                    "adaptive(corrector_v3_cross_domain,corrector_v4_din_sql)"
+                    if hybrid
+                    else CORRECTOR_PROMPT_VERSION
+                    if din_sql
+                    else BASELINE_CORRECTOR_PROMPT_VERSION
                 ),
             },
             "retrieval": {"mode": "hybrid", "top_k": 20, "token_budget": 1200},
@@ -126,9 +142,9 @@ class RuntimeBundle(AbstractContextManager["RuntimeBundle"]):
             grounding = GroundingService(
                 retriever, catalog, mode="hybrid", top_k=20, token_budget=1200
             )
-        if din_sql and grounding is None:
+        if grounded_planning and grounding is None:
             self.provider.close()
-            raise RuntimeError("DIN-SQL planning requires an active p3_1_semantic index")
+            raise RuntimeError("hybrid/DIN-SQL planning requires an active p3_1_semantic index")
         correction = None
         if correction_enabled:
             correction = CorrectionService(
@@ -143,6 +159,33 @@ class RuntimeBundle(AbstractContextManager["RuntimeBundle"]):
                 validation=ValidationService(policy, executor),
                 max_repairs=1,
                 max_llm_calls=1,
+            )
+        din_correction = None
+        if correction_enabled and hybrid:
+            din_correction = CorrectionService(
+                corrector=CorrectorAgent(
+                    self.provider,
+                    normalizer,
+                    root / "configs/prompts/corrector_v4_din_sql.j2",
+                    root / "datasets/olist/business_glossary.yaml",
+                    settings.ollama_model,
+                    CORRECTOR_PROMPT_VERSION,
+                ),
+                validation=ValidationService(policy, executor),
+                max_repairs=1,
+                max_llm_calls=1,
+            )
+        din_generation = None
+        if hybrid:
+            din_generation = GenerationService(
+                PromptBuilder(
+                    root / "configs/prompts/generator_v5_din_sql.j2",
+                    root / "datasets/olist/business_glossary.yaml",
+                ),
+                GeneratorAgent(self.provider),
+                normalizer,
+                settings.ollama_model,
+                GENERATOR_PROMPT_VERSION,
             )
         self.service = DirectBaselineService(
             router=QueryRouter(),
@@ -162,10 +205,12 @@ class RuntimeBundle(AbstractContextManager["RuntimeBundle"]):
                 settings.ollama_model,
                 GENERATOR_PROMPT_VERSION if din_sql else BASELINE_GENERATOR_PROMPT_VERSION,
             ),
+            din_generation=din_generation,
             policy=policy,
             executor=executor,
             grounding=grounding,
             correction=correction,
+            din_correction=din_correction,
             run_deadline_seconds=settings.run_deadline_seconds,
             planning_mode=settings.planning_mode,
         )

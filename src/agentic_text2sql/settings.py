@@ -39,7 +39,7 @@ class Settings(BaseSettings):
     run_deadline_seconds: float = Field(
         default=120.0, alias="TEXT2SQL_RUN_DEADLINE_SECONDS", ge=30, le=180
     )
-    planning_mode: Literal["baseline", "din_sql"] = Field(
+    planning_mode: Literal["baseline", "hybrid", "din_sql"] = Field(
         default="baseline", alias="TEXT2SQL_PLANNING_MODE"
     )
 

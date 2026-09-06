@@ -198,3 +198,31 @@ def test_nested_dependencies_must_be_ordered() -> None:
     )
     report = validate_plan(plan, catalog, schema_context())
     assert "SUBQUERY_DEPENDENCY_NOT_PRIOR" in report.signals
+
+
+def test_shape_conflict_is_advisory_so_hybrid_can_fallback() -> None:
+    catalog = SQLiteIntrospector().inspect(DATABASE, "synthetic")
+    draft = ranking_draft().model_copy(
+        update={
+            "task_type": "aggregation",
+            "dimensions": [],
+            "sort": [],
+            "limit": None,
+            "clauses": ranking_draft().clauses.model_copy(
+                update={"order_by": [], "limit": None, "output_grain": "one row per category"}
+            ),
+        }
+    )
+    plan = DINSQLPlan(
+        **draft.model_dump(exclude={"complexity"}),
+        semantic_links=semantic_links(),
+        complexity=ComplexityDecision(
+            kind=ComplexityKind.MULTI_JOIN,
+            strategy=PlanningStrategy.NON_NESTED,
+            signals=("multiple_tables_or_join",),
+        ),
+    )
+    report = validate_plan(plan, catalog, schema_context())
+    assert report.accepted
+    assert report.blocking_signals == ()
+    assert "SCALAR_OUTPUT_GRAIN_MISMATCH" in report.advisory_signals
