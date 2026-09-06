@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Literal
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -29,11 +30,17 @@ class Settings(BaseSettings):
     ollama_model: str = Field(default="qwen3:14b-q4_K_M", alias="TEXT2SQL_OLLAMA_MODEL")
     ollama_num_gpu: int | None = Field(default=None, alias="TEXT2SQL_OLLAMA_NUM_GPU", ge=0)
     ollama_seed: int = Field(default=42, alias="TEXT2SQL_OLLAMA_SEED", ge=0)
+    ollama_max_output_tokens: int = Field(
+        default=1024, alias="TEXT2SQL_OLLAMA_MAX_OUTPUT_TOKENS", ge=128, le=2048
+    )
     request_timeout_seconds: float = Field(
         default=120.0, alias="TEXT2SQL_REQUEST_TIMEOUT_SECONDS", gt=0
     )
     run_deadline_seconds: float = Field(
         default=120.0, alias="TEXT2SQL_RUN_DEADLINE_SECONDS", ge=30, le=180
+    )
+    planning_mode: Literal["baseline", "din_sql"] = Field(
+        default="din_sql", alias="TEXT2SQL_PLANNING_MODE"
     )
 
     @field_validator("ollama_base_url")

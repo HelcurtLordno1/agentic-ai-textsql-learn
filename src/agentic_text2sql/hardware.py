@@ -16,15 +16,17 @@ class ProfileName(StrEnum):
     INTERACTIVE = "interactive-balanced"
     ACCEPTANCE = "acceptance-safe"
     CPU_FALLBACK = "cpu-fallback"
+    OLIST_PAPER1 = "olist-paper1-ultrasafe"
 
 
 class ResourceLimits(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
-    minimum_available_ram_gib: float = Field(default=10, gt=0)
-    maximum_swap_used_gib: float = Field(default=1, gt=0)
-    maximum_gpu_memory_mib: int = Field(default=11776, gt=0)
-    maximum_gpu_temperature_c: int = Field(default=76, gt=0)
-    maximum_gpu_power_w: float = Field(default=105, gt=0)
+    minimum_available_ram_gib: float = Field(default=14, gt=0)
+    maximum_swap_used_gib: float = Field(default=0.25, gt=0)
+    maximum_gpu_memory_mib: int = Field(default=6144, gt=0)
+    maximum_gpu_temperature_c: int = Field(default=68, gt=0)
+    maximum_gpu_power_w: float = Field(default=70, gt=0)
+    maximum_gpu_graphics_clock_mhz: int = Field(default=1800, gt=0)
 
 
 class HardwareProfile(BaseModel):
@@ -52,6 +54,7 @@ class HardwareProfile(BaseModel):
             "OLLAMA_FLASH_ATTENTION": "1" if self.flash_attention else "0",
             "OLLAMA_KV_CACHE_TYPE": self.kv_cache_type,
             "TEXT2SQL_OLLAMA_NUM_GPU": str(self.ollama_num_gpu),
+            "TEXT2SQL_OLLAMA_MAX_OUTPUT_TOKENS": "768",
             "TEXT2SQL_RUN_DEADLINE_SECONDS": "120",
         }
 
@@ -95,6 +98,26 @@ PROFILES = {
         batch_size=1,
         cooldown_seconds=30,
     ),
+    ProfileName.OLIST_PAPER1: HardwareProfile(
+        name=ProfileName.OLIST_PAPER1,
+        description="Qwen3-14B Olist evaluation with minimal GPU offload and hard breakers.",
+        ollama_num_gpu=1,
+        cpu_cores=6,
+        max_loaded_models=1,
+        keep_alive="0",
+        flash_attention=True,
+        kv_cache_type="q8_0",
+        batch_size=1,
+        cooldown_seconds=60,
+        limits=ResourceLimits(
+            minimum_available_ram_gib=14,
+            maximum_swap_used_gib=0.25,
+            maximum_gpu_memory_mib=4096,
+            maximum_gpu_temperature_c=65,
+            maximum_gpu_power_w=78,
+            maximum_gpu_graphics_clock_mhz=650,
+        ),
+    ),
 }
 
 
@@ -106,6 +129,7 @@ class ResourceSample:
     gpu_temperature_c: int
     gpu_power_w: float
     gpu_utilization_pct: int
+    gpu_graphics_clock_mhz: int = 0
 
 
 def sample_resources() -> ResourceSample:
@@ -116,13 +140,15 @@ def sample_resources() -> ResourceSample:
     output = subprocess.check_output(
         [
             "nvidia-smi",
-            "--query-gpu=memory.used,temperature.gpu,power.draw,utilization.gpu",
+            "--query-gpu=memory.used,temperature.gpu,power.draw,utilization.gpu,clocks.current.graphics",
             "--format=csv,noheader,nounits",
         ],
         text=True,
         timeout=5,
     ).strip()
-    memory, temperature, power, utilization = [item.strip() for item in output.split(",")]
+    memory, temperature, power, utilization, graphics_clock = [
+        item.strip() for item in output.split(",")
+    ]
     return ResourceSample(
         available_ram_gib=values["MemAvailable"] / GIB,
         swap_used_gib=(values["SwapTotal"] - values["SwapFree"]) / GIB,
@@ -130,6 +156,7 @@ def sample_resources() -> ResourceSample:
         gpu_temperature_c=int(temperature),
         gpu_power_w=float(power),
         gpu_utilization_pct=int(utilization),
+        gpu_graphics_clock_mhz=int(graphics_clock),
     )
 
 
@@ -152,5 +179,9 @@ def unsafe_reason(sample: ResourceSample, limits: ResourceLimits) -> str | None:
             f"GPU temperature {sample.gpu_temperature_c} C",
         ),
         (sample.gpu_power_w >= limits.maximum_gpu_power_w, f"GPU power {sample.gpu_power_w:.1f} W"),
+        (
+            sample.gpu_graphics_clock_mhz >= limits.maximum_gpu_graphics_clock_mhz,
+            f"GPU graphics clock {sample.gpu_graphics_clock_mhz} MHz",
+        ),
     )
     return next((message for failed, message in checks if failed), None)

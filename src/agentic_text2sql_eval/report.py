@@ -84,6 +84,7 @@ def evaluate_predictions(
                     "safe_message": result.safe_message,
                     "latency_ms": result.latency_ms,
                     "semantic_tags": case.semantic_tags,
+                    "plan_validation": result.plan_validation,
                     "correction": result.correction,
                 }
             )

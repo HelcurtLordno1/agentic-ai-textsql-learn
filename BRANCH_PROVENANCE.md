@@ -9,15 +9,23 @@
 - PRACTIQ archive commit used for selected research documents:
   `e215356fa0f03807639e2c6818f339e5366d5ca7`
 
-## Composition rule
+## Initial composition rule
 
-Runtime source, prompts, benchmark scripts, model configuration, Olist glossary, and tests remain
-byte-for-byte at the `0972e47` tree. Only selected research documentation and the mandatory laptop
-safety instructions were copied from `practiq_paper1` so the failed Paper I experiment remains
-available as evidence for the next research direction.
+At branch creation, runtime source, prompts, benchmark scripts, model configuration, Olist glossary,
+and tests remained byte-for-byte at the `0972e47` tree. Only selected research documentation and the
+mandatory laptop safety instructions were copied from `practiq_paper1` so the failed Paper I
+experiment remained available as evidence for the next research direction.
 
 The copied documents do not make the PRACTIQ implementation part of this branch. Reports describing
 PRACTIQ are historical evidence, not a statement about the active runtime.
+
+## Paper II development state
+
+The branch now contains an independently implemented DIN-SQL research path. It is selected by
+`TEXT2SQL_PLANNING_MODE=din_sql`; `baseline` retains the frozen v2/v4/v3 prompt path for paired
+ablation. The implementation and deterministic evidence are documented in
+`docs/evidence/r2_din_sql_implementation.md`. No Paper II accuracy result has been produced yet, so
+the P6 baseline remains the champion and Gate R2 remains `IN_PROGRESS`.
 
 ## Safety boundary
 

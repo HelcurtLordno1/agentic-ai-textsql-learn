@@ -6,6 +6,7 @@ from enum import StrEnum
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from agentic_text2sql.contracts.planning import ClausePlan
 from agentic_text2sql.contracts.validation import ErrorClass, ValidationReport
 
 
@@ -26,6 +27,8 @@ class CorrectionPlan(BaseModel):
     suspected_cause: str = Field(min_length=1, max_length=500)
     changes_required: tuple[str, ...] = Field(min_length=1)
     evidence_ids: tuple[str, ...] = ()
+    target_clauses: tuple[str, ...] = ()
+    clause_expectations: ClausePlan | None = None
     should_retry: bool
 
 

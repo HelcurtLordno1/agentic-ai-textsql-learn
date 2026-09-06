@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from agentic_text2sql.contracts.correction import CorrectionPlan
+from agentic_text2sql.contracts.planning import DINSQLPlan, LogicalPlan
 from agentic_text2sql.contracts.validation import ErrorClass, ValidationReport
 from agentic_text2sql.layer5_correction.classifier import classify_for_repair
 
@@ -68,15 +69,55 @@ SIGNAL_GUIDANCE = {
     ),
 }
 
+ERROR_CLAUSES: dict[ErrorClass, tuple[str, ...]] = {
+    ErrorClass.SYNTAX_ERROR: ("ALL",),
+    ErrorClass.UNKNOWN_TABLE: ("FROM", "JOIN"),
+    ErrorClass.UNKNOWN_COLUMN: ("SELECT", "WHERE", "GROUP_BY", "HAVING", "ORDER_BY"),
+    ErrorClass.AMBIGUOUS_COLUMN: ("SELECT", "JOIN", "WHERE"),
+    ErrorClass.TYPE_OR_FUNCTION_ERROR: ("SELECT", "WHERE"),
+    ErrorClass.JOIN_ERROR: ("FROM", "JOIN"),
+    ErrorClass.FILTER_OR_VALUE_ERROR: ("WHERE", "HAVING"),
+    ErrorClass.AGGREGATION_ERROR: ("SELECT", "GROUP_BY", "HAVING"),
+    ErrorClass.DIALECT_ERROR: ("ALL",),
+    ErrorClass.EMPTY_RESULT_SUSPECTED: ("JOIN", "WHERE"),
+    ErrorClass.RESULT_SHAPE_MISMATCH: ("SELECT", "GROUP_BY"),
+    ErrorClass.SEMANTIC_MISMATCH: ("SELECT", "WHERE", "GROUP_BY", "ORDER_BY", "LIMIT"),
+    ErrorClass.POLICY_VIOLATION: (),
+    ErrorClass.TIMEOUT: (),
+    ErrorClass.UNKNOWN_RUNTIME_ERROR: (),
+}
 
-def build_correction_plan(report: ValidationReport) -> CorrectionPlan:
+SIGNAL_CLAUSES: dict[str, tuple[str, ...]] = {
+    "SCALAR_AGGREGATE_ROW_COUNT": ("SELECT", "GROUP_BY"),
+    "SCALAR_AGGREGATE_COLUMN_COUNT": ("SELECT",),
+    "AVERAGE_AGGREGATE_MISSING": ("SELECT",),
+    "CUSTOMER_IDENTITY_NOT_UNIQUE": ("FROM", "JOIN", "GROUP_BY"),
+    "DELIVERY_POPULATION_NARROWED_BY_STATUS": ("WHERE",),
+    "TOP_K_MISSING_ORDER": ("ORDER_BY",),
+    "TOP_K_MISSING_LIMIT": ("LIMIT",),
+    "RANKING_ORDER_MISSING": ("ORDER_BY",),
+    "RANKING_PRIMARY_NOT_DESC": ("ORDER_BY",),
+    "RANKING_LIMIT_MISMATCH": ("LIMIT",),
+    "ALPHABETICAL_TIE_BREAK_MISSING": ("ORDER_BY",),
+    "SCALAR_MAXIMUM_AGGREGATE_MISSING": ("SELECT", "GROUP_BY", "ORDER_BY", "LIMIT"),
+}
+
+
+def build_correction_plan(
+    report: ValidationReport, plan: LogicalPlan | None = None
+) -> CorrectionPlan:
     category = report.error_class or ErrorClass.UNKNOWN_RUNTIME_ERROR
     changes = [ERROR_GUIDANCE[category]]
     changes.extend(SIGNAL_GUIDANCE[item] for item in report.signals if item in SIGNAL_GUIDANCE)
+    clauses = [*ERROR_CLAUSES[category]]
+    for signal in report.signals:
+        clauses.extend(SIGNAL_CLAUSES.get(signal, ()))
     return CorrectionPlan(
         error_class=category,
         suspected_cause=report.safe_message or "Validation rejected the candidate",
         changes_required=tuple(dict.fromkeys(changes)),
         evidence_ids=tuple(report.signals),
+        target_clauses=tuple(dict.fromkeys(clauses)),
+        clause_expectations=plan.clauses if isinstance(plan, DINSQLPlan) else None,
         should_retry=classify_for_repair(report),
     )

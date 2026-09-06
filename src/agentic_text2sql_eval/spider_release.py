@@ -16,7 +16,10 @@ from pydantic import BaseModel, ConfigDict, Field
 from sqlglot import exp, parse_one
 
 from agentic_text2sql.adapters.sqlite_text import decode_sqlite_text
+from agentic_text2sql.contracts.catalog import CatalogSnapshot
 from agentic_text2sql.contracts.sql import DirectStatus
+from agentic_text2sql.layer2_grounding.introspector import SQLiteIntrospector
+from agentic_text2sql_eval.din_sql_metrics import aggregate_plan_metrics, evaluate_plan
 from agentic_text2sql_eval.inference_runner import SmokePrediction
 from agentic_text2sql_eval.report import _percentile
 from agentic_text2sql_eval.spider_adapter import case_hash, classify_complexity
@@ -273,7 +276,9 @@ def evaluate_spider_release(
     if len(predictions) != len(cases) or set(by_id) != {case.id for case in cases}:
         raise ValueError("Predictions must match the complete Spider release manifest")
     details: list[dict[str, Any]] = []
+    din_metrics: list[dict[str, Any]] = []
     connections: dict[str, sqlite3.Connection] = {}
+    catalogs: dict[str, CatalogSnapshot] = {}
     try:
         for case in cases:
             connection = connections.get(case.db_id)
@@ -283,6 +288,7 @@ def evaluate_spider_release(
                 connection.text_factory = decode_sqlite_text
                 connection.execute("PRAGMA query_only=ON")
                 connections[case.db_id] = connection
+                catalogs[case.db_id] = SQLiteIntrospector().inspect(database, case.db_id)
             result = by_id[case.id].result
             generated_sql = (
                 result.candidate.normalized_sql if result.candidate is not None else None
@@ -299,6 +305,15 @@ def evaluate_spider_release(
                     )
                 except sqlite3.Error:
                     pass
+            din_metric = None
+            if result.plan is not None and "clauses" in result.plan:
+                din_metric = evaluate_plan(
+                    result.plan,
+                    gold_sql=case.gold_sql,
+                    predicted_sql=generated_sql,
+                    catalog=catalogs[case.db_id],
+                )
+                din_metrics.append(din_metric)
             details.append(
                 {
                     "id": case.id,
@@ -317,6 +332,8 @@ def evaluate_spider_release(
                         else _failure_category(result.status.value, result.error_class, executed)
                     ),
                     "latency_ms": result.latency_ms,
+                    "plan_validation": result.plan_validation,
+                    "din_sql_plan_metrics": din_metric,
                     "correction": result.correction,
                 }
             )
@@ -364,6 +381,7 @@ def evaluate_spider_release(
         "by_partition": slices("partition"),
         "by_database": slices("db_id"),
         "failure_categories": dict(categories.most_common()),
+        "din_sql_planning": aggregate_plan_metrics(din_metrics),
         "manifest": manifest.model_dump(mode="json", exclude={"cases"}),
         "provenance": provenance,
         "limitations": [

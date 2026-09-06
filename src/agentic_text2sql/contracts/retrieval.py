@@ -71,6 +71,9 @@ class SchemaContext(BaseModel):
     selected_tables: list[str]
     selected_columns: list[str]
     joins: list[str]
+    join_provenance: dict[str, Literal["DECLARED_FK", "INFERRED_UNIQUE_LOOKUP"]] = Field(
+        default_factory=dict
+    )
     evidence: list[EvidenceItem]
     catalog_hash: str
     rendered_context: str = ""

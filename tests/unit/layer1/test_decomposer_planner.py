@@ -6,6 +6,7 @@ from pydantic import BaseModel
 from agentic_text2sql.contracts.planning import LogicalPlan
 from agentic_text2sql.layer1_reasoning.decomposer import Decomposer
 from agentic_text2sql.layer1_reasoning.planner import (
+    BASELINE_PLANNER_PROMPT_VERSION,
     PLANNER_PROMPT_VERSION,
     PlannerAgent,
     align_plan,
@@ -54,7 +55,8 @@ def test_planner_uses_versioned_schema_agnostic_prompt() -> None:
         "Top 5 danh mục theo doanh thu", Decomposer().decompose("Top 5 danh mục theo doanh thu")
     )
     assert plan.limit == 5
-    assert PLANNER_PROMPT_VERSION == "planner_v2"
+    assert BASELINE_PLANNER_PROMPT_VERSION == "planner_v2"
+    assert PLANNER_PROMPT_VERSION == "planner_v3_din_sql"
     assert "Do not produce SQL" in provider.prompt
     assert "Required JSON Schema" in provider.prompt
     assert "olist_orders_dataset" not in provider.prompt
@@ -104,6 +106,23 @@ def test_scalar_maximum_clears_model_ranking_shape() -> None:
         task_type="ranking",
         metrics=["order count"],
         dimensions=["customer"],
+        sort=["metric descending"],
+        limit=1,
+    )
+    aligned = align_plan(question, Decomposer().decompose(question), generated)
+    assert aligned.task_type == "aggregation"
+    assert aligned.dimensions == []
+    assert aligned.sort == []
+    assert aligned.limit is None
+
+
+def test_derived_average_per_entity_remains_one_scalar_result() -> None:
+    question = "Trung bình mỗi đơn có bao nhiêu item, làm tròn 4 chữ số?"
+    generated = LogicalPlan(
+        question_language="vi",
+        task_type="aggregation",
+        metrics=["average item count"],
+        dimensions=["order"],
         sort=["metric descending"],
         limit=1,
     )

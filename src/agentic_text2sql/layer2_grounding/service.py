@@ -12,9 +12,14 @@ import time
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from pathlib import Path
+from typing import Literal
 
 from agentic_text2sql.contracts.catalog import CatalogSnapshot
-from agentic_text2sql.contracts.planning import LogicalPlan
+from agentic_text2sql.contracts.planning import (
+    DecomposedQuestion,
+    LogicalPlan,
+    SemanticLinkPlan,
+)
 from agentic_text2sql.contracts.retrieval import (
     CatalogDocument,
     IndexManifest,
@@ -22,9 +27,10 @@ from agentic_text2sql.contracts.retrieval import (
 )
 from agentic_text2sql.layer2_grounding.document_builder import build_documents
 from agentic_text2sql.layer2_grounding.embedding_index import DenseIndex
-from agentic_text2sql.layer2_grounding.keyword_index import KeywordIndex
+from agentic_text2sql.layer2_grounding.keyword_index import KeywordIndex, normalize_tokens
 from agentic_text2sql.layer2_grounding.retriever import HybridRetriever
 from agentic_text2sql.layer2_grounding.schema_linker import link_schema
+from agentic_text2sql.layer2_grounding.semantic_links import build_semantic_link_plan
 
 DOCUMENT_TEMPLATE_VERSION = "p3.1-v2"
 INDEX_FILES = frozenset(
@@ -38,6 +44,28 @@ INDEX_FILES = frozenset(
         "bm25.json",
     }
 )
+
+
+def exact_entity_tables(catalog: CatalogSnapshot, entities: list[str]) -> tuple[str, ...]:
+    """Resolve an exact lexical entity owner before approximate retrieval ranking."""
+    generic = {"dataset", "olist", "semantic", "table", "view"}
+    preferred: list[str] = []
+    for entity in entities:
+        entity_tokens = set(normalize_tokens(entity))
+        matches = [
+            table.name
+            for table in catalog.tables
+            if table.kind == "table"
+            and {
+                token
+                for token in normalize_tokens(table.name)
+                if "_" not in token and token not in generic
+            }
+            == entity_tokens
+        ]
+        if len(matches) == 1:
+            preferred.extend(matches)
+    return tuple(dict.fromkeys(preferred))
 
 
 def _sha256(path: Path) -> str:
@@ -328,3 +356,56 @@ class GroundingService:
         )
         retrieval = self.retriever.retrieve(expanded_query, mode=self.mode, top_k=self.top_k)
         return link_schema(plan, retrieval, self.catalog, token_budget=self.token_budget)
+
+    def prepare_for_planning(
+        self, question: str, decomposition: DecomposedQuestion
+    ) -> tuple[SchemaContext, SemanticLinkPlan]:
+        """Run DIN-SQL schema linking before the single semantic-planner call."""
+        task_type: Literal["lookup", "aggregation", "ranking", "comparison", "set"]
+        if decomposition.set_operation_hint is not None:
+            task_type = "set"
+        elif decomposition.sort_hints or decomposition.limit_hint is not None:
+            task_type = "ranking"
+        elif decomposition.metric_hints:
+            task_type = "aggregation"
+        else:
+            task_type = "lookup"
+        provisional = LogicalPlan(
+            question_language=decomposition.question_language,
+            task_type=task_type,
+            metrics=decomposition.metric_hints,
+            dimensions=decomposition.dimension_hints,
+            filters=decomposition.filter_hints,
+            sort=decomposition.sort_hints,
+            limit=decomposition.limit_hint,
+            required_concepts=list(
+                dict.fromkeys(
+                    [
+                        *decomposition.entity_hints,
+                        *decomposition.metric_hints,
+                        *decomposition.dimension_hints,
+                        *decomposition.filter_hints,
+                        *decomposition.time_hints,
+                    ]
+                )
+            ),
+        )
+        expanded_query = " ".join(
+            [
+                question,
+                *decomposition.entity_hints,
+                *provisional.required_concepts,
+                *provisional.sort,
+            ]
+        )
+        retrieval = self.retriever.retrieve(expanded_query, mode=self.mode, top_k=self.top_k)
+        preferred_tables = exact_entity_tables(self.catalog, decomposition.entity_hints)
+        context = link_schema(
+            provisional,
+            retrieval,
+            self.catalog,
+            token_budget=self.token_budget,
+            preferred_tables=preferred_tables,
+        )
+        links = build_semantic_link_plan(question, decomposition, retrieval, context, self.catalog)
+        return context, links

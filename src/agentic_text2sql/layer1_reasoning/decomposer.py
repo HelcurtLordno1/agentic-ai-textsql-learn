@@ -24,6 +24,15 @@ DIMENSIONS = {
     "time": ("year", "month", "năm", "tháng"),
     "payment type": ("payment type", "payment method", "phương thức thanh toán"),
 }
+ENTITIES = {
+    "orders": ("order", "orders", "đơn hàng"),
+    "customers": ("customer", "customers", "khách hàng"),
+    "products": ("product", "products", "sản phẩm"),
+    "sellers": ("seller", "sellers", "người bán"),
+    "payments": ("payment", "payments", "thanh toán"),
+    "reviews": ("review", "reviews", "đánh giá"),
+    "order items": ("order item", "order items", "dòng đơn hàng", "item"),
+}
 
 
 def _language(question: str) -> Literal["vi", "en", "other"]:
@@ -41,6 +50,9 @@ class Decomposer:
     def decompose(self, question: str) -> DecomposedQuestion:
         lowered = question.casefold()
         metrics = [name for name, aliases in METRICS.items() if any(x in lowered for x in aliases)]
+        entities = [
+            name for name, aliases in ENTITIES.items() if any(x in lowered for x in aliases)
+        ]
         dimensions = [
             name for name, aliases in DIMENSIONS.items() if any(x in lowered for x in aliases)
         ]
@@ -72,6 +84,7 @@ class Decomposer:
         return DecomposedQuestion(
             question_language=_language(question),
             metric_hints=metrics,
+            entity_hints=entities,
             dimension_hints=dimensions,
             filter_hints=filters,
             sort_hints=sort,

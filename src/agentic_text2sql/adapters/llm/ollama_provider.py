@@ -143,6 +143,7 @@ class OllamaProvider:
             options = {
                 "temperature": 0,
                 "num_ctx": 4096,
+                "num_predict": self.settings.ollama_max_output_tokens,
                 "seed": self.settings.ollama_seed,
             }
             if self.settings.ollama_num_gpu is not None:

@@ -12,6 +12,8 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 from agentic_text2sql.contracts.sql import DirectStatus
+from agentic_text2sql.layer2_grounding.introspector import SQLiteIntrospector
+from agentic_text2sql_eval.din_sql_metrics import aggregate_plan_metrics, evaluate_plan
 from agentic_text2sql_eval.inference_runner import SmokePrediction
 from agentic_text2sql_eval.report import _percentile
 
@@ -106,7 +108,9 @@ def evaluate_olist_acceptance(
     if set(by_id) != {case.id for case in cases}:
         raise ValueError("Predictions must match the complete acceptance manifest")
     details: list[dict[str, Any]] = []
+    din_metrics: list[dict[str, Any]] = []
     latencies: list[float] = []
+    catalog = SQLiteIntrospector().inspect(database, "olist")
     connection = sqlite3.connect(f"file:{database.resolve()}?mode=ro", uri=True)
     try:
         connection.execute("PRAGMA query_only=ON")
@@ -121,6 +125,18 @@ def evaluate_olist_acceptance(
             )
             total_latency = result.latency_ms.get("total", sum(result.latency_ms.values()))
             latencies.append(total_latency)
+            generated_sql = (
+                result.candidate.normalized_sql if result.candidate is not None else None
+            )
+            din_metric = None
+            if result.plan is not None and "clauses" in result.plan:
+                din_metric = evaluate_plan(
+                    result.plan,
+                    gold_sql=case.gold_sql,
+                    predicted_sql=generated_sql,
+                    catalog=catalog,
+                )
+                din_metrics.append(din_metric)
             details.append(
                 {
                     "id": case.id,
@@ -129,9 +145,7 @@ def evaluate_olist_acceptance(
                     "difficulty": case.difficulty,
                     "status": result.status.value,
                     "result_correct": correct,
-                    "generated_sql": (
-                        result.candidate.normalized_sql if result.candidate is not None else None
-                    ),
+                    "generated_sql": generated_sql,
                     "expected_result_hash": hashlib.sha256(
                         repr(expected_rows).encode()
                     ).hexdigest(),
@@ -139,6 +153,8 @@ def evaluate_olist_acceptance(
                     "latency_ms": result.latency_ms,
                     "required_concepts": case.required_concepts,
                     "error_class": result.error_class,
+                    "plan_validation": result.plan_validation,
+                    "din_sql_plan_metrics": din_metric,
                     "correction": result.correction,
                 }
             )
@@ -198,6 +214,7 @@ def evaluate_olist_acceptance(
         "by_partition": slice_metrics("partition"),
         "by_language": slice_metrics("language"),
         "by_difficulty": slice_metrics("difficulty"),
+        "din_sql_planning": aggregate_plan_metrics(din_metrics),
         "details": details,
     }
     report_path.parent.mkdir(parents=True, exist_ok=True)

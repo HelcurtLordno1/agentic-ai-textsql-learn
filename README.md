@@ -46,10 +46,17 @@ Gate evidence is recorded under [`docs/evidence`](docs/evidence), including the
 [`P5.1 laptop hardening`](docs/evidence/p5_1_gate.md), and the
 [`P6 laptop release`](docs/evidence/p6_gate.md).
 
-The application routes unsupported/write intents before model calls, creates a schema-agnostic
-structured plan, grounds it against a pinned local index, generates one candidate, and sends every
-candidate—including repairs—through the same read-only policy/executor. Correction is bounded to
-one repair and remains opt-in. Gold SQL is loaded only by the evaluator after inference closes.
+The application routes unsupported/write intents before model calls. On the Paper II research
+branch, schema linking runs before one typed DIN-SQL planner call, producing provenance-backed
+semantic links, an adaptive complexity decision and a clause plan whose ownership/join/dependency
+constraints are validated before one candidate is generated. Correction is bounded to one repair
+and receives clause-specific failure evidence. Gold SQL is loaded only by the evaluator after
+inference closes.
+
+Set `TEXT2SQL_PLANNING_MODE=baseline` for the frozen prompt path or `din_sql` for the research path.
+The latter requires an active `p3_1_semantic` index and fails closed if it is absent. The code and
+deterministic tests are complete, but Paper II is not promoted until its guarded paired Olist/Spider
+benchmark meets Gate R2; the historical P6 scores below remain the champion evidence meanwhile.
 
 P5 adds one shared runtime path for CLI, FastAPI and Streamlit; a persistent SQLite run/trace/
 feedback/catalog ledger; restart-safe SSE; and a five-workspace local SQL Observatory. Query

@@ -20,7 +20,8 @@ from agentic_text2sql.layer3_generation.prompt_builder import (
     domain_rules,
 )
 
-CORRECTOR_PROMPT_VERSION = "corrector_v3_cross_domain"
+BASELINE_CORRECTOR_PROMPT_VERSION = "corrector_v3_cross_domain"
+CORRECTOR_PROMPT_VERSION = "corrector_v4_din_sql"
 
 
 class CorrectorAgent:
@@ -31,12 +32,14 @@ class CorrectorAgent:
         template_path: Path,
         glossary_path: Path,
         model_name: str,
+        prompt_version: str = CORRECTOR_PROMPT_VERSION,
     ) -> None:
         self.provider = provider
         self.normalizer = normalizer
         self.template_path = template_path
         self.glossary_path = glossary_path
         self.model_name = model_name
+        self.prompt_version = prompt_version
 
     def correct(
         self,
@@ -72,7 +75,7 @@ class CorrectorAgent:
         return self.normalizer.normalize(
             candidate,
             model_name=self.model_name,
-            prompt_version=CORRECTOR_PROMPT_VERSION,
+            prompt_version=self.prompt_version,
             catalog_hash=catalog.catalog_hash,
             prompt_estimated_tokens=estimate_tokens(prompt),
         )

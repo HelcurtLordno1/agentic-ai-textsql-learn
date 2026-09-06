@@ -19,6 +19,9 @@ from agentic_text2sql.hardware import (
     sample_resources,
     unsafe_reason,
 )
+from agentic_text2sql.settings import Settings
+from agentic_text2sql_eval.inference_runner import SmokePrediction
+from agentic_text2sql_eval.olist_acceptance import evaluate_olist_acceptance, load_olist_acceptance
 
 
 def unload_models(base_url: str) -> None:
@@ -38,6 +41,17 @@ def count_predictions(path: Path) -> int:
     return sum(bool(line.strip()) for line in path.read_text(encoding="utf-8").splitlines())
 
 
+def stop_process_group(process: subprocess.Popen[bytes]) -> None:
+    if process.poll() is not None:
+        return
+    os.killpg(process.pid, signal.SIGINT)
+    try:
+        process.wait(timeout=10)
+    except subprocess.TimeoutExpired:
+        os.killpg(process.pid, signal.SIGTERM)
+        process.wait(timeout=10)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -46,28 +60,51 @@ def main() -> None:
     parser.add_argument("--batch-size", type=int)
     parser.add_argument("--cooldown-seconds", type=int)
     parser.add_argument("--max-batches", type=int)
+    parser.add_argument("--sample-seconds", type=float, default=0.5)
     parser.add_argument("--predictions", type=Path)
     parser.add_argument("--report", type=Path)
     parser.add_argument("--evaluation-id", default="olist-acceptance-60-p5-v1")
+    parser.add_argument("--minimum-correct", type=int)
+    parser.add_argument("--progress-report", type=Path)
     args = parser.parse_args()
     profile = PROFILES[ProfileName(args.profile)]
     batch_size = args.batch_size if args.batch_size is not None else profile.batch_size
     cooldown_seconds = (
         args.cooldown_seconds if args.cooldown_seconds is not None else profile.cooldown_seconds
     )
-    if batch_size not in {1, 2, 3}:
-        raise SystemExit("batch-size must be between 1 and 3")
+    if not 1 <= batch_size <= profile.batch_size:
+        raise SystemExit(f"batch-size must be between 1 and profile maximum {profile.batch_size}")
+    if not profile.cooldown_seconds <= cooldown_seconds <= 300:
+        raise SystemExit(
+            f"cooldown-seconds must be between profile minimum {profile.cooldown_seconds} and 300"
+        )
+    if not 0.5 <= args.sample_seconds <= 5:
+        raise SystemExit("sample-seconds must be between 0.5 and 5")
+    if args.minimum_correct is not None and not 0 <= args.minimum_correct <= 60:
+        raise SystemExit("minimum-correct must be between 0 and 60")
     limits = profile.limits
 
     root = Path(__file__).resolve().parents[1]
+    total_cases = 60
     predictions = args.predictions or root / "evals/predictions/olist-p5-60.jsonl"
     base_url = os.environ.get("OLLAMA_BASE_URL", "http://127.0.0.1:11434").rstrip("/")
     environment = {
         **os.environ,
         "OLLAMA_BASE_URL": base_url,
-        "TEXT2SQL_REQUEST_TIMEOUT_SECONDS": "240",
+        "TEXT2SQL_REQUEST_TIMEOUT_SECONDS": (
+            "600" if profile.name is ProfileName.OLIST_PAPER1 else "240"
+        ),
         **profile.ollama_environment(),
     }
+    try:
+        preflight = sample_resources()
+    except (OSError, subprocess.SubprocessError, ValueError) as exc:
+        raise SystemExit(
+            f"RESOURCE_GUARD_REFUSED_START: monitor failure {type(exc).__name__}"
+        ) from exc
+    preflight_reason = unsafe_reason(preflight, limits)
+    if preflight_reason:
+        raise SystemExit(f"RESOURCE_GUARD_REFUSED_START: {preflight_reason}")
     retry_counts: dict[int, int] = {}
     peak: dict[str, float] = {
         "ram_used_gib": 0,
@@ -78,7 +115,7 @@ def main() -> None:
     }
 
     batches = 0
-    while count_predictions(predictions) < 60:
+    while count_predictions(predictions) < total_cases:
         before = count_predictions(predictions)
         command = [
             "uv",
@@ -112,31 +149,29 @@ def main() -> None:
             )
             if retrying:
                 command.append("--retry-last-infrastructure-error")
-        process = subprocess.Popen(command, cwd=root, env=environment)
+        process = subprocess.Popen(command, cwd=root, env=environment, start_new_session=True)
         reason: str | None = None
-        while process.poll() is None:
-            try:
+        try:
+            while process.poll() is None:
                 current = sample_resources()
-            except (OSError, subprocess.SubprocessError, ValueError) as exc:
-                reason = f"monitor failure: {type(exc).__name__}"
-                break
-            total_ram = os.sysconf("SC_PAGE_SIZE") * os.sysconf("SC_PHYS_PAGES") / GIB
-            peak["ram_used_gib"] = max(peak["ram_used_gib"], total_ram - current.available_ram_gib)
-            peak["swap_used_gib"] = max(peak["swap_used_gib"], current.swap_used_gib)
-            peak["gpu_memory_mib"] = max(peak["gpu_memory_mib"], current.gpu_memory_mib)
-            peak["gpu_temperature_c"] = max(peak["gpu_temperature_c"], current.gpu_temperature_c)
-            peak["gpu_power_w"] = max(peak["gpu_power_w"], current.gpu_power_w)
-            reason = unsafe_reason(current, limits)
-            if reason:
-                break
-            time.sleep(2)
+                total_ram = os.sysconf("SC_PAGE_SIZE") * os.sysconf("SC_PHYS_PAGES") / GIB
+                peak["ram_used_gib"] = max(
+                    peak["ram_used_gib"], total_ram - current.available_ram_gib
+                )
+                peak["swap_used_gib"] = max(peak["swap_used_gib"], current.swap_used_gib)
+                peak["gpu_memory_mib"] = max(peak["gpu_memory_mib"], current.gpu_memory_mib)
+                peak["gpu_temperature_c"] = max(
+                    peak["gpu_temperature_c"], current.gpu_temperature_c
+                )
+                peak["gpu_power_w"] = max(peak["gpu_power_w"], current.gpu_power_w)
+                reason = unsafe_reason(current, limits)
+                if reason:
+                    break
+                time.sleep(args.sample_seconds)
+        except (OSError, subprocess.SubprocessError, ValueError) as exc:
+            reason = f"monitor failure: {type(exc).__name__}"
         if reason:
-            process.send_signal(signal.SIGINT)
-            try:
-                process.wait(timeout=10)
-            except subprocess.TimeoutExpired:
-                process.terminate()
-                process.wait(timeout=10)
+            stop_process_group(process)
             unload_models(base_url)
             print(f"RESOURCE_GUARD_STOP: {reason}; checkpoint={count_predictions(predictions)}/60")
             print(json.dumps({"observed_peak": peak}, indent=2))
@@ -151,6 +186,35 @@ def main() -> None:
             raise SystemExit("acceptance batch made no checkpoint progress")
         unload_models(base_url)
         batches += 1
+        if args.minimum_correct is not None:
+            all_cases = load_olist_acceptance(root / "evals/configs/olist-acceptance-60.jsonl")
+            persisted = [
+                SmokePrediction.model_validate_json(line)
+                for line in predictions.read_text(encoding="utf-8").splitlines()
+                if line.strip()
+            ]
+            prefix_cases = all_cases[: len(persisted)]
+            progress_report = args.progress_report or predictions.with_suffix(".progress.json")
+            progress = evaluate_olist_acceptance(
+                cases=prefix_cases,
+                predictions=persisted,
+                database=Settings().resolved_data_dir / "processed/olist.sqlite",
+                report_path=progress_report,
+                evaluation_id=f"{args.evaluation_id}-prefix-{len(persisted)}",
+            )
+            correct = int(progress["result_correct_count"])
+            maximum_final = correct + (total_cases - len(persisted))
+            print(
+                f"offline checkpoint score: {correct}/{len(persisted)}; "
+                f"maximum final={maximum_final}/{total_cases}",
+                flush=True,
+            )
+            if maximum_final < args.minimum_correct:
+                print(
+                    f"ACCURACY_STOP: maximum final {maximum_final}/{total_cases} "
+                    f"is below {args.minimum_correct}/{total_cases}; checkpoint={len(persisted)}"
+                )
+                raise SystemExit(76)
         print(
             f"guarded batch complete: {after}/60; cooling {cooldown_seconds}s; "
             f"observed_peak={json.dumps(peak, sort_keys=True)}"

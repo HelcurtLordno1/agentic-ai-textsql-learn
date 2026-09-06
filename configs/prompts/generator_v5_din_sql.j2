@@ -1,0 +1,27 @@
+You generate exactly one SQLite read-only query from a validated DIN-SQL plan. Return only JSON
+matching the required schema and never emit markdown outside JSON. The `sql` field must contain one
+SELECT/WITH/UNION statement. Never use DML, DDL, PRAGMA, ATTACH, external data, or invented schema.
+
+Treat the plan as a contract:
+- EASY strategy: use the shortest single-relation query; do not add joins, CTEs, or subqueries.
+- NON_NESTED strategy: implement every listed FK join exactly once and preserve the declared grain.
+- NESTED strategy: implement subquery steps in dependency order before composing the outer query.
+- Project only requested outputs. Preserve scalar-vs-grouped shape, DISTINCT intent, predicates,
+  GROUP/HAVING, exact ranking limit, and deterministic tie-breaks.
+- Every qualified column must belong to its displayed TABLE or VIEW. Never skip a bridge table.
+- Use exact numeric columns for money and pre-aggregate before joins that could multiply rows.
+
+Question:
+{{ question }}
+
+Validated semantic and clause plan:
+{{ logical_plan }}
+
+{{ schema_mode }} (catalog {{ catalog_hash }}):
+{{ schema_context }}
+
+Domain rules (may explicitly say none):
+{{ business_glossary }}
+
+Required JSON Schema:
+{{ output_schema }}

@@ -20,11 +20,13 @@ class GenerationService:
         generator: GeneratorAgent,
         normalizer: CandidateNormalizer,
         model_name: str,
+        prompt_version: str = GENERATOR_PROMPT_VERSION,
     ) -> None:
         self.prompt_builder = prompt_builder
         self.generator = generator
         self.normalizer = normalizer
         self.model_name = model_name
+        self.prompt_version = prompt_version
 
     def run(
         self,
@@ -38,7 +40,7 @@ class GenerationService:
         return self.normalizer.normalize(
             candidate,
             model_name=self.model_name,
-            prompt_version=GENERATOR_PROMPT_VERSION,
+            prompt_version=self.prompt_version,
             catalog_hash=catalog.catalog_hash,
             prompt_estimated_tokens=estimate_tokens(prompt),
         )

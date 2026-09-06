@@ -51,7 +51,7 @@ class CorrectionService:
         schema_context: SchemaContext | None = None,
         deadline: float | None = None,
     ) -> tuple[CorrectionOutcome, CandidateRecord, ValidationReport, ResultPreview | None]:
-        plan_for_repair = build_correction_plan(initial_report)
+        plan_for_repair = build_correction_plan(initial_report, plan)
         if not plan_for_repair.should_retry:
             return (
                 CorrectionOutcome(
@@ -99,7 +99,7 @@ class CorrectionService:
                     current_report,
                     result,
                 )
-            correction_plan = build_correction_plan(current_report)
+            correction_plan = build_correction_plan(current_report, plan)
             if not correction_plan.should_retry:
                 return (
                     CorrectionOutcome(

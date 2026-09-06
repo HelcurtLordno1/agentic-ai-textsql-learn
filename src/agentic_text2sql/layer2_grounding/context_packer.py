@@ -1,5 +1,7 @@
 """Final schema-context rendering and conservative token estimation."""
 
+from collections.abc import Mapping
+
 from agentic_text2sql.contracts.catalog import CatalogSnapshot
 from agentic_text2sql.contracts.retrieval import RankedDocument
 
@@ -14,6 +16,7 @@ def render_schema_context(
     selected_tables: set[str],
     selected_columns: set[str],
     joins: list[str],
+    join_provenance: Mapping[str, str] | None = None,
 ) -> str:
     lines: list[str] = []
     for table in catalog.tables:
@@ -29,7 +32,12 @@ def render_schema_context(
             columns = [table.columns[0]]
         rendered = ", ".join(f"{column.name} {column.data_type}" for column in columns)
         lines.append(f"{table.kind.upper()} {table.name}({rendered})")
-    lines.extend(f"FK {join}" for join in joins)
+    join_provenance = join_provenance or {}
+    lines.extend(
+        f"{('UNIQUE_LOOKUP' if join_provenance.get(join) == 'INFERRED_UNIQUE_LOOKUP' else 'FK')} "
+        f"{join}"
+        for join in joins
+    )
     return "\n".join(lines)
 
 

@@ -47,6 +47,7 @@ class DirectRunResult(BaseModel):
     route_reason: str
     prompt_versions: dict[str, str]
     plan: dict[str, Any] | None = None
+    plan_validation: dict[str, Any] | None = None
     schema_context: dict[str, Any] | None = None
     candidate: CandidateRecord | None = None
     result_columns: list[str] = Field(default_factory=list)

@@ -19,12 +19,20 @@ from agentic_text2sql.layer1_reasoning.router import QueryRouter
 from agentic_text2sql.layer2_grounding.service import GroundingService, IndexService
 from agentic_text2sql.layer3_generation.generator import GeneratorAgent
 from agentic_text2sql.layer3_generation.normalizer import CandidateNormalizer
-from agentic_text2sql.layer3_generation.prompt_builder import PromptBuilder
+from agentic_text2sql.layer3_generation.prompt_builder import (
+    BASELINE_GENERATOR_PROMPT_VERSION,
+    GENERATOR_PROMPT_VERSION,
+    PromptBuilder,
+)
 from agentic_text2sql.layer3_generation.service import GenerationService
 from agentic_text2sql.layer4_validation.executor import ReadOnlySQLiteExecutor
 from agentic_text2sql.layer4_validation.policy import SQLSafetyPolicy
 from agentic_text2sql.layer4_validation.service import ValidationService
-from agentic_text2sql.layer5_correction.corrector import CorrectorAgent
+from agentic_text2sql.layer5_correction.corrector import (
+    BASELINE_CORRECTOR_PROMPT_VERSION,
+    CORRECTOR_PROMPT_VERSION,
+    CorrectorAgent,
+)
 from agentic_text2sql.layer5_correction.service import CorrectionService
 from agentic_text2sql.layer6_application.query_service import DirectBaselineService
 from agentic_text2sql.settings import Settings
@@ -39,6 +47,7 @@ class RuntimeBundle(AbstractContextManager["RuntimeBundle"]):
         correction_enabled: bool,
     ) -> None:
         root = settings.project_root
+        din_sql = settings.planning_mode == "din_sql"
         self.provider = OllamaProvider(settings)
         generation_digest = next(
             (
@@ -66,11 +75,16 @@ class RuntimeBundle(AbstractContextManager["RuntimeBundle"]):
                 "seed": settings.ollama_seed,
             },
             "prompt_versions": {
-                "planner": "planner_v2",
-                "generator": "generator_v4_cross_domain",
-                "corrector": "corrector_v3_cross_domain",
+                "planner": "planner_v3_din_sql" if din_sql else "planner_v2",
+                "generator": (
+                    GENERATOR_PROMPT_VERSION if din_sql else BASELINE_GENERATOR_PROMPT_VERSION
+                ),
+                "corrector": (
+                    CORRECTOR_PROMPT_VERSION if din_sql else BASELINE_CORRECTOR_PROMPT_VERSION
+                ),
             },
             "retrieval": {"mode": "hybrid", "top_k": 20, "token_budget": 1200},
+            "planning_mode": settings.planning_mode,
             "correction": {
                 "enabled": correction_enabled,
                 "max_repairs": 1 if correction_enabled else 0,
@@ -78,6 +92,12 @@ class RuntimeBundle(AbstractContextManager["RuntimeBundle"]):
             },
         }
         self.embedding: OllamaEmbeddingClient | None = None
+        generator_template = (
+            "generator_v5_din_sql.j2" if din_sql else "generator_v4_cross_domain.j2"
+        )
+        corrector_template = (
+            "corrector_v4_din_sql.j2" if din_sql else "corrector_v3_cross_domain.j2"
+        )
         normalizer = CandidateNormalizer()
         policy = SQLSafetyPolicy(default_limit=200)
         executor = ReadOnlySQLiteExecutor(timeout_seconds=10, max_rows=200)
@@ -106,15 +126,19 @@ class RuntimeBundle(AbstractContextManager["RuntimeBundle"]):
             grounding = GroundingService(
                 retriever, catalog, mode="hybrid", top_k=20, token_budget=1200
             )
+        if din_sql and grounding is None:
+            self.provider.close()
+            raise RuntimeError("DIN-SQL planning requires an active p3_1_semantic index")
         correction = None
         if correction_enabled:
             correction = CorrectionService(
                 corrector=CorrectorAgent(
                     self.provider,
                     normalizer,
-                    root / "configs/prompts/corrector_v3_cross_domain.j2",
+                    root / "configs/prompts" / corrector_template,
                     root / "datasets/olist/business_glossary.yaml",
                     settings.ollama_model,
+                    (CORRECTOR_PROMPT_VERSION if din_sql else BASELINE_CORRECTOR_PROMPT_VERSION),
                 ),
                 validation=ValidationService(policy, executor),
                 max_repairs=1,
@@ -123,21 +147,27 @@ class RuntimeBundle(AbstractContextManager["RuntimeBundle"]):
         self.service = DirectBaselineService(
             router=QueryRouter(),
             decomposer=Decomposer(),
-            planner=PlannerAgent(self.provider, root / "configs/prompts/planner_v2.j2"),
+            planner=PlannerAgent(
+                self.provider,
+                root / "configs/prompts/planner_v2.j2",
+                root / "configs/prompts/planner_v3_din_sql.j2",
+            ),
             generation=GenerationService(
                 PromptBuilder(
-                    root / "configs/prompts/generator_v4_cross_domain.j2",
+                    root / "configs/prompts" / generator_template,
                     root / "datasets/olist/business_glossary.yaml",
                 ),
                 GeneratorAgent(self.provider),
                 normalizer,
                 settings.ollama_model,
+                GENERATOR_PROMPT_VERSION if din_sql else BASELINE_GENERATOR_PROMPT_VERSION,
             ),
             policy=policy,
             executor=executor,
             grounding=grounding,
             correction=correction,
             run_deadline_seconds=settings.run_deadline_seconds,
+            planning_mode=settings.planning_mode,
         )
 
     def _embed_many(self, texts: list[str]) -> list[list[float]]:

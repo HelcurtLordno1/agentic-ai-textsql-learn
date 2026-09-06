@@ -13,21 +13,35 @@ agentic_text2sql_eval -> runtime public contracts/results
 runtime -X-> evaluator, gold SQL, benchmark answers
 ```
 
-The verified application path is:
+The P6 verified path remains the frozen benchmark baseline. The active Paper II branch adds a
+research path before generation:
 
 ```text
-Question -> Router -> Decomposer -> LogicalPlan
-         -> BM25 + BGE-M3/FAISS -> equal-weight RRF
-         -> plan-aware minimal FK closure -> serialized budgeted SchemaContext
-         -> Qwen3 Generator -> SQLGlot policy -> read-only bounded SQLite
+Question -> Router -> Decomposer
+         -> BM25 + BGE-M3/FAISS -> compact connected SchemaContext
+         -> SemanticLinkPlan(entity/metric/dimension/filter/value + evidence owner)
+         -> Qwen3 DIN planner -> ComplexityDecision + typed ClausePlan
+         -> deterministic PlanConsistencyValidator
+         -> strategy-specific Qwen3 Generator -> SQLGlot policy -> read-only bounded SQLite
          -> optional one-shot correction -> full policy/validation re-entry
          -> persistent result + six-layer trace -> CLI / FastAPI / Streamlit
 ```
 
-Routing, catalog hashing, retrieval fusion, graph closure, budgets, policy and evaluation are
-deterministic. LLM calls are limited to typed planning/generation and, only when explicitly
-enabled, one bounded correction call. Every grounded candidate retains catalog/model/prompt
-identity and evidence IDs.
+Schema linking precedes semantic planning as in DIN-SQL. `EASY` plans stay minimal,
+`NON_NESTED` plans enumerate physical joins, and `NESTED` plans carry ordered subquery dependencies.
+The runtime still uses one planner call and one generator call; it does not run long chain-of-thought
+prompts or multiple candidates. Exact-name lookup joins not declared as FKs are admitted only when
+both sides are raw tables and exactly one side is a primary/unique key, and are labeled
+`INFERRED_UNIQUE_LOOKUP` in provenance.
+
+`TEXT2SQL_PLANNING_MODE=baseline|din_sql` makes the A/B path explicit. Baseline mode selects the
+frozen v2/v4/v3 prompts. DIN-SQL mode selects v3/v5/v4 prompts and refuses to start without an active
+semantic index. Routing, catalog hashing, retrieval fusion, graph closure, plan validation, budgets,
+policy and evaluation are deterministic. Every grounded candidate retains catalog/model/prompt
+identity, evidence IDs, planning mode and the plan-validation report.
+
+The Paper II implementation has deterministic test evidence, but it is not promoted or marked
+`VERIFIED` until a guarded paired benchmark meets Gate R2 accuracy and latency thresholds.
 
 The application boundary uses one `ApplicationQueryService`. CLI invokes it synchronously; FastAPI
 submits to a one-worker executor and exposes restart-safe SSE; Streamlit calls only the API and has
@@ -66,3 +80,7 @@ Release inference is pinned to seed 42, configured Qwen/BGE digests, and one cle
 Resume refuses predictions from another revision; per-database index/catalog provenance is
 checkpointed atomically beside predictions. Evaluator result materialization is capped so an
 incorrect cross join cannot exhaust laptop memory.
+
+Post-inference evaluators report clause-presence F1, clause exact rate, table/column/join recall,
+and plan-to-SQL clause agreement when a typed DIN-SQL plan is present. Gold SQL is still opened only
+after inference has stopped; runtime code does not import the evaluator.
