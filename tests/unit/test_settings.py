@@ -18,7 +18,7 @@ def test_settings_paths_are_relocatable(tmp_path: Path) -> None:
     assert settings.ollama_base_url == "http://example.test:11434"
     assert settings.ollama_seed == 42
     assert settings.ollama_max_output_tokens == 1024
-    assert settings.planning_mode == "din_sql"
+    assert settings.planning_mode == "baseline"
 
 
 def test_planning_mode_is_bounded_to_reproducible_ablation_variants() -> None:

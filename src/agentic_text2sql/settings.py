@@ -40,7 +40,7 @@ class Settings(BaseSettings):
         default=120.0, alias="TEXT2SQL_RUN_DEADLINE_SECONDS", ge=30, le=180
     )
     planning_mode: Literal["baseline", "din_sql"] = Field(
-        default="din_sql", alias="TEXT2SQL_PLANNING_MODE"
+        default="baseline", alias="TEXT2SQL_PLANNING_MODE"
     )
 
     @field_validator("ollama_base_url")
