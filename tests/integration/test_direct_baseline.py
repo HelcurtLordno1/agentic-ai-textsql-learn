@@ -18,6 +18,11 @@ from agentic_text2sql.layer1_reasoning.planner import PlannerAgent
 from agentic_text2sql.layer1_reasoning.router import QueryRouter
 from agentic_text2sql.layer2_grounding.introspector import SQLiteIntrospector
 from agentic_text2sql.layer2_grounding.service import GroundingService
+from agentic_text2sql.layer3_generation.easy_compiler import (
+    GROUNDED_EASY_COMPILER_MODEL,
+    GROUNDED_EASY_COMPILER_VERSION,
+    GroundedEasyCompiler,
+)
 from agentic_text2sql.layer3_generation.generator import GeneratorAgent
 from agentic_text2sql.layer3_generation.normalizer import CandidateNormalizer
 from agentic_text2sql.layer3_generation.prompt_builder import (
@@ -189,6 +194,7 @@ def grounded_service(
         ),
         generation=din_generation if planning_mode == "din_sql" else baseline_generation,
         din_generation=din_generation if planning_mode == "hybrid" else None,
+        easy_compiler=GroundedEasyCompiler(normalizer) if planning_mode == "hybrid" else None,
         policy=SQLSafetyPolicy(),
         executor=ReadOnlySQLiteExecutor(),
         grounding=cast(GroundingService, StubGrounding(catalog_hash)),
@@ -215,7 +221,7 @@ def test_din_sql_handoff_uses_one_model_call_and_records_plan_validation() -> No
     assert provider.calls == 1
 
 
-def test_hybrid_easy_route_uses_compact_baseline_generator() -> None:
+def test_hybrid_easy_route_uses_grounded_compiler_without_a_model_call() -> None:
     catalog = SQLiteIntrospector().inspect(DATABASE, "synthetic")
     provider = QueueProvider([SqlCandidate(sql="SELECT COUNT(*) FROM orders", confidence=1)])
     result = grounded_service(provider, catalog.catalog_hash, "hybrid").run(
@@ -223,9 +229,10 @@ def test_hybrid_easy_route_uses_compact_baseline_generator() -> None:
     )
     assert result.status is DirectStatus.SUCCEEDED
     assert result.candidate is not None
-    assert result.candidate.prompt_version == BASELINE_GENERATOR_PROMPT_VERSION
+    assert result.candidate.prompt_version == GROUNDED_EASY_COMPILER_VERSION
+    assert result.candidate.model_name == GROUNDED_EASY_COMPILER_MODEL
     assert result.prompt_versions["planner"] == "hybrid_deterministic_v1"
-    assert provider.calls == 1
+    assert provider.calls == 0
 
 
 def test_din_sql_mode_refuses_to_start_without_grounding() -> None:

@@ -17,6 +17,9 @@ from agentic_text2sql.layer1_reasoning.decomposer import Decomposer
 from agentic_text2sql.layer1_reasoning.planner import PlannerAgent
 from agentic_text2sql.layer1_reasoning.router import QueryRouter
 from agentic_text2sql.layer2_grounding.service import GroundingService, IndexService
+from agentic_text2sql.layer3_generation.easy_compiler import (
+    GroundedEasyCompiler,
+)
 from agentic_text2sql.layer3_generation.generator import GeneratorAgent
 from agentic_text2sql.layer3_generation.normalizer import CandidateNormalizer
 from agentic_text2sql.layer3_generation.prompt_builder import (
@@ -85,7 +88,8 @@ class RuntimeBundle(AbstractContextManager["RuntimeBundle"]):
                     else "planner_v2"
                 ),
                 "generator": (
-                    "adaptive(generator_v4_cross_domain,generator_v5_din_sql)"
+                    "adaptive(generator_v6_grounded_easy,generator_v4_cross_domain,"
+                    "generator_v5_din_sql)"
                     if hybrid
                     else GENERATOR_PROMPT_VERSION
                     if din_sql
@@ -206,6 +210,7 @@ class RuntimeBundle(AbstractContextManager["RuntimeBundle"]):
                 GENERATOR_PROMPT_VERSION if din_sql else BASELINE_GENERATOR_PROMPT_VERSION,
             ),
             din_generation=din_generation,
+            easy_compiler=GroundedEasyCompiler(normalizer) if hybrid else None,
             policy=policy,
             executor=executor,
             grounding=grounding,

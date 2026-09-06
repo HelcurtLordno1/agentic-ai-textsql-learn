@@ -8,6 +8,7 @@ from agentic_text2sql.contracts.planning import (
 )
 from agentic_text2sql.contracts.retrieval import (
     CatalogDocument,
+    EvidenceItem,
     RankedDocument,
     RetrievalResult,
     SchemaContext,
@@ -58,7 +59,6 @@ def test_delivered_value_prefers_status_column_over_delivery_timestamp() -> None
         )
         for column, description in (
             ("order_delivered_carrier_date", "delivered carrier date delivery timestamp"),
-            ("order_status", "order status delivered canceled unavailable"),
         )
     )
     retrieval = RetrievalResult(
@@ -77,6 +77,15 @@ def test_delivered_value_prefers_status_column_over_delivery_timestamp() -> None
             "olist_orders_dataset.order_status",
         ],
     )
+    context.evidence = [
+        EvidenceItem(
+            evidence_id="olist.olist_orders_dataset.order_status",
+            kind="column",
+            table="olist_orders_dataset",
+            column="order_status",
+            score=0.5,
+        )
+    ]
     decomposition = Decomposer().decompose("How many orders were delivered?")
     links = build_semantic_link_plan(
         "How many orders were delivered?", decomposition, retrieval, context, catalog
@@ -122,6 +131,7 @@ def test_scalar_revenue_uses_metric_view_without_disconnected_product_join() -> 
     plan = _planner().plan_grounded(question, Decomposer().decompose(question), links, context)
     assert plan.clauses.from_tables == ["order_item_totals"]
     assert plan.clauses.joins == []
+    assert plan.clauses.select == ["SUM order_item_totals.product_revenue_cents"]
 
 
 def test_unique_customer_count_is_scalar_distinct_without_orders_join() -> None:

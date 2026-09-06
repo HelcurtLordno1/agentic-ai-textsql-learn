@@ -26,6 +26,7 @@ from agentic_text2sql.layer1_reasoning.planner import (
 )
 from agentic_text2sql.layer1_reasoning.router import QueryRouter
 from agentic_text2sql.layer2_grounding.service import GroundingService
+from agentic_text2sql.layer3_generation.easy_compiler import GroundedEasyCompiler
 from agentic_text2sql.layer3_generation.service import GenerationService
 from agentic_text2sql.layer4_validation.error_normalizer import normalize_error
 from agentic_text2sql.layer4_validation.executor import ReadOnlySQLiteExecutor
@@ -45,6 +46,7 @@ class DirectBaselineService:
         planner: PlannerAgent,
         generation: GenerationService,
         din_generation: GenerationService | None = None,
+        easy_compiler: GroundedEasyCompiler | None = None,
         policy: SQLSafetyPolicy,
         executor: ReadOnlySQLiteExecutor,
         grounding: GroundingService | None = None,
@@ -58,6 +60,7 @@ class DirectBaselineService:
         self.planner = planner
         self.generation = generation
         self.din_generation = din_generation
+        self.easy_compiler = easy_compiler
         self.policy = policy
         self.executor = executor
         self.grounding = grounding
@@ -69,6 +72,8 @@ class DirectBaselineService:
             raise ValueError("hybrid/DIN-SQL planning requires an active grounded schema index")
         if planning_mode == "hybrid" and din_generation is None:
             raise ValueError("hybrid planning requires both baseline and DIN generation paths")
+        if planning_mode == "hybrid" and easy_compiler is None:
+            raise ValueError("hybrid planning requires the grounded EASY compiler")
 
     def run(self, question: str, database: Path, catalog: CatalogSnapshot) -> DirectRunResult:
         run_id = str(uuid.uuid4())
@@ -247,7 +252,21 @@ class DirectBaselineService:
 
         generation_started = time.monotonic()
         try:
-            candidate = active_generation.run(question, generation_plan, catalog, schema_context)
+            candidate = (
+                self.easy_compiler.compile(plan, catalog)
+                if hybrid
+                and isinstance(plan, DINSQLPlan)
+                and plan.complexity.strategy is PlanningStrategy.EASY
+                and not (plan_validation and plan_validation.advisory_signals)
+                and self.easy_compiler is not None
+                else None
+            )
+            if candidate is None:
+                candidate = active_generation.run(
+                    question, generation_plan, catalog, schema_context
+                )
+            else:
+                versions["generator"] = candidate.prompt_version
         except SQLParseError as exc:
             timings["generation"] = (time.monotonic() - generation_started) * 1000
             finish_timings()

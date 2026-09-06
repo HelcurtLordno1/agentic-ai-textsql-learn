@@ -20,24 +20,27 @@ research path before generation:
 Question -> Router -> Decomposer
          -> BM25 + BGE-M3/FAISS -> compact connected SchemaContext
          -> SemanticLinkPlan(entity/metric/dimension/filter/value + evidence owner)
-         -> Qwen3 DIN planner -> ComplexityDecision + typed ClausePlan
+         -> deterministic DIN planner -> ComplexityDecision + typed ClausePlan
          -> deterministic PlanConsistencyValidator
-         -> strategy-specific Qwen3 Generator -> SQLGlot policy -> read-only bounded SQLite
+         -> provable EASY compiler or strategy-specific Qwen3 Generator
+         -> SQLGlot policy -> read-only bounded SQLite
          -> optional one-shot correction -> full policy/validation re-entry
          -> persistent result + six-layer trace -> CLI / FastAPI / Streamlit
 ```
 
 Schema linking precedes semantic planning as in DIN-SQL. `EASY` plans stay minimal,
 `NON_NESTED` plans enumerate physical joins, and `NESTED` plans carry ordered subquery dependencies.
-The runtime still uses one planner call and one generator call; it does not run long chain-of-thought
-prompts or multiple candidates. Exact-name lookup joins not declared as FKs are admitted only when
+The hybrid runtime does not spend a generation-model call on scalar EASY plans that its catalog-
+checked compiler can prove; unsupported EASY shapes fall back to one compact generator call. It does
+not run long chain-of-thought prompts or multiple candidates. Exact-name lookup joins not declared as FKs are admitted only when
 both sides are raw tables and exactly one side is a primary/unique key, and are labeled
 `INFERRED_UNIQUE_LOOKUP` in provenance.
 
 `TEXT2SQL_PLANNING_MODE=baseline|hybrid|din_sql` makes the ablation path explicit. Baseline mode
-selects the frozen v2/v4/v3 prompts. Hybrid uses deterministic grounded planning, sends EASY or
-advisory-conflict plans through compact baseline generation/correction, and reserves DIN prompts for
-validated multi-join/nested plans. DIN-SQL mode selects v3/v5/v4 prompts and refuses to start without an active
+selects the frozen v2/v4/v3 prompts. Hybrid uses deterministic grounded planning, compiles its
+catalog-provable scalar EASY subset, sends the remaining EASY or advisory-conflict plans through
+compact baseline generation/correction, and reserves DIN prompts for validated multi-join/nested
+plans. DIN-SQL mode selects v3/v5/v4 prompts and refuses to start without an active
 semantic index. Routing, catalog hashing, retrieval fusion, graph closure, plan validation, budgets,
 policy and evaluation are deterministic. Every grounded candidate retains catalog/model/prompt
 identity, evidence IDs, planning mode and the plan-validation report.

@@ -29,7 +29,7 @@ DecomposedQuestion
   -> retrieval + compact connected schema closure
   -> SemanticLinkPlan
        mention, role, table/column owner, value, evidence_id, score
-  -> one schema-aware planner call
+  -> deterministic schema-aware planner
   -> ComplexityDecision
        SIMPLE | AGGREGATE | MULTI_JOIN | NESTED_SET_WINDOW
        EASY | NON_NESTED | NESTED
@@ -37,7 +37,7 @@ DecomposedQuestion
        SELECT, FROM, JOIN, WHERE, GROUP, HAVING, ORDER, LIMIT,
        output grain, DISTINCT, set operation, ordered subquery dependencies
   -> deterministic PlanConsistencyValidator
-  -> one strategy-specific SQL generation call
+  -> catalog-checked scalar EASY compiler, otherwise one strategy-specific SQL generation call
   -> normal Layer 4 execution/semantic validation
   -> optional one-shot clause-specific correction
 ```
@@ -50,9 +50,12 @@ checks catalog identity, table/column owner, visible evidence, join endpoints/co
 semantic population owner, scalar versus ranking shape, limits, complexity strategy and ordered
 subquery dependencies.
 
-The number of normal model calls is unchanged: one planner plus one generator, with at most one
-existing opt-in correction call. Embedding/schema retrieval now occurs before the first generation
-model request. Runtime has no import from `agentic_text2sql_eval` and no access to gold data.
+Hybrid planning itself makes no generation-model request. A deliberately small compiler emits only
+single-table scalar `COUNT`, `COUNT DISTINCT`, `SUM`, `AVG`, `MIN` or `MAX` queries plus catalog-
+checked string equalities. It returns no candidate for any unsupported shape, identifier, join or
+clause, causing the normal one-call generator path to take over. Embedding/schema retrieval occurs
+before any generation-model request. Runtime has no import from `agentic_text2sql_eval` and no access
+to gold data.
 
 ## Failure-directed protections
 
@@ -81,17 +84,19 @@ make check
 Observed result on 2026-09-06:
 
 - Ruff lint: pass;
-- Ruff format check: 220 files formatted;
-- strict mypy: 107 source files pass;
-- pytest excluding Ollama: 181 passed, 1 Ollama test deselected;
+- Ruff format check: 224 files formatted;
+- strict mypy: 108 source files pass;
+- pytest excluding Ollama: 190 passed, 1 Ollama test deselected;
 - one existing Starlette/httpx deprecation warning;
 - no Ollama request, generation benchmark, embedding model, GPU workload or acceptance suite ran.
 
 Focused coverage includes:
 
 - `tests/unit/layer1/test_din_sql_planning.py`;
+- `tests/unit/layer1/test_hybrid_failure_repairs.py`;
 - `tests/unit/layer2/test_semantic_links.py`;
-- `tests/integration/test_direct_baseline.py` (two-call hand-off and stop-before-generation failure);
+- `tests/unit/layer3/test_easy_compiler.py` (catalog-proven compilation and fail-closed fallback);
+- `tests/integration/test_direct_baseline.py` (model-free EASY compilation, DIN hand-off and stop-before-generation failure);
 - `tests/unit/test_din_sql_metrics.py`;
 - existing Layer 4 safety and Layer 5 bounded-correction suites.
 
@@ -116,12 +121,17 @@ compute DIN planning metrics when the prediction actually contains a typed claus
 reports remain readable.
 
 After the all-DIN Olist run hit the predefined accuracy stop at 4/8 correct (upper bound 56/60), the
-research implementation added a bounded hybrid route. EASY plans use the baseline generator and a
-compact `LogicalPlan`; only validated `NON_NESTED`/`NESTED` plans use DIN generation. Plan validation
+research implementation added a bounded hybrid route. Provable scalar EASY plans use a deterministic
+catalog-checked compiler; unsupported EASY plans use the baseline generator and a compact
+`LogicalPlan`; only validated `NON_NESTED`/`NESTED` plans use DIN generation. Plan validation
 now separates blocking catalog/identifier violations from advisory shape/connectivity signals, which
 fall back to the baseline generator. Deterministic regression tests cover status-value ownership,
 scalar semantic-view ownership, distinct customer count without an unnecessary join, and seller
-count grain. This hybrid revision remains `IN_PROGRESS` pending guarded live smoke evidence.
+count grain. A first hybrid live snapshot passed `olist_acc_002`, then `olist_acc_005` reproduced a
+600-second structured-generation `ReadTimeout` twice while all resource guards remained safe. That
+artifact was stopped at 1/2 and retained as negative evidence. The EASY compiler removes that
+unnecessary model boundary; a new source-locked four-case smoke remains pending. This hybrid revision
+therefore remains `IN_PROGRESS`.
 
 The implementation is deliberately **not VERIFIED** and no accuracy gain is claimed. Promotion still
 requires the guarded, checkpointed paired experiment specified in the research plan:

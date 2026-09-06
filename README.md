@@ -47,15 +47,17 @@ Gate evidence is recorded under [`docs/evidence`](docs/evidence), including the
 [`P6 laptop release`](docs/evidence/p6_gate.md).
 
 The application routes unsupported/write intents before model calls. On the Paper II research
-branch, schema linking runs before one typed DIN-SQL planner call, producing provenance-backed
+branch, schema linking runs before typed deterministic DIN-SQL planning, producing provenance-backed
 semantic links, an adaptive complexity decision and a clause plan whose ownership/join/dependency
 constraints are validated before one candidate is generated. Correction is bounded to one repair
 and receives clause-specific failure evidence. Gold SQL is loaded only by the evaluator after
 inference closes.
 
 Set `TEXT2SQL_PLANNING_MODE=baseline` for the frozen prompt path, `hybrid` for the adaptive
-baseline/DIN route, or `din_sql` for the all-DIN research ablation. Hybrid keeps EASY queries on the
-compact baseline generator and selects DIN prompts only for validated multi-join/nested plans.
+baseline/DIN route, or `din_sql` for the all-DIN research ablation. Hybrid compiles the catalog-
+provable scalar subset of validated EASY plans without a generation-model call, falls back to the
+compact baseline generator for other EASY/advisory plans, and selects DIN prompts only for validated
+multi-join/nested plans.
 The latter requires an active `p3_1_semantic` index and fails closed if it is absent. The code and
 deterministic tests are complete, but Paper II is not promoted until its guarded paired Olist/Spider
 benchmark meets Gate R2; the historical P6 scores below remain the champion evidence meanwhile.

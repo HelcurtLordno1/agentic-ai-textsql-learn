@@ -16,6 +16,7 @@ from agentic_text2sql.layer2_grounding.keyword_index import normalize_tokens
 
 _QUOTED_VALUE = re.compile(r"['\"]([^'\"]{1,120})['\"]")
 _TABLE_BOILERPLATE = {"dataset", "olist", "semantic", "table", "view"}
+_STATUS_VALUES = {"delivered", "canceled", "unavailable", "giao thành công", "đã hủy"}
 
 
 def _tokens(value: str) -> set[str]:
@@ -106,6 +107,52 @@ def build_semantic_link_plan(
     links: list[SemanticLink] = []
     unmatched: list[str] = []
     for role, mention, value in mentions:
+        status_evidence = next(
+            (
+                evidence
+                for evidence in context.evidence
+                if role is SemanticRole.FILTER
+                and value in _STATUS_VALUES
+                and evidence.column is not None
+                and evidence.column.casefold().endswith("status")
+            ),
+            None,
+        )
+        if status_evidence is None and role is SemanticRole.FILTER and value in _STATUS_VALUES:
+            status_columns = [
+                qualified
+                for qualified in context.selected_columns
+                if qualified.rsplit(".", maxsplit=1)[-1].casefold().endswith("status")
+            ]
+            if len(status_columns) == 1:
+                status_table, status_column = status_columns[0].split(".", maxsplit=1)
+                links.append(
+                    SemanticLink(
+                        mention=mention,
+                        role=role,
+                        table=status_table,
+                        column=status_column,
+                        value=value,
+                        evidence_id=f"{context.db_id}.{status_table}.{status_column}",
+                        score=0,
+                        required=True,
+                    )
+                )
+                continue
+        if status_evidence is not None:
+            links.append(
+                SemanticLink(
+                    mention=mention,
+                    role=role,
+                    table=status_evidence.table,
+                    column=status_evidence.column,
+                    value=value,
+                    evidence_id=status_evidence.evidence_id,
+                    score=status_evidence.score,
+                    required=True,
+                )
+            )
+            continue
         candidate = _best_document(
             mention,
             retrieval.candidates,

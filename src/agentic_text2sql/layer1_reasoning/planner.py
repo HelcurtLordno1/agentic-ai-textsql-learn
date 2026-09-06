@@ -133,9 +133,16 @@ class PlannerAgent:
                 else f"COUNT rows of {owner}"
             ]
         else:
-            select = [
+            selected_columns = [
                 *linked_columns[SemanticRole.DIMENSION],
                 *linked_columns[SemanticRole.METRIC],
+            ]
+            select = [
+                _scalar_metric_expression(question, column)
+                if not decomposition.dimension_hints
+                and column in linked_columns[SemanticRole.METRIC]
+                else column
+                for column in selected_columns
             ]
         if not select:
             select = list(schema_context.selected_columns[:1]) or ["row count"]
@@ -202,6 +209,20 @@ class PlannerAgent:
             complexity=decision,
             clauses=clauses,
         )
+
+
+def _scalar_metric_expression(question: str, column: str) -> str:
+    """Make an explicit aggregate only when the scalar wording determines the operator."""
+    lowered = question.casefold()
+    if any(value in lowered for value in ("average", "avg", "trung bình")):
+        return f"AVG {column}"
+    if any(value in lowered for value in ("maximum", "max ", "lớn nhất")):
+        return f"MAX {column}"
+    if any(value in lowered for value in ("minimum", "min ", "nhỏ nhất")):
+        return f"MIN {column}"
+    if any(value in lowered for value in ("total", "sum", "tổng", "revenue", "doanh thu")):
+        return f"SUM {column}"
+    return column
 
 
 def classify_complexity(plan: DINSQLDraft) -> ComplexityDecision:
