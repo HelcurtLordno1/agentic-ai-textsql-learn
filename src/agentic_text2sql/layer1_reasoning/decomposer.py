@@ -91,7 +91,7 @@ class Decomposer:
             filters = [value for value in filters if value != "delivered"]
         asks_count = any(
             phrase in lowered for phrase in ("how many", "có bao nhiêu", "number of", "số lượng")
-        )
+        ) or any(metric.casefold().endswith(" count") for metric in metrics)
         if asks_count and len(entities) == 1:
             metrics = [f"{entities[0]} count"]
             dimensions = []

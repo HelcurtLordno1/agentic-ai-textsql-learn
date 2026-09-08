@@ -76,7 +76,7 @@ class PlannerAgent:
         lowered = question.casefold()
         asks_count = any(
             phrase in lowered for phrase in ("how many", "có bao nhiêu", "number of", "số lượng")
-        )
+        ) or any(metric.casefold().endswith(" count") for metric in decomposition.metric_hints)
         asks_distinct = any(
             phrase in lowered for phrase in ("distinct", "unique", "duy nhất", "khác nhau")
         )

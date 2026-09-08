@@ -86,7 +86,7 @@ Observed result on 2026-09-06:
 - Ruff lint: pass;
 - Ruff format check: 224 files formatted;
 - strict mypy: 108 source files pass;
-- pytest excluding Ollama: 190 passed, 1 Ollama test deselected;
+- pytest excluding Ollama: 191 passed, 1 Ollama test deselected;
 - one existing Starlette/httpx deprecation warning;
 - no Ollama request, generation benchmark, embedding model, GPU workload or acceptance suite ran.
 
@@ -134,8 +134,14 @@ unnecessary model boundary. A second source-locked smoke then passed cases 002 a
 showed that a retrieved identity column can carry the `METRIC` role rather than `DIMENSION`; the
 planner consequently emitted `COUNT(*)` instead of `COUNT(DISTINCT customer_unique_id)`. That
 artifact stopped at 2/3. Distinct-count planning now checks both roles inside the proven population
-owner, and the live-shaped fixture passes. A new four-case smoke remains pending, so this hybrid
-revision remains `IN_PROGRESS`.
+owner, and the live-shaped fixture passes.
+
+The next four-case artifact completed `4/4` first-pass correct. A separate full-suite pilot then
+found a broader Vietnamese count wording, “Có tổng cộng bao nhiêu đơn hàng?”, whose already-typed
+`order count` metric was overridden by the lexical word “tổng” and compiled as `SUM(timestamp)`.
+That full-suite artifact was stopped at `0/1`. Count intent now also derives from typed metric names
+ending in `count`; amount questions such as “Tổng doanh thu ... là bao nhiêu?” remain `SUM`, covered
+by both regressions. The final source-locked Olist-60 run is still pending.
 
 The implementation is deliberately **not VERIFIED** and no accuracy gain is claimed. Promotion still
 requires the guarded, checkpointed paired experiment specified in the research plan:

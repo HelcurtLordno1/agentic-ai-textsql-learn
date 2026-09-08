@@ -184,3 +184,31 @@ def test_how_many_sellers_normalizes_to_scalar_entity_count() -> None:
     assert plan.dimensions == []
     assert plan.clauses.select == ["COUNT rows of olist_sellers_dataset"]
     assert plan.clauses.output_grain == "one scalar row"
+
+
+def test_typed_count_metric_overrides_total_word_and_unrelated_metric_column() -> None:
+    question = "Có tổng cộng bao nhiêu đơn hàng?"
+    decomposition = Decomposer().decompose(question)
+    assert decomposition.metric_hints == ["orders count"]
+    context = _context(
+        "olist_orders_dataset",
+        columns=["olist_orders_dataset.order_approved_at"],
+    )
+    links = SemanticLinkPlan(
+        db_id="olist",
+        catalog_hash=context.catalog_hash,
+        links=(
+            SemanticLink(
+                mention="order count",
+                role=SemanticRole.METRIC,
+                table="olist_orders_dataset",
+                column="order_approved_at",
+                evidence_id="olist.olist_orders_dataset.order_approved_at",
+                score=1,
+            ),
+        ),
+        population_owner="olist_orders_dataset",
+        required_tables=("olist_orders_dataset",),
+    )
+    plan = _planner().plan_grounded(question, decomposition, links, context)
+    assert plan.clauses.select == ["COUNT rows of olist_orders_dataset"]
