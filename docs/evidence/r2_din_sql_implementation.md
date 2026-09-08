@@ -141,7 +141,10 @@ found a broader Vietnamese count wording, “Có tổng cộng bao nhiêu đơn 
 `order count` metric was overridden by the lexical word “tổng” and compiled as `SUM(timestamp)`.
 That full-suite artifact was stopped at `0/1`. Count intent now also derives from typed metric names
 ending in `count`; amount questions such as “Tổng doanh thu ... là bao nhiêu?” remain `SUM`, covered
-by both regressions. The final source-locked Olist-60 run is still pending.
+by both regressions. The next source-locked run passed cases 001–002, then exposed that Vietnamese
+status literal “đã hủy” was sent verbatim to an English-valued `order_status` column. Status enum
+aliases are now canonicalized (`đã hủy` → `canceled`, `giao thành công` → `delivered`) after mention
+matching but before clause construction. The final source-locked Olist-60 run is still pending.
 
 The implementation is deliberately **not VERIFIED** and no accuracy gain is claimed. Promotion still
 requires the guarded, checkpointed paired experiment specified in the research plan:

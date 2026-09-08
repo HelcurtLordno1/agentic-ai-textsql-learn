@@ -16,7 +16,14 @@ from agentic_text2sql.layer2_grounding.keyword_index import normalize_tokens
 
 _QUOTED_VALUE = re.compile(r"['\"]([^'\"]{1,120})['\"]")
 _TABLE_BOILERPLATE = {"dataset", "olist", "semantic", "table", "view"}
-_STATUS_VALUES = {"delivered", "canceled", "unavailable", "giao thành công", "đã hủy"}
+_STATUS_VALUE_ALIASES = {
+    "delivered": "delivered",
+    "canceled": "canceled",
+    "unavailable": "unavailable",
+    "giao thành công": "delivered",
+    "đã hủy": "canceled",
+}
+_STATUS_VALUES = frozenset(_STATUS_VALUE_ALIASES.values())
 
 
 def _tokens(value: str) -> set[str]:
@@ -100,7 +107,10 @@ def build_semantic_link_plan(
         *((SemanticRole.ENTITY, value, None) for value in decomposition.entity_hints),
         *((SemanticRole.METRIC, value, None) for value in decomposition.metric_hints),
         *((SemanticRole.DIMENSION, value, None) for value in decomposition.dimension_hints),
-        *((SemanticRole.FILTER, value, value) for value in decomposition.filter_hints),
+        *(
+            (SemanticRole.FILTER, value, _STATUS_VALUE_ALIASES.get(value, value))
+            for value in decomposition.filter_hints
+        ),
         *((SemanticRole.VALUE, value, value) for value in decomposition.time_hints),
         *((SemanticRole.VALUE, value, value) for value in _QUOTED_VALUE.findall(question)),
     ]

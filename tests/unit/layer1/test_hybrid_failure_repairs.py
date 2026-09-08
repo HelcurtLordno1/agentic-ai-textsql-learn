@@ -93,6 +93,20 @@ def test_delivered_value_prefers_status_column_over_delivery_timestamp() -> None
     assert status.column == "order_status"
     assert status.value == "delivered"
 
+    canceled_question = "Có bao nhiêu đơn hàng đã hủy?"
+    canceled_links = build_semantic_link_plan(
+        canceled_question,
+        Decomposer().decompose(canceled_question),
+        retrieval,
+        context,
+        catalog,
+    )
+    canceled_status = next(
+        link for link in canceled_links.links if link.role is SemanticRole.FILTER
+    )
+    assert canceled_status.column == "order_status"
+    assert canceled_status.value == "canceled"
+
 
 def test_scalar_revenue_uses_metric_view_without_disconnected_product_join() -> None:
     context = _context(
