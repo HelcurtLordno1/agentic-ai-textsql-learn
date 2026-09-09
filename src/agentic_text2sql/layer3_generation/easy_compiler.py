@@ -2,31 +2,29 @@
 
 from __future__ import annotations
 
-import re
-
 from sqlglot import exp
 
 from agentic_text2sql.contracts.catalog import CatalogSnapshot
 from agentic_text2sql.contracts.planning import DINSQLPlan, PlanningStrategy
+from agentic_text2sql.contracts.semantics import (
+    AggregateOperator,
+    BindingStatus,
+    ComparisonOperator,
+    PredicateSpec,
+    ScalarValue,
+)
 from agentic_text2sql.contracts.sql import CandidateRecord, SqlCandidate
 from agentic_text2sql.layer3_generation.normalizer import CandidateNormalizer
 
-GROUNDED_EASY_COMPILER_VERSION = "generator_v6_grounded_easy"
+GROUNDED_EASY_COMPILER_VERSION = "generator_v7_typed_semantic"
 GROUNDED_EASY_COMPILER_MODEL = "deterministic-grounded-compiler"
-
-_COUNT_ROWS = re.compile(r"^COUNT rows of ([A-Za-z_][A-Za-z0-9_]*)$")
-_COLUMN_AGGREGATE = re.compile(
-    r"^(COUNT DISTINCT|SUM|AVG|MIN|MAX) "
-    r"([A-Za-z_][A-Za-z0-9_]*)\.([A-Za-z_][A-Za-z0-9_]*)$"
-)
-_STRING_EQUALITY = re.compile(r"^([A-Za-z_][A-Za-z0-9_]*)\.([A-Za-z_][A-Za-z0-9_]*) = '([^']*)'$")
 
 
 class GroundedEasyCompiler:
-    """Compile only a small SQL subset whose identifiers can be proven from the catalog.
+    """Compile only scalar SQL whose full meaning is represented by a proven binding.
 
-    Returning ``None`` is an intentional hand-off to model generation. The compiler never guesses
-    an identifier, join, aggregation, or predicate that is absent from the validated clause plan.
+    Returning ``None`` deliberately hands control to model generation. Human-readable clause text
+    is never parsed or trusted: the compiler consumes only typed aggregate and predicate contracts.
     """
 
     def __init__(self, normalizer: CandidateNormalizer) -> None:
@@ -35,8 +33,16 @@ class GroundedEasyCompiler:
 
     def compile(self, plan: DINSQLPlan, catalog: CatalogSnapshot) -> CandidateRecord | None:
         clauses = plan.clauses
+        binding = plan.semantic_links.binding
         if (
-            plan.complexity.strategy is not PlanningStrategy.EASY
+            binding is None
+            or binding.status is not BindingStatus.PROVEN
+            or binding.db_id != catalog.db_id
+            or binding.catalog_hash != catalog.catalog_hash
+            or binding.aggregate is None
+            or clauses.aggregate != binding.aggregate
+            or tuple(clauses.predicates) != binding.predicates
+            or plan.complexity.strategy is not PlanningStrategy.EASY
             or clauses.output_grain.casefold() != "one scalar row"
             or len(clauses.select) != 1
             or len(clauses.from_tables) != 1
@@ -51,53 +57,43 @@ class GroundedEasyCompiler:
             return None
 
         table_name = clauses.from_tables[0]
+        owners = {
+            binding.aggregate.table,
+            *(predicate.table for predicate in binding.predicates),
+        }
+        if owners != {table_name} or set(binding.required_tables) != {table_name}:
+            return None
         table = next((item for item in catalog.tables if item.name == table_name), None)
         if table is None:
             return None
         catalog_columns = {column.name for column in table.columns}
-
-        used_columns: list[str] = []
-        select_text = clauses.select[0]
-        count_rows = _COUNT_ROWS.fullmatch(select_text)
-        aggregate = _COLUMN_AGGREGATE.fullmatch(select_text)
-        if count_rows is not None:
-            if count_rows.group(1) != table_name:
-                return None
-            selection: exp.Expression = exp.Count(this=exp.Star())
-        elif aggregate is not None:
-            operation, owner, column = aggregate.groups()
-            if owner != table_name or column not in catalog_columns:
-                return None
-            used_columns.append(column)
-            operand = exp.column(column)
-            if operation == "COUNT DISTINCT":
-                selection = exp.Count(this=exp.Distinct(expressions=[operand]))
-            elif operation == "SUM":
-                selection = exp.Sum(this=operand)
-            elif operation == "AVG":
-                selection = exp.Avg(this=operand)
-            elif operation == "MIN":
-                selection = exp.Min(this=operand)
-            else:
-                selection = exp.Max(this=operand)
-        else:
+        if any(
+            qualified.split(".", maxsplit=1)[0] != table_name
+            or qualified.split(".", maxsplit=1)[-1] not in catalog_columns
+            for qualified in binding.required_columns
+        ):
             return None
 
-        query = exp.select(selection).from_(table_name)
+        aggregate = binding.aggregate
+        if aggregate.column is not None and aggregate.column not in catalog_columns:
+            return None
+        selection = _aggregate_expression(aggregate.operator, aggregate.column)
+        if selection is None:
+            return None
+
+        used_columns = [aggregate.column] if aggregate.column is not None else []
         predicates: list[exp.Expression] = []
-        for predicate_text in clauses.where:
-            equality = _STRING_EQUALITY.fullmatch(predicate_text)
-            if equality is None:
+        for predicate in binding.predicates:
+            if predicate.column not in catalog_columns:
                 return None
-            owner, column, value = equality.groups()
-            if owner != table_name or column not in catalog_columns:
-                return None
-            used_columns.append(column)
-            predicates.append(exp.column(column).eq(exp.Literal.string(value)))
+            used_columns.append(predicate.column)
+            predicates.append(_predicate_expression(predicate))
+
+        query = exp.select(selection).from_(table_name)
         if predicates:
             condition = predicates[0]
-            for predicate in predicates[1:]:
-                condition = exp.and_(condition, predicate)
+            for predicate_expression in predicates[1:]:
+                condition = exp.and_(condition, predicate_expression)
             query = query.where(condition)
 
         candidate = SqlCandidate(
@@ -113,3 +109,44 @@ class GroundedEasyCompiler:
             prompt_version=self.prompt_version,
             catalog_hash=catalog.catalog_hash,
         )
+
+
+def _aggregate_expression(
+    operator: AggregateOperator,
+    column: str | None,
+) -> exp.Expression | None:
+    if operator is AggregateOperator.COUNT_ROWS:
+        return exp.Count(this=exp.Star()) if column is None else None
+    if column is None:
+        return None
+    operand = exp.column(column)
+    if operator is AggregateOperator.COUNT_DISTINCT:
+        return exp.Count(this=exp.Distinct(expressions=[operand]))
+    constructors: dict[AggregateOperator, type[exp.Expression]] = {
+        AggregateOperator.SUM: exp.Sum,
+        AggregateOperator.AVG: exp.Avg,
+        AggregateOperator.MIN: exp.Min,
+        AggregateOperator.MAX: exp.Max,
+    }
+    constructor = constructors.get(operator)
+    return constructor(this=operand) if constructor is not None else None
+
+
+def _literal(value: ScalarValue) -> exp.Expression:
+    if isinstance(value, str):
+        return exp.Literal.string(value)
+    return exp.Literal.number(str(value))
+
+
+def _predicate_expression(predicate: PredicateSpec) -> exp.Expression:
+    left = exp.column(predicate.column)
+    right = _literal(predicate.value)
+    constructors: dict[ComparisonOperator, type[exp.Expression]] = {
+        ComparisonOperator.EQ: exp.EQ,
+        ComparisonOperator.NE: exp.NEQ,
+        ComparisonOperator.GT: exp.GT,
+        ComparisonOperator.GTE: exp.GTE,
+        ComparisonOperator.LT: exp.LT,
+        ComparisonOperator.LTE: exp.LTE,
+    }
+    return constructors[predicate.operator](this=left, expression=right)

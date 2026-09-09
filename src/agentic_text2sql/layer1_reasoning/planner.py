@@ -24,6 +24,13 @@ from agentic_text2sql.contracts.planning import (
     SemanticRole,
 )
 from agentic_text2sql.contracts.retrieval import SchemaContext
+from agentic_text2sql.contracts.semantics import (
+    AggregateOperator,
+    BindingStatus,
+    ComparisonOperator,
+    PredicateSpec,
+    SemanticBinding,
+)
 
 BASELINE_PLANNER_PROMPT_VERSION = "planner_v2"
 PLANNER_PROMPT_VERSION = "planner_v3_din_sql"
@@ -65,6 +72,14 @@ class PlannerAgent:
             or semantic_links.catalog_hash != schema_context.catalog_hash
         ):
             raise ValueError("semantic links do not match schema context")
+        binding = semantic_links.binding
+        if binding is not None and binding.status is BindingStatus.PROVEN:
+            return _plan_from_proven_binding(
+                decomposition,
+                semantic_links,
+                schema_context,
+                binding,
+            )
         linked_columns = {
             role: [
                 f"{link.table}.{link.column}"
@@ -212,6 +227,80 @@ class PlannerAgent:
             complexity=decision,
             clauses=clauses,
         )
+
+
+def _plan_from_proven_binding(
+    decomposition: DecomposedQuestion,
+    semantic_links: SemanticLinkPlan,
+    schema_context: SchemaContext,
+    binding: SemanticBinding,
+) -> DINSQLPlan:
+    """Translate a proven semantic binding into a typed scalar clause plan."""
+    aggregate = binding.aggregate
+    if aggregate is None:
+        raise ValueError("a proven semantic binding must include an aggregate")
+    owners = {aggregate.table, *(predicate.table for predicate in binding.predicates)}
+    if len(owners) != 1:
+        raise ValueError("the deterministic scalar subset requires exactly one table owner")
+    owner = next(iter(owners))
+    if owner not in schema_context.selected_tables:
+        raise ValueError("proven semantic owner is absent from schema context")
+
+    select_text = _render_aggregate(aggregate.operator, owner, aggregate.column)
+    where = [_render_predicate(predicate) for predicate in binding.predicates]
+    draft = DINSQLDraft(
+        question_language=decomposition.question_language,
+        task_type="aggregation",
+        metrics=[select_text],
+        dimensions=[],
+        filters=where,
+        required_concepts=list(binding.rule_ids),
+        complexity=ComplexityDecision(
+            kind=ComplexityKind.AGGREGATE,
+            strategy=PlanningStrategy.EASY,
+            signals=("proven_semantic_binding",),
+        ),
+        clauses=ClausePlan(
+            select=[select_text],
+            from_tables=[owner],
+            where=where,
+            output_grain="one scalar row",
+            requires_distinct=aggregate.operator is AggregateOperator.COUNT_DISTINCT,
+            aggregate=aggregate,
+            predicates=list(binding.predicates),
+        ),
+    )
+    return DINSQLPlan(
+        **draft.model_dump(exclude={"complexity", "clauses"}),
+        semantic_links=semantic_links,
+        complexity=draft.complexity,
+        clauses=draft.clauses,
+    )
+
+
+def _render_aggregate(
+    operator: AggregateOperator,
+    table: str,
+    column: str | None,
+) -> str:
+    if operator is AggregateOperator.COUNT_ROWS:
+        return f"COUNT rows of {table}"
+    if column is None:
+        raise ValueError(f"{operator} requires a column")
+    label = "COUNT DISTINCT" if operator is AggregateOperator.COUNT_DISTINCT else operator.value
+    return f"{label} {table}.{column}"
+
+
+def _render_predicate(predicate: PredicateSpec) -> str:
+    symbols = {
+        ComparisonOperator.EQ: "=",
+        ComparisonOperator.NE: "!=",
+        ComparisonOperator.GT: ">",
+        ComparisonOperator.GTE: ">=",
+        ComparisonOperator.LT: "<",
+        ComparisonOperator.LTE: "<=",
+    }
+    return f"{predicate.table}.{predicate.column} {symbols[predicate.operator]} {predicate.value!r}"
 
 
 def _scalar_metric_expression(question: str, column: str) -> str:

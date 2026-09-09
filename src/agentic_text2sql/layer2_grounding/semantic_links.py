@@ -12,18 +12,11 @@ from agentic_text2sql.contracts.planning import (
     SemanticRole,
 )
 from agentic_text2sql.contracts.retrieval import RankedDocument, RetrievalResult, SchemaContext
+from agentic_text2sql.contracts.semantics import BindingStatus, SemanticBinding
 from agentic_text2sql.layer2_grounding.keyword_index import normalize_tokens
 
 _QUOTED_VALUE = re.compile(r"['\"]([^'\"]{1,120})['\"]")
 _TABLE_BOILERPLATE = {"dataset", "olist", "semantic", "table", "view"}
-_STATUS_VALUE_ALIASES = {
-    "delivered": "delivered",
-    "canceled": "canceled",
-    "unavailable": "unavailable",
-    "giao thành công": "delivered",
-    "đã hủy": "canceled",
-}
-_STATUS_VALUES = frozenset(_STATUS_VALUE_ALIASES.values())
 
 
 def _tokens(value: str) -> set[str]:
@@ -52,7 +45,6 @@ def _best_document(
             continue
         status_match = int(
             role is SemanticRole.FILTER
-            and value in {"delivered", "canceled", "unavailable", "giao thành công", "đã hủy"}
             and document.column is not None
             and document.column.casefold().endswith("status")
         )
@@ -96,6 +88,7 @@ def build_semantic_link_plan(
     retrieval: RetrievalResult,
     context: SchemaContext,
     catalog: CatalogSnapshot,
+    binding: SemanticBinding | None = None,
 ) -> SemanticLinkPlan:
     """Map intent mentions to retrieved catalog evidence without reading database values."""
     if retrieval.db_id != context.db_id or retrieval.catalog_hash != context.catalog_hash:
@@ -107,10 +100,7 @@ def build_semantic_link_plan(
         *((SemanticRole.ENTITY, value, None) for value in decomposition.entity_hints),
         *((SemanticRole.METRIC, value, None) for value in decomposition.metric_hints),
         *((SemanticRole.DIMENSION, value, None) for value in decomposition.dimension_hints),
-        *(
-            (SemanticRole.FILTER, value, _STATUS_VALUE_ALIASES.get(value, value))
-            for value in decomposition.filter_hints
-        ),
+        *((SemanticRole.FILTER, value, value) for value in decomposition.filter_hints),
         *((SemanticRole.VALUE, value, value) for value in decomposition.time_hints),
         *((SemanticRole.VALUE, value, value) for value in _QUOTED_VALUE.findall(question)),
     ]
@@ -122,13 +112,12 @@ def build_semantic_link_plan(
                 evidence
                 for evidence in context.evidence
                 if role is SemanticRole.FILTER
-                and value in _STATUS_VALUES
                 and evidence.column is not None
                 and evidence.column.casefold().endswith("status")
             ),
             None,
         )
-        if status_evidence is None and role is SemanticRole.FILTER and value in _STATUS_VALUES:
+        if status_evidence is None and role is SemanticRole.FILTER:
             status_columns = [
                 qualified
                 for qualified in context.selected_columns
@@ -253,16 +242,24 @@ def build_semantic_link_plan(
         and not decomposition.dimension_hints
         and not decomposition.filter_hints
     )
-    required_tables = tuple(
-        sorted(
-            {
-                link.table
-                for link in ordered_links
-                if link.required and not (scalar_metric and link.role is SemanticRole.ENTITY)
-            }
-            | ({population_owner} if population_owner is not None else set())
+    required_tables = (
+        binding.required_tables
+        if binding is not None and binding.status is BindingStatus.PROVEN
+        else tuple(
+            sorted(
+                {
+                    link.table
+                    for link in ordered_links
+                    if link.required and not (scalar_metric and link.role is SemanticRole.ENTITY)
+                }
+                | ({population_owner} if population_owner is not None else set())
+            )
         )
     )
+    if binding is not None and binding.status is BindingStatus.PROVEN:
+        if binding.aggregate is None:  # Defensive boundary for externally constructed payloads.
+            raise ValueError("proven semantic binding has no aggregate")
+        population_owner = binding.aggregate.table
     return SemanticLinkPlan(
         db_id=context.db_id,
         catalog_hash=context.catalog_hash,
@@ -271,4 +268,5 @@ def build_semantic_link_plan(
         required_tables=required_tables,
         join_paths=tuple(context.joins),
         unmatched_mentions=tuple(dict.fromkeys(unmatched)),
+        binding=binding,
     )

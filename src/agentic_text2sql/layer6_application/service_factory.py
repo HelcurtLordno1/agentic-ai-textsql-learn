@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 from contextlib import AbstractContextManager
 from pathlib import Path
@@ -16,6 +17,7 @@ from agentic_text2sql.contracts.sql import DirectRunResult
 from agentic_text2sql.layer1_reasoning.decomposer import Decomposer
 from agentic_text2sql.layer1_reasoning.planner import PlannerAgent
 from agentic_text2sql.layer1_reasoning.router import QueryRouter
+from agentic_text2sql.layer2_grounding.semantic_catalog import load_semantic_catalog
 from agentic_text2sql.layer2_grounding.service import GroundingService, IndexService
 from agentic_text2sql.layer3_generation.easy_compiler import (
     GroundedEasyCompiler,
@@ -53,6 +55,12 @@ class RuntimeBundle(AbstractContextManager["RuntimeBundle"]):
         din_sql = settings.planning_mode == "din_sql"
         hybrid = settings.planning_mode == "hybrid"
         grounded_planning = din_sql or hybrid
+        semantic_catalog_path = root / "datasets" / catalog.db_id / "semantic_catalog.yaml"
+        semantic_catalog = (
+            load_semantic_catalog(semantic_catalog_path, catalog)
+            if grounded_planning and semantic_catalog_path.is_file()
+            else None
+        )
         self.provider = OllamaProvider(settings)
         generation_digest = next(
             (
@@ -88,7 +96,7 @@ class RuntimeBundle(AbstractContextManager["RuntimeBundle"]):
                     else "planner_v2"
                 ),
                 "generator": (
-                    "adaptive(generator_v6_grounded_easy,generator_v4_cross_domain,"
+                    "adaptive(generator_v7_typed_semantic,generator_v4_cross_domain,"
                     "generator_v5_din_sql)"
                     if hybrid
                     else GENERATOR_PROMPT_VERSION
@@ -105,6 +113,14 @@ class RuntimeBundle(AbstractContextManager["RuntimeBundle"]):
             },
             "retrieval": {"mode": "hybrid", "top_k": 20, "token_budget": 1200},
             "planning_mode": settings.planning_mode,
+            "semantic_catalog": (
+                {
+                    "version": semantic_catalog.version,
+                    "sha256": hashlib.sha256(semantic_catalog_path.read_bytes()).hexdigest(),
+                }
+                if semantic_catalog is not None
+                else None
+            ),
             "correction": {
                 "enabled": correction_enabled,
                 "max_repairs": 1 if correction_enabled else 0,
@@ -144,7 +160,12 @@ class RuntimeBundle(AbstractContextManager["RuntimeBundle"]):
             )
             retriever = index_service.load(catalog.db_id, lambda text: self._embed_many([text])[0])
             grounding = GroundingService(
-                retriever, catalog, mode="hybrid", top_k=20, token_budget=1200
+                retriever,
+                catalog,
+                mode="hybrid",
+                top_k=20,
+                token_budget=1200,
+                semantic_catalog=semantic_catalog,
             )
         if grounded_planning and grounding is None:
             self.provider.close()

@@ -5,6 +5,12 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from agentic_text2sql.contracts.semantics import (
+    AggregateSpec,
+    PredicateSpec,
+    SemanticBinding,
+)
+
 
 class RouteIntent(StrEnum):
     QUERY = "QUERY"
@@ -80,6 +86,7 @@ class SemanticLinkPlan(BaseModel):
     required_tables: tuple[str, ...] = ()
     join_paths: tuple[str, ...] = ()
     unmatched_mentions: tuple[str, ...] = ()
+    binding: SemanticBinding | None = None
 
 
 class ComplexityKind(StrEnum):
@@ -142,6 +149,8 @@ class ClausePlan(BaseModel):
     requires_distinct: bool = False
     subqueries: list[SubqueryStep] = Field(default_factory=list, max_length=6)
     set_operation: Literal["UNION", "INTERSECT", "EXCEPT"] | None = None
+    aggregate: AggregateSpec | None = None
+    predicates: list[PredicateSpec] = Field(default_factory=list, max_length=12)
 
 
 class DINSQLPlan(LogicalPlan):

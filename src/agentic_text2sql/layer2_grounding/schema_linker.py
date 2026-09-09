@@ -40,6 +40,7 @@ def link_schema(
     max_tables: int = 6,
     fk_hops: int = 2,
     preferred_tables: tuple[str, ...] = (),
+    required_columns: tuple[str, ...] = (),
 ) -> SchemaContext:
     if retrieval.db_id != catalog.db_id or retrieval.catalog_hash != catalog.catalog_hash:
         raise ValueError("retrieval result does not belong to the supplied catalog")
@@ -55,9 +56,19 @@ def link_schema(
         ),
     )
     known_tables = {table.name for table in catalog.tables}
+    known_columns = {
+        f"{table.name}.{column.name}" for table in catalog.tables for column in table.columns
+    }
     if unknown := set(preferred_tables) - known_tables:
         raise ValueError(f"preferred tables are absent from catalog: {', '.join(sorted(unknown))}")
+    if unknown := set(required_columns) - known_columns:
+        raise ValueError(f"required columns are absent from catalog: {', '.join(sorted(unknown))}")
     table_order: list[str] = list(dict.fromkeys(preferred_tables))
+    table_order.extend(
+        table
+        for qualified in required_columns
+        if (table := qualified.split(".", maxsplit=1)[0]) not in table_order
+    )
     for item in ranked:
         related_tables = [item.document.table]
         if item.document.kind == "relationship":
@@ -97,6 +108,9 @@ def link_schema(
             for item in ranked
             if item.document.table in tables and item.document.column is not None
         }
+        columns.update(
+            column for column in required_columns if column.split(".", maxsplit=1)[0] in tables
+        )
         for join in joins:
             for equality in join.split(" AND "):
                 left, right = equality.split(" = ", maxsplit=1)

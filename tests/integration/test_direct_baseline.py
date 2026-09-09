@@ -11,6 +11,12 @@ from agentic_text2sql.contracts.planning import (
     SemanticRole,
 )
 from agentic_text2sql.contracts.retrieval import SchemaContext
+from agentic_text2sql.contracts.semantics import (
+    AggregateOperator,
+    AggregateSpec,
+    BindingStatus,
+    SemanticBinding,
+)
 from agentic_text2sql.contracts.sql import DirectRunResult, DirectStatus, SqlCandidate
 from agentic_text2sql.exceptions import StructuredOutputError
 from agentic_text2sql.layer1_reasoning.decomposer import Decomposer
@@ -127,7 +133,7 @@ def test_write_and_returns_stop_before_model() -> None:
 
 
 class StubGrounding:
-    def __init__(self, catalog_hash: str) -> None:
+    def __init__(self, catalog_hash: str, *, proven: bool = False) -> None:
         self.context = SchemaContext(
             db_id="synthetic",
             selected_tables=["orders"],
@@ -137,6 +143,22 @@ class StubGrounding:
             catalog_hash=catalog_hash,
             rendered_context="TABLE orders(order_id TEXT)",
             estimated_tokens=10,
+        )
+        binding = (
+            SemanticBinding(
+                db_id="synthetic",
+                catalog_hash=catalog_hash,
+                status=BindingStatus.PROVEN,
+                aggregate=AggregateSpec(
+                    operator=AggregateOperator.COUNT_ROWS,
+                    table="orders",
+                    evidence_id="semantic.entity.orders",
+                ),
+                required_tables=("orders",),
+                rule_ids=("entity.orders",),
+            )
+            if proven
+            else None
         )
         self.links = SemanticLinkPlan(
             db_id="synthetic",
@@ -151,6 +173,7 @@ class StubGrounding:
                 ),
             ),
             required_tables=("orders",),
+            binding=binding,
         )
 
     def prepare_for_planning(self, question: str, decomposition: object) -> tuple[Any, Any]:
@@ -197,7 +220,10 @@ def grounded_service(
         easy_compiler=GroundedEasyCompiler(normalizer) if planning_mode == "hybrid" else None,
         policy=SQLSafetyPolicy(),
         executor=ReadOnlySQLiteExecutor(),
-        grounding=cast(GroundingService, StubGrounding(catalog_hash)),
+        grounding=cast(
+            GroundingService,
+            StubGrounding(catalog_hash, proven=planning_mode == "hybrid"),
+        ),
         planning_mode=planning_mode,
     )
 
@@ -213,9 +239,9 @@ def test_din_sql_handoff_uses_one_model_call_and_records_plan_validation() -> No
     assert result.plan is not None and result.plan["complexity"]["strategy"] == "EASY"
     assert result.plan_validation == {
         "accepted": True,
-        "signals": [],
+        "signals": ["UNPROVEN_SEMANTIC_BINDING"],
         "blocking_signals": [],
-        "advisory_signals": [],
+        "advisory_signals": ["UNPROVEN_SEMANTIC_BINDING"],
         "safe_message": None,
     }
     assert provider.calls == 1

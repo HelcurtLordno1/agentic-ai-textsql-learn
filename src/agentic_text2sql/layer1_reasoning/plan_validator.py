@@ -14,6 +14,7 @@ from agentic_text2sql.contracts.planning import (
     PlanValidationReport,
 )
 from agentic_text2sql.contracts.retrieval import SchemaContext
+from agentic_text2sql.contracts.semantics import BindingStatus
 from agentic_text2sql.layer2_grounding.fk_graph import catalog_join_edges
 
 _QUALIFIED = re.compile(r"\b([A-Za-z_][A-Za-z0-9_]*)\.([A-Za-z_][A-Za-z0-9_]*)\b")
@@ -32,6 +33,10 @@ _BLOCKING_SIGNALS = frozenset(
         "UNDECLARED_JOIN_CONDITION",
         "DUPLICATE_SUBQUERY_ID",
         "SUBQUERY_DEPENDENCY_NOT_PRIOR",
+        "SEMANTIC_BINDING_MISMATCH",
+        "UNKNOWN_TYPED_COLUMN",
+        "TYPED_COLUMN_OUTSIDE_EVIDENCE",
+        "TYPED_OWNER_NOT_IN_FROM",
     }
 )
 
@@ -138,6 +143,42 @@ def validate_plan(
         required_owners.add(plan.semantic_links.population_owner)
     if required_owners - all_planned_tables:
         signals.append("SEMANTIC_OWNER_MISSING")
+
+    binding = plan.semantic_links.binding
+    if binding is None or binding.status is not BindingStatus.PROVEN:
+        signals.append("UNPROVEN_SEMANTIC_BINDING")
+    else:
+        typed_aggregate = plan.clauses.aggregate
+        typed_predicates = tuple(plan.clauses.predicates)
+        if (
+            binding.db_id != catalog.db_id
+            or binding.catalog_hash != catalog.catalog_hash
+            or typed_aggregate != binding.aggregate
+            or typed_predicates != binding.predicates
+        ):
+            signals.append("SEMANTIC_BINDING_MISMATCH")
+        typed_owners = {
+            *(predicate.table for predicate in typed_predicates),
+            *((typed_aggregate.table,) if typed_aggregate is not None else ()),
+        }
+        typed_columns = {
+            *(f"{predicate.table}.{predicate.column}" for predicate in typed_predicates),
+            *(
+                (f"{typed_aggregate.table}.{typed_aggregate.column}",)
+                if typed_aggregate is not None and typed_aggregate.column is not None
+                else ()
+            ),
+        }
+        if typed_owners != set(binding.required_tables) or typed_columns != set(
+            binding.required_columns
+        ):
+            signals.append("SEMANTIC_BINDING_MISMATCH")
+        if typed_columns - columns:
+            signals.append("UNKNOWN_TYPED_COLUMN")
+        if typed_columns - set(schema_context.selected_columns):
+            signals.append("TYPED_COLUMN_OUTSIDE_EVIDENCE")
+        if typed_owners - all_planned_tables:
+            signals.append("TYPED_OWNER_NOT_IN_FROM")
 
     allowed_pairs = _allowed_fk_pairs(catalog)
     all_joins = [

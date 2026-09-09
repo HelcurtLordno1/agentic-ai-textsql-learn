@@ -18,8 +18,9 @@ research path before generation:
 
 ```text
 Question -> Router -> Decomposer
-         -> BM25 + BGE-M3/FAISS -> compact connected SchemaContext
-         -> SemanticLinkPlan(entity/metric/dimension/filter/value + evidence owner)
+         -> versioned semantic catalog -> SemanticBinding(PROVEN/INCOMPLETE/AMBIGUOUS)
+         -> BM25 + BGE-M3/FAISS -> required-evidence SchemaContext
+         -> SemanticLinkPlan(binding + retrieval links/evidence owner)
          -> deterministic DIN planner -> ComplexityDecision + typed ClausePlan
          -> deterministic PlanConsistencyValidator
          -> provable EASY compiler or strategy-specific Qwen3 Generator
@@ -28,11 +29,19 @@ Question -> Router -> Decomposer
          -> persistent result + six-layer trace -> CLI / FastAPI / Streamlit
 ```
 
+The semantic catalog is domain metadata, not benchmark gold. Startup validates every referenced
+table and column against the introspected catalog and records the semantic file hash. Canonical enum
+values, metric operators, entity identities and derived grains live in this versioned data rather
+than question-specific Python conditions. Required binding columns are inserted into the bounded
+schema context before planning.
+
 Schema linking precedes semantic planning as in DIN-SQL. `EASY` plans stay minimal,
 `NON_NESTED` plans enumerate physical joins, and `NESTED` plans carry ordered subquery dependencies.
-The hybrid runtime does not spend a generation-model call on scalar EASY plans that its catalog-
-checked compiler can prove; unsupported EASY shapes fall back to one compact generator call. It does
-not run long chain-of-thought prompts or multiple candidates. Exact-name lookup joins not declared as FKs are admitted only when
+The hybrid runtime does not spend a generation-model call on scalar EASY plans whose complete
+`AggregateSpec` and `PredicateSpec` binding is `PROVEN`. The compiler consumes these typed fields,
+never regex-parses human-readable clause descriptions, and refuses any binding/clause/evidence
+mismatch. Incomplete or ambiguous EASY shapes fall back to one compact generator call. It does not
+run long chain-of-thought prompts or multiple candidates. Exact-name lookup joins not declared as FKs are admitted only when
 both sides are raw tables and exactly one side is a primary/unique key, and are labeled
 `INFERRED_UNIQUE_LOOKUP` in provenance.
 
@@ -47,6 +56,8 @@ identity, evidence IDs, planning mode and the plan-validation report.
 
 The Paper II implementation has deterministic test evidence, but it is not promoted or marked
 `VERIFIED` until a guarded paired benchmark meets Gate R2 accuracy and latency thresholds.
+The construction rationale, invariants and benchmark freeze are specified in
+`docs/research_plan/r2_semantic_construction.md`.
 
 The application boundary uses one `ApplicationQueryService`. CLI invokes it synchronously; FastAPI
 submits to a one-worker executor and exposes restart-safe SSE; Streamlit calls only the API and has

@@ -19,6 +19,12 @@ from agentic_text2sql.contracts.planning import (
     SubqueryStep,
 )
 from agentic_text2sql.contracts.retrieval import SchemaContext
+from agentic_text2sql.contracts.semantics import (
+    AggregateOperator,
+    AggregateSpec,
+    BindingStatus,
+    SemanticBinding,
+)
 from agentic_text2sql.layer1_reasoning.decomposer import Decomposer
 from agentic_text2sql.layer1_reasoning.plan_validator import validate_plan
 from agentic_text2sql.layer1_reasoning.planner import PlannerAgent
@@ -226,3 +232,35 @@ def test_shape_conflict_is_advisory_so_hybrid_can_fallback() -> None:
     assert report.accepted
     assert report.blocking_signals == ()
     assert "SCALAR_OUTPUT_GRAIN_MISMATCH" in report.advisory_signals
+
+
+def test_proven_binding_cannot_diverge_from_typed_clause_contract() -> None:
+    catalog = SQLiteIntrospector().inspect(DATABASE, "synthetic")
+    draft = ranking_draft()
+    binding = SemanticBinding(
+        db_id="synthetic",
+        catalog_hash=catalog.catalog_hash,
+        status=BindingStatus.PROVEN,
+        aggregate=AggregateSpec(
+            operator=AggregateOperator.SUM,
+            table="order_items",
+            column="price",
+            evidence_id="test.metric.revenue",
+        ),
+        required_tables=("order_items",),
+        required_columns=("order_items.price",),
+        rule_ids=("metric.revenue",),
+    )
+    links = semantic_links().model_copy(update={"binding": binding})
+    plan = DINSQLPlan(
+        **draft.model_dump(exclude={"complexity"}),
+        semantic_links=links,
+        complexity=ComplexityDecision(
+            kind=ComplexityKind.MULTI_JOIN,
+            strategy=PlanningStrategy.NON_NESTED,
+            signals=("multiple_tables_or_join",),
+        ),
+    )
+    report = validate_plan(plan, catalog, schema_context())
+    assert not report.accepted
+    assert "SEMANTIC_BINDING_MISMATCH" in report.blocking_signals

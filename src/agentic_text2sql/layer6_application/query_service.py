@@ -206,6 +206,12 @@ class DirectBaselineService:
         plan_validation_payload = (
             plan_validation.model_dump(mode="json") if plan_validation is not None else None
         )
+        has_generation_advisory = bool(
+            plan_validation
+            and any(
+                signal != "UNPROVEN_SEMANTIC_BINDING" for signal in plan_validation.advisory_signals
+            )
+        )
 
         use_din_generation = bool(
             isinstance(plan, DINSQLPlan)
@@ -214,7 +220,7 @@ class DirectBaselineService:
                 or (
                     self.planning_mode == "hybrid"
                     and plan.complexity.strategy is not PlanningStrategy.EASY
-                    and not (plan_validation and plan_validation.advisory_signals)
+                    and not has_generation_advisory
                 )
             )
         )
@@ -257,7 +263,7 @@ class DirectBaselineService:
                 if hybrid
                 and isinstance(plan, DINSQLPlan)
                 and plan.complexity.strategy is PlanningStrategy.EASY
-                and not (plan_validation and plan_validation.advisory_signals)
+                and not has_generation_advisory
                 and self.easy_compiler is not None
                 else None
             )

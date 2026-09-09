@@ -105,7 +105,9 @@ def test_delivered_value_prefers_status_column_over_delivery_timestamp() -> None
         link for link in canceled_links.links if link.role is SemanticRole.FILTER
     )
     assert canceled_status.column == "order_status"
-    assert canceled_status.value == "canceled"
+    # Legacy retrieval links preserve user wording; canonical enum values live in the typed
+    # semantic catalog binding consumed by the compiler.
+    assert canceled_status.value == "đã hủy"
 
 
 def test_scalar_revenue_uses_metric_view_without_disconnected_product_join() -> None:

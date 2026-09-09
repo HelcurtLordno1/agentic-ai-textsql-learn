@@ -1714,7 +1714,7 @@ Mỗi bug quan trọng cần:
 | E-M6 | Correction ablation | Yes | L5 | VERIFIED | frozen Olist 14/18 off vs 17/18 on; `docs/evidence/p4_gate.md` |
 | E-M7 | BIRD Mini-Dev | No | core complete | NOT_STARTED | — |
 | R1-M1 | PRACTIQ question reliability | No | R0 baseline lock | IN_PROGRESS | Typed/glossary-grounded gate, early-exit và clarification đã có, nhưng source-locked Olist v3 bị dừng tại 35/60 theo accuracy kill criterion: prefix 30/35 so với paired baseline 33/35 và full-suite upper bound chỉ 55/60 < champion 57/60. Current integrated variant bị reject promotion; chưa có final macro-F1 và không `VERIFIED`; `comparison_new_to_baseline.md`, `docs/evidence/r1_question_reliability.md`, `docs/evidence/r1_olist_benchmark.md`, `docs/evidence/r1_resource_guard_incident.md` |
-| R2-M1 | DIN-SQL semantic links + adaptive clause planner | No | R0 baseline lock, rejected R1 promotion | IN_PROGRESS | All-DIN stopped at Olist prefix 4/8 (upper bound 56/60); hybrid uses a catalog-checked compiler for provable scalar EASY plans, baseline fallback for other EASY/advisory plans, and DIN generation for validated complex plans. Failure-directed smoke is 4/4; Olist pilots then exposed and fixed typed count intent and Vietnamese status canonicalization; `make check` passes 191 tests, final full benchmark pending, so not `VERIFIED`; `docs/evidence/r2_din_sql_implementation.md` |
+| R2-M1 | DIN-SQL semantic links + adaptive clause planner | No | R0 baseline lock, rejected R1 promotion | IN_PROGRESS | Initial case-directed hybrid pilots were not promotion evidence and were superseded by a versioned, schema-validated semantic catalog; typed `PROVEN/INCOMPLETE/AMBIGUOUS` bindings; required-evidence context; binding/clause consistency; typed SQLGlot scalar compilation; baseline fallback; and complex DIN routing. Systemic `make check` passes 219 tests with 1 Ollama test deselected; final paired benchmark is pending, so not `VERIFIED`; `docs/research_plan/r2_semantic_construction.md`, `docs/evidence/r2_din_sql_implementation.md` |
 | X-M1 | PostgreSQL adapter | No | core complete | NOT_STARTED | — |
 
 Overall project status tại thời điểm cập nhật master plan: `GATE_P6_VERIFIED`. P0
@@ -1729,7 +1729,9 @@ vượt target interactive 60 giây nên được giữ như limitation. Full Sp
 
 Gate R2 Paper II hiện `IN_PROGRESS`: implementation DIN-SQL đã có typed semantic ownership,
 complexity routing, clause/subquery plan, plan consistency, catalog-checked scalar EASY compiler,
-prompt theo strategy, correction theo clause và offline planning metrics. Chưa có local-model
+prompt theo strategy, correction theo clause và offline planning metrics. Scalar path đã được
+construct lại theo semantic catalog versioned, schema-validated và fail-closed; compiler chỉ đọc
+typed aggregate/predicate, không parse display string hay chứa nhánh theo benchmark case. Chưa có local-model
 paired benchmark mới, vì vậy không thay score champion P6, không tuyên bố tăng accuracy và không
 đánh dấu `VERIFIED` trước evidence theo `docs/evidence/r2_din_sql_implementation.md`.
 

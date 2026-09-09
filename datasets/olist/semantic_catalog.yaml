@@ -1,0 +1,159 @@
+version: 1
+db_id: olist
+
+# This is domain metadata, not benchmark gold. Rules describe stable business meaning and are
+# validated against the introspected SQLite catalog before the runtime can use them.
+entities:
+  orders:
+    aliases: [order, orders, đơn hàng]
+    table: olist_orders_dataset
+    identity_column: order_id
+  customers:
+    aliases: [customer, customers, buyer, buyers, khách hàng, người mua]
+    table: olist_customers_dataset
+    identity_column: customer_unique_id
+  sellers:
+    aliases: [seller, sellers, merchant, merchants, người bán]
+    table: olist_sellers_dataset
+    identity_column: seller_id
+  products:
+    aliases: [product, products, sản phẩm, hàng hóa]
+    table: olist_products_dataset
+    identity_column: product_id
+  order_items:
+    aliases: [order item, order items, item, items, dòng đơn hàng]
+    table: olist_order_items_dataset
+  payments:
+    aliases: [payment, payments, thanh toán]
+    table: olist_order_payments_dataset
+  reviews:
+    aliases: [review, reviews, đánh giá]
+    table: olist_order_reviews_dataset
+
+metrics:
+  product_revenue:
+    aliases: [product revenue, merchandise revenue, doanh thu sản phẩm, doanh thu hàng hóa]
+    operator: SUM
+    allowed_operators: [SUM, AVG, MIN, MAX]
+    table: order_item_totals
+    column: product_revenue_cents
+  freight:
+    aliases: [freight, shipping fee, freight amount, phí vận chuyển]
+    operator: SUM
+    allowed_operators: [SUM, AVG, MIN, MAX]
+    table: order_item_totals
+    column: freight_cents
+  paid_value:
+    aliases: [paid value, payment value, total payment, tổng thanh toán]
+    operator: SUM
+    allowed_operators: [SUM, AVG, MIN, MAX]
+    table: order_payment_totals
+    column: paid_value_cents
+  review_score:
+    aliases: [average review score, average rating, điểm đánh giá trung bình]
+    operator: AVG
+    allowed_operators: [AVG, MIN, MAX]
+    table: order_review_summary
+    column: average_review_score
+  items_per_order:
+    aliases:
+      - average items per order
+      - average item count per order
+      - avg items per order
+      - số sản phẩm trung bình mỗi đơn hàng
+      - trung bình số mặt hàng mỗi đơn
+    operator: AVG
+    allowed_operators: [AVG]
+    table: order_item_totals
+    column: item_count
+  delivery_days:
+    aliases:
+      - average delivery days
+      - average delivery time
+      - thời gian giao hàng trung bình
+      - số ngày giao hàng trung bình
+    operator: AVG
+    allowed_operators: [AVG, MIN, MAX]
+    table: order_delivery_facts
+    column: delivery_days
+  delay_days:
+    aliases:
+      - average delay days
+      - average delivery delay
+      - số ngày trễ trung bình
+      - độ trễ giao hàng trung bình
+    operator: AVG
+    allowed_operators: [AVG, MIN, MAX]
+    table: order_delivery_facts
+    column: delay_days
+
+filters:
+  order_status:
+    table: olist_orders_dataset
+    column: order_status
+    values:
+      delivered:
+        aliases: [delivered, completed delivery, giao thành công, đã giao]
+        value: delivered
+      canceled:
+        aliases: [canceled, cancelled, canceled status, bị hủy, đã hủy]
+        value: canceled
+      unavailable:
+        aliases: [unavailable, không có sẵn]
+        value: unavailable
+
+derived:
+  repeat_customer:
+    aliases:
+      - returning customer
+      - returning customers
+      - repeat customer
+      - repeat customers
+      - khách hàng quay lại
+      - người mua lặp lại
+    aggregate:
+      operator: COUNT_ROWS
+      table: customer_order_facts
+      column: null
+      evidence_id: semantic.derived.repeat_customer
+    predicates:
+      - table: customer_order_facts
+        column: order_count
+        operator: GT
+        value: 1
+        evidence_id: semantic.derived.repeat_customer.order_count
+  multi_payment_order:
+    aliases:
+      - orders with multiple payment methods
+      - orders using multiple payment types
+      - đơn hàng có nhiều phương thức thanh toán
+      - đơn dùng nhiều loại thanh toán
+    aggregate:
+      operator: COUNT_ROWS
+      table: order_payment_totals
+      column: null
+      evidence_id: semantic.derived.multi_payment_order
+    predicates:
+      - table: order_payment_totals
+        column: distinct_payment_type_count
+        operator: GT
+        value: 1
+        evidence_id: semantic.derived.multi_payment_order.distinct_payment_type_count
+  late_delivery:
+    aliases:
+      - late deliveries
+      - late delivered orders
+      - orders delivered late
+      - giao hàng trễ
+      - đơn giao trễ
+    aggregate:
+      operator: COUNT_ROWS
+      table: order_delivery_facts
+      column: null
+      evidence_id: semantic.derived.late_delivery
+    predicates:
+      - table: order_delivery_facts
+        column: is_late_delivered
+        operator: EQ
+        value: 1
+        evidence_id: semantic.derived.late_delivery.is_late_delivered

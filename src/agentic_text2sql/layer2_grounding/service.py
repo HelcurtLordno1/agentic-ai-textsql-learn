@@ -25,11 +25,13 @@ from agentic_text2sql.contracts.retrieval import (
     IndexManifest,
     SchemaContext,
 )
+from agentic_text2sql.contracts.semantics import BindingStatus, SemanticCatalog
 from agentic_text2sql.layer2_grounding.document_builder import build_documents
 from agentic_text2sql.layer2_grounding.embedding_index import DenseIndex
 from agentic_text2sql.layer2_grounding.keyword_index import KeywordIndex, normalize_tokens
 from agentic_text2sql.layer2_grounding.retriever import HybridRetriever
 from agentic_text2sql.layer2_grounding.schema_linker import link_schema
+from agentic_text2sql.layer2_grounding.semantic_catalog import resolve_semantic_binding
 from agentic_text2sql.layer2_grounding.semantic_links import build_semantic_link_plan
 
 DOCUMENT_TEMPLATE_VERSION = "p3.1-v2"
@@ -337,12 +339,14 @@ class GroundingService:
         mode: str = "dense",
         top_k: int = 20,
         token_budget: int = 1200,
+        semantic_catalog: SemanticCatalog | None = None,
     ) -> None:
         self.retriever = retriever
         self.catalog = catalog
         self.mode = mode
         self.top_k = top_k
         self.token_budget = token_budget
+        self.semantic_catalog = semantic_catalog
 
     def ground(self, question: str, plan: LogicalPlan) -> SchemaContext:
         expanded_query = " ".join(
@@ -399,13 +403,32 @@ class GroundingService:
             ]
         )
         retrieval = self.retriever.retrieve(expanded_query, mode=self.mode, top_k=self.top_k)
-        preferred_tables = exact_entity_tables(self.catalog, decomposition.entity_hints)
+        binding = resolve_semantic_binding(
+            question,
+            decomposition,
+            self.catalog,
+            self.semantic_catalog,
+        )
+        binding_is_proven = binding.status is BindingStatus.PROVEN
+        preferred_tables = (
+            binding.required_tables
+            if binding_is_proven
+            else exact_entity_tables(self.catalog, decomposition.entity_hints)
+        )
         context = link_schema(
             provisional,
             retrieval,
             self.catalog,
             token_budget=self.token_budget,
             preferred_tables=preferred_tables,
+            required_columns=binding.required_columns if binding_is_proven else (),
         )
-        links = build_semantic_link_plan(question, decomposition, retrieval, context, self.catalog)
+        links = build_semantic_link_plan(
+            question,
+            decomposition,
+            retrieval,
+            context,
+            self.catalog,
+            binding=binding,
+        )
         return context, links
