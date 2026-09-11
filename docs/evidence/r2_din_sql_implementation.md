@@ -1,8 +1,9 @@
 # Gate R2 DIN-SQL implementation evidence
 
-**Date:** 2026-09-09 (Asia/Bangkok)
+**Date:** 2026-09-11 (Asia/Bangkok)
 
-**Status:** `IN_PROGRESS` — systemic construction verified; paired benchmark pending
+**Status:** `IN_PROGRESS` — systemic construction verified; revision `f70d191` rejected by the
+paired Olist accuracy gate
 
 ## Hypothesis and locked comparator
 
@@ -12,9 +13,9 @@ Paper I/PRACTIQ is not a promoted comparator: its source-locked run stopped at p
 
 The R2 hypothesis is that typed semantic ownership and adaptive DIN-SQL planning reduce
 executable-but-semantically-wrong SQL without imposing a long reasoning prompt on every easy query.
-Primary sources and transfer details remain in `docs/paper_to_research_implement.md`, section 4. The
-architecture-level construction contract is
-`docs/research_plan/r2_semantic_construction.md`.
+Primary sources and transfer details remain in
+`docs/research_plan/paper_to_research_implement.md`, section 6. The architecture-level construction
+contract is `docs/research_plan/r2_semantic_construction.md`.
 
 ## Why the initial revision was not sufficient
 
@@ -84,10 +85,10 @@ Command:
 make check
 ```
 
-Observed on 2026-09-09:
+Observed again after the benchmark report update on 2026-09-11:
 
 - Ruff lint: pass;
-- Ruff format check: 229 files already formatted;
+- Ruff format check: 230 files already formatted;
 - strict mypy: 110 source files pass;
 - pytest excluding Ollama: 219 passed, 1 Ollama test deselected;
 - one pre-existing Starlette/httpx deprecation warning;
@@ -101,17 +102,32 @@ Focused construction evidence:
 - `tests/unit/layer1/test_din_sql_planning.py`: planning/validator integrity;
 - `tests/integration/test_direct_baseline.py`: compiler, fallback and DIN routing boundaries.
 
-## Benchmark and promotion contract
+## Frozen Olist benchmark result
 
-No new accuracy is claimed. The earlier case-directed pilots are retained as negative development
-history, but they do not unlock promotion and will not be used as a repair checklist.
+The clean source revision `f70d1912220902326d821557ab3ab5d6a616f39b` was evaluated under the
+approved `olist-paper1-ultrasafe` wrapper on 2026-09-11. A one-case pilot passed, then the exact same
+checkpoint continued with batch size one, model unload, 60-second cooldown and 0.5-second resource
+sampling. The run stopped automatically at case 12:
 
-The next model action, if run, is one frozen guarded Olist-60 benchmark from a clean revision. It
-must use the approved wrapper, batch size one, continuous 0.5-second monitoring, explicit bounded
-GPU offload, checkpointing, model unload and cooldown. Stop when the possible final Olist result is
-below `57/60`, preserve the artifact and reject or redesign R2 by failure family. Spider runs only
-if Olist holds the champion guardrail.
+- Paper II prefix: `8/12` (66.67%);
+- paired P6 baseline prefix: `12/12` (100%);
+- full-suite upper bound: `8 + 48 = 56/60`, below the `57/60` champion;
+- corrections attempted/recovered: `2/0`;
+- clause exact and macro clause F1: `12/12` and `1.0`, despite result accuracy `0.6667`;
+- macro table/column recall: `0.6667/0.5556`;
+- failed cases: `olist_acc_005`, `010`, `011`, `012`.
 
-Promotion remains: Spider medium+hard +5 percentage points, overall +2 points, easy loses at most
-one case, Olist at least `57/60`, end-to-end p95 increase at most 20%, zero gold leakage and zero
-resource breach. R2 remains `IN_PROGRESS` until that evidence exists.
+The failures span fallback timeout, wrong aggregate grain, lineage-blind validator rejection and
+incomplete late-delivery predicate binding. They are recorded as failure families, not as a list of
+benchmark-ID repairs. The source-locked report is `comparison_new2_to_baseline_vn.md`; local raw
+predictions and evaluator reports remain uncommitted by repository policy.
+
+The run used one Qwen3-14B GPU layer and an Administrator hard graphics-clock lock of 300–600 MHz.
+Observed peaks were 2.277 GiB system RAM used, zero swap, 1,557 MiB VRAM, 56 C, 45.01 W and 600 MHz.
+There was no resource breach, OOM or shutdown. Ollama was unloaded and the hard clock was reset only
+after all model work stopped.
+
+Revision `f70d191` is rejected for promotion. Spider was not run because Olist failed its mandatory
+non-regression gate. R2 remains `IN_PROGRESS`, not `VERIFIED`; any continuation requires systemic
+grain/lineage/predicate invariants or a narrower complex-query-only activation, followed by a fresh
+revision and evaluation ID. The stopped checkpoint must not be resumed or blended with a later run.
