@@ -46,6 +46,7 @@ class DirectRunResult(BaseModel):
     status: DirectStatus
     route_reason: str
     prompt_versions: dict[str, str]
+    adaptive_route: dict[str, Any] | None = None
     plan: dict[str, Any] | None = None
     plan_validation: dict[str, Any] | None = None
     schema_context: dict[str, Any] | None = None

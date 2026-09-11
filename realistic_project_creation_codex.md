@@ -1714,7 +1714,7 @@ Mỗi bug quan trọng cần:
 | E-M6 | Correction ablation | Yes | L5 | VERIFIED | frozen Olist 14/18 off vs 17/18 on; `docs/evidence/p4_gate.md` |
 | E-M7 | BIRD Mini-Dev | No | core complete | NOT_STARTED | — |
 | R1-M1 | PRACTIQ question reliability | No | R0 baseline lock | IN_PROGRESS | Typed/glossary-grounded gate, early-exit và clarification đã có, nhưng source-locked Olist v3 bị dừng tại 35/60 theo accuracy kill criterion: prefix 30/35 so với paired baseline 33/35 và full-suite upper bound chỉ 55/60 < champion 57/60. Current integrated variant bị reject promotion; chưa có final macro-F1 và không `VERIFIED`; `comparison_new_to_baseline.md`, `docs/evidence/r1_question_reliability.md`, `docs/evidence/r1_olist_benchmark.md`, `docs/evidence/r1_resource_guard_incident.md` |
-| R2-M1 | DIN-SQL semantic links + adaptive clause planner | No | R0 baseline lock, rejected R1 promotion | IN_PROGRESS | Versioned semantic catalog, typed bindings/clause plan, SQLGlot scalar compiler, fallback and complex DIN routing pass systemic tests, but clean revision `f70d191` failed the guarded paired Olist gate: Paper II prefix 8/12 versus P6 12/12, giving a full-suite upper bound 56/60 < champion 57/60. The run stopped automatically; Spider was not run. Current revision is rejected for promotion and not `VERIFIED`; `comparison_new2_to_baseline_vn.md`, `docs/research_plan/r2_semantic_construction.md`, `docs/evidence/r2_din_sql_implementation.md` |
+| R2-M1 | DIN-SQL semantic links + adaptive clause planner | No | R0 baseline lock, rejected R1 promotion | IN_PROGRESS | Revision `f70d191` failed guarded Olist at 8/12 (upper bound 56/60). The one permitted systemic redesign now defaults to `BASELINE_PRESERVE`, activates schema-bounded DIN decomposition only for explicit complex dependencies, removes the semantic compiler from the EASY runtime path, and adds typed grain/weight/rounding plus lineage-aware validation. `make check` passes 235 tests with 1 Ollama test deselected. Fresh guarded Olist evidence is pending, so not `VERIFIED`; `comparison_new2_to_baseline_vn.md`, `docs/research_plan/r2_semantic_construction.md`, `docs/evidence/r2_din_sql_implementation.md` |
 | X-M1 | PostgreSQL adapter | No | core complete | NOT_STARTED | — |
 
 Overall project status tại thời điểm cập nhật master plan: `GATE_P6_VERIFIED`. P0
@@ -1734,7 +1734,10 @@ theo semantic catalog versioned, schema-validated và fail-closed; compiler ch�
 aggregate/predicate, không parse display string hay chứa nhánh theo benchmark case. Clean guarded
 benchmark của revision `f70d191` bị dừng tại prefix 12: Paper II đạt 8/12 so với paired P6 12/12,
 nên cận trên toàn suite chỉ 56/60 < champion 57/60. Spider không chạy. Revision này bị reject
-promotion; module không `VERIFIED`. Evidence và hướng redesign theo invariant nằm tại
+promotion. Một redesign tổng thể sau failure đã chuyển hybrid thành baseline-first: EASY giữ nguyên
+P6, chỉ dependency phức tạp mới chạy schema-bounded DIN planner/generator; semantic aggregate có
+typed source grain/weight/rounding và validator dùng proven lineage. `make check` pass 235 test, một
+Ollama test deselect. Benchmark sạch của revision mới còn pending; module không `VERIFIED`. Evidence nằm tại
 `comparison_new2_to_baseline_vn.md` và `docs/evidence/r2_din_sql_implementation.md`.
 
 Post-P6 usability hardening ngày 2026-08-16 đã sửa lỗi thực tế trong câu hỏi Olist “Top 5 danh mục

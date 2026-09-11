@@ -65,13 +65,22 @@ class PlannerAgent:
         decomposition: DecomposedQuestion,
         semantic_links: SemanticLinkPlan,
         schema_context: SchemaContext,
+        *,
+        use_model: bool = False,
     ) -> DINSQLPlan:
-        """Create a bounded schema-aware clause plan without another 14B model request."""
+        """Create a bounded schema-aware clause plan, invoking decomposition only when requested."""
         if (
             semantic_links.db_id != schema_context.db_id
             or semantic_links.catalog_hash != schema_context.catalog_hash
         ):
             raise ValueError("semantic links do not match schema context")
+        if use_model:
+            return self._plan_complex_with_model(
+                question,
+                decomposition,
+                semantic_links,
+                schema_context,
+            )
         binding = semantic_links.binding
         if binding is not None and binding.status is BindingStatus.PROVEN:
             return _plan_from_proven_binding(
@@ -226,6 +235,42 @@ class PlannerAgent:
             semantic_links=semantic_links,
             complexity=decision,
             clauses=clauses,
+        )
+
+    def _plan_complex_with_model(
+        self,
+        question: str,
+        decomposition: DecomposedQuestion,
+        semantic_links: SemanticLinkPlan,
+        schema_context: SchemaContext,
+    ) -> DINSQLPlan:
+        """Run the DIN decomposition prompt only beyond the baseline-preservation boundary."""
+        if self.grounded_template_path is None:
+            raise ValueError("complex DIN-SQL planning requires a grounded planner template")
+        template = Environment(undefined=StrictUndefined, autoescape=False).from_string(
+            self.grounded_template_path.read_text(encoding="utf-8")
+        )
+        prompt = template.render(
+            question=question,
+            decomposition=decomposition.model_dump_json(indent=2),
+            semantic_links=semantic_links.model_dump_json(indent=2),
+            schema_context=schema_context.rendered_context,
+            output_schema=json.dumps(DINSQLDraft.model_json_schema(), ensure_ascii=False),
+        )
+        generated = self.provider.generate_structured(prompt=prompt, response_model=DINSQLDraft)
+        aligned = align_plan(question, decomposition, generated)
+        clauses = aligned.clauses.model_copy(update={"limit": aligned.limit})
+        normalized = aligned.model_copy(
+            update={
+                "clauses": clauses,
+                "complexity": classify_complexity(aligned.model_copy(update={"clauses": clauses})),
+            }
+        )
+        return DINSQLPlan(
+            **normalized.model_dump(exclude={"complexity", "clauses"}),
+            semantic_links=semantic_links,
+            complexity=normalized.complexity,
+            clauses=normalized.clauses,
         )
 
 

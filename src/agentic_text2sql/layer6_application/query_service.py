@@ -9,6 +9,8 @@ from typing import Literal
 
 from agentic_text2sql.contracts.catalog import CatalogSnapshot
 from agentic_text2sql.contracts.planning import (
+    AdaptiveRoute,
+    AdaptiveRouteDecision,
     DINSQLPlan,
     LogicalPlan,
     PlanningStrategy,
@@ -17,6 +19,7 @@ from agentic_text2sql.contracts.planning import (
 from agentic_text2sql.contracts.sql import DirectRunResult, DirectStatus
 from agentic_text2sql.contracts.validation import ErrorClass, ValidationReport
 from agentic_text2sql.exceptions import StructuredOutputError, Text2SQLError
+from agentic_text2sql.layer1_reasoning.adaptive_routing import choose_adaptive_route
 from agentic_text2sql.layer1_reasoning.decomposer import Decomposer
 from agentic_text2sql.layer1_reasoning.plan_validator import validate_plan
 from agentic_text2sql.layer1_reasoning.planner import (
@@ -26,7 +29,6 @@ from agentic_text2sql.layer1_reasoning.planner import (
 )
 from agentic_text2sql.layer1_reasoning.router import QueryRouter
 from agentic_text2sql.layer2_grounding.service import GroundingService
-from agentic_text2sql.layer3_generation.easy_compiler import GroundedEasyCompiler
 from agentic_text2sql.layer3_generation.service import GenerationService
 from agentic_text2sql.layer4_validation.error_normalizer import normalize_error
 from agentic_text2sql.layer4_validation.executor import ReadOnlySQLiteExecutor
@@ -46,7 +48,6 @@ class DirectBaselineService:
         planner: PlannerAgent,
         generation: GenerationService,
         din_generation: GenerationService | None = None,
-        easy_compiler: GroundedEasyCompiler | None = None,
         policy: SQLSafetyPolicy,
         executor: ReadOnlySQLiteExecutor,
         grounding: GroundingService | None = None,
@@ -60,7 +61,6 @@ class DirectBaselineService:
         self.planner = planner
         self.generation = generation
         self.din_generation = din_generation
-        self.easy_compiler = easy_compiler
         self.policy = policy
         self.executor = executor
         self.grounding = grounding
@@ -72,8 +72,6 @@ class DirectBaselineService:
             raise ValueError("hybrid/DIN-SQL planning requires an active grounded schema index")
         if planning_mode == "hybrid" and din_generation is None:
             raise ValueError("hybrid planning requires both baseline and DIN generation paths")
-        if planning_mode == "hybrid" and easy_compiler is None:
-            raise ValueError("hybrid planning requires the grounded EASY compiler")
 
     def run(self, question: str, database: Path, catalog: CatalogSnapshot) -> DirectRunResult:
         run_id = str(uuid.uuid4())
@@ -81,7 +79,7 @@ class DirectBaselineService:
         hybrid = self.planning_mode == "hybrid"
         versions = {
             "planner": (
-                "hybrid_deterministic_v1"
+                BASELINE_PLANNER_PROMPT_VERSION
                 if hybrid
                 else PLANNER_PROMPT_VERSION
                 if din_sql
@@ -92,6 +90,7 @@ class DirectBaselineService:
         if self.correction is not None:
             versions["corrector"] = self.correction.corrector.prompt_version
         timings: dict[str, float] = {}
+        adaptive_route: AdaptiveRouteDecision | None = None
         started = time.monotonic()
 
         def finish_timings() -> None:
@@ -119,7 +118,7 @@ class DirectBaselineService:
         decomposition = self.decomposer.decompose(question)
         schema_context = None
         semantic_links = None
-        if self.grounding is not None and self.planning_mode in {"hybrid", "din_sql"}:
+        if self.grounding is not None and din_sql:
             grounding_started = time.monotonic()
             try:
                 schema_context, semantic_links = self.grounding.prepare_for_planning(
@@ -142,11 +141,7 @@ class DirectBaselineService:
         planning_started = time.monotonic()
         plan: LogicalPlan
         try:
-            if (
-                self.planning_mode in {"hybrid", "din_sql"}
-                and schema_context is not None
-                and semantic_links is not None
-            ):
+            if din_sql and schema_context is not None and semantic_links is not None:
                 plan = self.planner.plan_grounded(
                     question, decomposition, semantic_links, schema_context
                 )
@@ -167,6 +162,67 @@ class DirectBaselineService:
             )
         timings["planning"] = (time.monotonic() - planning_started) * 1000
 
+        if hybrid:
+            if not isinstance(plan, LogicalPlan):
+                raise TypeError("adaptive routing requires the frozen baseline logical plan")
+            adaptive_route = choose_adaptive_route(question, decomposition, plan)
+            versions["adaptive_route"] = adaptive_route.route.value
+            if adaptive_route.route is AdaptiveRoute.DIN_SQL_ENHANCE:
+                versions["planner"] = (
+                    f"adaptive({BASELINE_PLANNER_PROMPT_VERSION},{PLANNER_PROMPT_VERSION})"
+                )
+                if self.grounding is None:
+                    raise RuntimeError("adaptive DIN-SQL requires grounding")
+                grounding_started = time.monotonic()
+                try:
+                    schema_context, semantic_links = self.grounding.prepare_for_planning(
+                        question, decomposition
+                    )
+                except (ValueError, Text2SQLError) as exc:
+                    timings["grounding"] = (time.monotonic() - grounding_started) * 1000
+                    finish_timings()
+                    return DirectRunResult(
+                        run_id=run_id,
+                        question=question,
+                        status=DirectStatus.GROUNDING_ERROR,
+                        route_reason=route.reason,
+                        prompt_versions=versions,
+                        adaptive_route=adaptive_route.model_dump(mode="json"),
+                        plan=plan.model_dump(mode="json"),
+                        safe_message=str(exc),
+                        latency_ms=timings,
+                    )
+                timings["grounding"] = (time.monotonic() - grounding_started) * 1000
+                din_planning_started = time.monotonic()
+                try:
+                    plan = self.planner.plan_grounded(
+                        question,
+                        decomposition,
+                        semantic_links,
+                        schema_context,
+                        use_model=True,
+                    )
+                except (StructuredOutputError, Text2SQLError, ValueError) as exc:
+                    timings["din_planning"] = (time.monotonic() - din_planning_started) * 1000
+                    finish_timings()
+                    return DirectRunResult(
+                        run_id=run_id,
+                        question=question,
+                        status=DirectStatus.MODEL_ERROR,
+                        route_reason=route.reason,
+                        prompt_versions=versions,
+                        adaptive_route=adaptive_route.model_dump(mode="json"),
+                        plan=plan.model_dump(mode="json"),
+                        schema_context=schema_context.model_dump(mode="json"),
+                        safe_message=str(exc),
+                        latency_ms=timings,
+                    )
+                timings["din_planning"] = (time.monotonic() - din_planning_started) * 1000
+
+        adaptive_route_payload = (
+            adaptive_route.model_dump(mode="json") if adaptive_route is not None else None
+        )
+
         if self.grounding is not None and schema_context is None:
             grounding_started = time.monotonic()
             try:
@@ -180,6 +236,7 @@ class DirectBaselineService:
                     status=DirectStatus.GROUNDING_ERROR,
                     route_reason=route.reason,
                     prompt_versions=versions,
+                    adaptive_route=adaptive_route_payload,
                     plan=plan.model_dump(mode="json"),
                     safe_message=str(exc),
                     latency_ms=timings,
@@ -197,6 +254,7 @@ class DirectBaselineService:
                     status=DirectStatus.GROUNDING_ERROR,
                     route_reason=route.reason,
                     prompt_versions=versions,
+                    adaptive_route=adaptive_route_payload,
                     plan=plan.model_dump(mode="json"),
                     plan_validation=plan_validation.model_dump(mode="json"),
                     schema_context=schema_context.model_dump(mode="json"),
@@ -219,6 +277,8 @@ class DirectBaselineService:
                 self.planning_mode == "din_sql"
                 or (
                     self.planning_mode == "hybrid"
+                    and adaptive_route is not None
+                    and adaptive_route.route is AdaptiveRoute.DIN_SQL_ENHANCE
                     and plan.complexity.strategy is not PlanningStrategy.EASY
                     and not has_generation_advisory
                 )
@@ -258,21 +318,7 @@ class DirectBaselineService:
 
         generation_started = time.monotonic()
         try:
-            candidate = (
-                self.easy_compiler.compile(plan, catalog)
-                if hybrid
-                and isinstance(plan, DINSQLPlan)
-                and plan.complexity.strategy is PlanningStrategy.EASY
-                and not has_generation_advisory
-                and self.easy_compiler is not None
-                else None
-            )
-            if candidate is None:
-                candidate = active_generation.run(
-                    question, generation_plan, catalog, schema_context
-                )
-            else:
-                versions["generator"] = candidate.prompt_version
+            candidate = active_generation.run(question, generation_plan, catalog, schema_context)
         except SQLParseError as exc:
             timings["generation"] = (time.monotonic() - generation_started) * 1000
             finish_timings()
@@ -282,6 +328,7 @@ class DirectBaselineService:
                 status=DirectStatus.INVALID_SQL,
                 route_reason=route.reason,
                 prompt_versions=versions,
+                adaptive_route=adaptive_route_payload,
                 plan=plan.model_dump(mode="json"),
                 plan_validation=plan_validation_payload,
                 schema_context=(schema_context.model_dump(mode="json") if schema_context else None),
@@ -297,6 +344,7 @@ class DirectBaselineService:
                 status=DirectStatus.MODEL_ERROR,
                 route_reason=route.reason,
                 prompt_versions=versions,
+                adaptive_route=adaptive_route_payload,
                 plan=plan.model_dump(mode="json"),
                 plan_validation=plan_validation_payload,
                 schema_context=(schema_context.model_dump(mode="json") if schema_context else None),
@@ -323,6 +371,7 @@ class DirectBaselineService:
                     status=DirectStatus.SUCCEEDED,
                     route_reason=route.reason,
                     prompt_versions=versions,
+                    adaptive_route=adaptive_route_payload,
                     plan=plan.model_dump(mode="json"),
                     plan_validation=plan_validation_payload,
                     schema_context=(
@@ -353,6 +402,7 @@ class DirectBaselineService:
                     status=DirectStatus.SUCCEEDED,
                     route_reason=route.reason,
                     prompt_versions=versions,
+                    adaptive_route=adaptive_route_payload,
                     plan=plan.model_dump(mode="json"),
                     plan_validation=plan_validation_payload,
                     schema_context=(
@@ -370,6 +420,7 @@ class DirectBaselineService:
                 status=_status_for_report(final_report),
                 route_reason=route.reason,
                 prompt_versions=versions,
+                adaptive_route=adaptive_route_payload,
                 plan=plan.model_dump(mode="json"),
                 plan_validation=plan_validation_payload,
                 schema_context=(schema_context.model_dump(mode="json") if schema_context else None),
@@ -393,6 +444,7 @@ class DirectBaselineService:
                 status=DirectStatus.POLICY_BLOCKED,
                 route_reason=route.reason,
                 prompt_versions=versions,
+                adaptive_route=adaptive_route_payload,
                 plan=plan.model_dump(mode="json"),
                 plan_validation=plan_validation_payload,
                 schema_context=(schema_context.model_dump(mode="json") if schema_context else None),
@@ -415,6 +467,7 @@ class DirectBaselineService:
                 status=DirectStatus.EXECUTION_ERROR,
                 route_reason=route.reason,
                 prompt_versions=versions,
+                adaptive_route=adaptive_route_payload,
                 plan=plan.model_dump(mode="json"),
                 plan_validation=plan_validation_payload,
                 schema_context=(schema_context.model_dump(mode="json") if schema_context else None),
@@ -431,6 +484,7 @@ class DirectBaselineService:
             status=DirectStatus.SUCCEEDED,
             route_reason=route.reason,
             prompt_versions=versions,
+            adaptive_route=adaptive_route_payload,
             plan=plan.model_dump(mode="json"),
             plan_validation=plan_validation_payload,
             schema_context=(schema_context.model_dump(mode="json") if schema_context else None),

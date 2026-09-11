@@ -153,6 +153,26 @@ def test_grounded_planner_uses_schema_links_and_normalizes_complexity() -> None:
     assert plan.clauses.joins[0].condition == "order_items.product_id = products.product_id"
 
 
+def test_complex_route_invokes_schema_bounded_din_decomposition() -> None:
+    provider = RecordingProvider(ranking_draft())
+    planner = PlannerAgent(
+        provider,
+        ROOT / "configs/prompts/planner_v2.j2",
+        ROOT / "configs/prompts/planner_v3_din_sql.j2",
+    )
+    plan = planner.plan_grounded(
+        "Top 5 categories by revenue with alphabetical tie-break",
+        Decomposer().decompose("Top 5 categories by revenue with alphabetical tie-break"),
+        semantic_links(),
+        schema_context(),
+        use_model=True,
+    )
+    assert plan.complexity.strategy is PlanningStrategy.NON_NESTED
+    assert plan.semantic_links == semantic_links()
+    assert "Allowed schema context and FK paths" in provider.prompt
+    assert "order_items.product_id = products.product_id" in provider.prompt
+
+
 def test_plan_validator_accepts_declared_fk_and_rejects_missing_owner() -> None:
     catalog = SQLiteIntrospector().inspect(DATABASE, "synthetic")
     valid = DINSQLPlan(

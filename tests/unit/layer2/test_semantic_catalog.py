@@ -87,6 +87,13 @@ def _fixtures():  # type: ignore[no-untyped-def]
             None,
         ),
         (
+            "What is the average review score rounded to 6 decimals?",
+            AggregateOperator.AVG,
+            "order_review_summary",
+            "average_review_score",
+            None,
+        ),
+        (
             "How many unique buyers exist using customer_unique_id?",
             AggregateOperator.COUNT_DISTINCT,
             "olist_customers_dataset",
@@ -154,6 +161,10 @@ def test_paraphrase_distribution_resolves_typed_scalar_semantics(
     assert [predicate.value for predicate in binding.predicates] == (
         [] if predicate_value is None else [predicate_value]
     )
+    if "review score" in question:
+        assert binding.aggregate.source_grain == "one row per order_id"
+        assert binding.aggregate.weight_column == "review_row_count"
+        assert binding.aggregate.rounding_digits == 6
 
 
 def test_filler_words_do_not_change_the_resolved_contract() -> None:
@@ -220,7 +231,11 @@ def test_semantic_catalog_rejects_identifiers_absent_from_database() -> None:
         update={
             "entities": {
                 **semantics.entities,
-                "invented": EntityRule(aliases=("invented",), table="missing_table"),
+                "invented": EntityRule(
+                    aliases=("invented",),
+                    table="missing_table",
+                    row_grain="one row per invented entity",
+                ),
             }
         }
     )

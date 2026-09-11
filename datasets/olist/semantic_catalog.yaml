@@ -8,27 +8,34 @@ entities:
     aliases: [order, orders, đơn hàng]
     table: olist_orders_dataset
     identity_column: order_id
+    row_grain: one row per order_id
   customers:
     aliases: [customer, customers, buyer, buyers, khách hàng, người mua]
     table: olist_customers_dataset
     identity_column: customer_unique_id
+    row_grain: one row per customer_id with customer_unique_id identity
   sellers:
     aliases: [seller, sellers, merchant, merchants, người bán]
     table: olist_sellers_dataset
     identity_column: seller_id
+    row_grain: one row per seller_id
   products:
     aliases: [product, products, sản phẩm, hàng hóa]
     table: olist_products_dataset
     identity_column: product_id
+    row_grain: one row per product_id
   order_items:
     aliases: [order item, order items, item, items, dòng đơn hàng]
     table: olist_order_items_dataset
+    row_grain: one row per order item
   payments:
     aliases: [payment, payments, thanh toán]
     table: olist_order_payments_dataset
+    row_grain: one row per payment record
   reviews:
     aliases: [review, reviews, đánh giá]
     table: olist_order_reviews_dataset
+    row_grain: one row per review record
 
 metrics:
   product_revenue:
@@ -37,24 +44,29 @@ metrics:
     allowed_operators: [SUM, AVG, MIN, MAX]
     table: order_item_totals
     column: product_revenue_cents
+    source_grain: one row per order_id
   freight:
     aliases: [freight, shipping fee, freight amount, phí vận chuyển]
     operator: SUM
     allowed_operators: [SUM, AVG, MIN, MAX]
     table: order_item_totals
     column: freight_cents
+    source_grain: one row per order_id
   paid_value:
     aliases: [paid value, payment value, total payment, tổng thanh toán]
     operator: SUM
     allowed_operators: [SUM, AVG, MIN, MAX]
     table: order_payment_totals
     column: paid_value_cents
+    source_grain: one row per order_id
   review_score:
     aliases: [average review score, average rating, điểm đánh giá trung bình]
     operator: AVG
     allowed_operators: [AVG, MIN, MAX]
     table: order_review_summary
     column: average_review_score
+    source_grain: one row per order_id
+    weight_column: review_row_count
   items_per_order:
     aliases:
       - average items per order
@@ -66,6 +78,7 @@ metrics:
     allowed_operators: [AVG]
     table: order_item_totals
     column: item_count
+    source_grain: one row per order_id
   delivery_days:
     aliases:
       - average delivery days
@@ -76,6 +89,7 @@ metrics:
     allowed_operators: [AVG, MIN, MAX]
     table: order_delivery_facts
     column: delivery_days
+    source_grain: one row per order_id
   delay_days:
     aliases:
       - average delay days
@@ -86,6 +100,7 @@ metrics:
     allowed_operators: [AVG, MIN, MAX]
     table: order_delivery_facts
     column: delay_days
+    source_grain: one row per order_id
 
 filters:
   order_status:
@@ -116,6 +131,7 @@ derived:
       table: customer_order_facts
       column: null
       evidence_id: semantic.derived.repeat_customer
+      source_grain: one row per customer_unique_id
     predicates:
       - table: customer_order_facts
         column: order_count
@@ -133,6 +149,7 @@ derived:
       table: order_payment_totals
       column: null
       evidence_id: semantic.derived.multi_payment_order
+      source_grain: one row per order_id
     predicates:
       - table: order_payment_totals
         column: distinct_payment_type_count
@@ -151,6 +168,7 @@ derived:
       table: order_delivery_facts
       column: null
       evidence_id: semantic.derived.late_delivery
+      source_grain: one row per order_id
     predicates:
       - table: order_delivery_facts
         column: is_late_delivered

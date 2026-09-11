@@ -61,6 +61,10 @@ _QUALIFIER_MARKERS = (
     " sau ",
     " từ ",
 )
+_ROUNDING_PATTERNS = (
+    re.compile(r"\bround(?:ed)?\s+to\s+(\d+)\s+decimal"),
+    re.compile(r"\blàm tròn\s+(\d+)\s+chữ số"),
+)
 
 
 class _HasAliases(Protocol):
@@ -115,6 +119,11 @@ def _validate_aggregate(
             raise ValueError(f"semantic rule {rule_id} COUNT_ROWS must not name a column")
     elif aggregate.column is None or _qualified(aggregate.table, aggregate.column) not in columns:
         raise ValueError(f"semantic rule {rule_id} references an unknown aggregate column")
+    if (
+        aggregate.weight_column is not None
+        and _qualified(aggregate.table, aggregate.weight_column) not in columns
+    ):
+        raise ValueError(f"semantic rule {rule_id} references an unknown weight column")
 
 
 def validate_semantic_catalog(semantic_catalog: SemanticCatalog, catalog: CatalogSnapshot) -> None:
@@ -146,6 +155,10 @@ def validate_semantic_catalog(semantic_catalog: SemanticCatalog, catalog: Catalo
                     table=metric_rule.table,
                     column=metric_rule.column,
                     evidence_id=f"semantic.metric.{name}",
+                    source_grain=metric_rule.source_grain,
+                    weight_column=(
+                        metric_rule.weight_column if operator is AggregateOperator.AVG else None
+                    ),
                 ),
                 tables,
                 columns,
@@ -157,6 +170,8 @@ def validate_semantic_catalog(semantic_catalog: SemanticCatalog, catalog: Catalo
         _validate_aliases(f"filter {name}", filter_rule.values)
     for name, derived_rule in semantic_catalog.derived.items():
         _validate_aggregate(derived_rule.aggregate, tables, columns, rule_id=f"derived.{name}")
+        if derived_rule.aggregate.source_grain is None:
+            raise ValueError(f"semantic derived rule {name} does not declare its source grain")
         for predicate in derived_rule.predicates:
             if _qualified(predicate.table, predicate.column) not in columns:
                 raise ValueError(
@@ -207,6 +222,13 @@ def _requested_metric_operators(question: str) -> tuple[AggregateOperator, ...]:
         for operator, markers in _METRIC_OPERATOR_MARKERS.items()
         if any(_contains_alias(question, marker) for marker in markers)
     )
+
+
+def _requested_rounding_digits(question: str) -> int | None:
+    matches = [
+        int(match.group(1)) for pattern in _ROUNDING_PATTERNS if (match := pattern.search(question))
+    ]
+    return matches[0] if len(set(matches)) == 1 else None
 
 
 def _hints_covered_by_rules(
@@ -334,6 +356,11 @@ def resolve_semantic_binding(
             table=metric_rule.table,
             column=metric_rule.column,
             evidence_id=f"semantic.metric.{name}",
+            source_grain=metric_rule.source_grain,
+            weight_column=(
+                metric_rule.weight_column if selected_operator is AggregateOperator.AVG else None
+            ),
+            rounding_digits=_requested_rounding_digits(normalized),
         )
         rule_ids.append(f"metric.{name}")
     elif len(entities) == 1 and any(marker in normalized for marker in _COUNT_MARKERS):
@@ -363,6 +390,7 @@ def resolve_semantic_binding(
             table=entity_rule.table,
             column=identity if distinct else None,
             evidence_id=f"semantic.entity.{name}",
+            source_grain=entity_rule.row_grain,
         )
         rule_ids.append(f"entity.{name}")
 
@@ -414,6 +442,11 @@ def resolve_semantic_binding(
         *(
             [_qualified(aggregate.table, aggregate.column)]
             if aggregate is not None and aggregate.column is not None
+            else []
+        ),
+        *(
+            [_qualified(aggregate.table, aggregate.weight_column)]
+            if aggregate is not None and aggregate.weight_column is not None
             else []
         ),
         *(_qualified(item.table, item.column) for item in predicates),

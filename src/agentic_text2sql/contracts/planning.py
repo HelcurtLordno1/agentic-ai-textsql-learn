@@ -104,6 +104,21 @@ class PlanningStrategy(StrEnum):
     NESTED = "NESTED"
 
 
+class AdaptiveRoute(StrEnum):
+    """A conservative promotion boundary around the frozen baseline."""
+
+    BASELINE_PRESERVE = "BASELINE_PRESERVE"
+    DIN_SQL_ENHANCE = "DIN_SQL_ENHANCE"
+
+
+class AdaptiveRouteDecision(BaseModel):
+    """Gold-blind reason why a request stays on P6 or enters DIN-SQL."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+    route: AdaptiveRoute
+    signals: tuple[str, ...] = Field(min_length=1, max_length=8)
+
+
 class ComplexityDecision(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
     kind: ComplexityKind

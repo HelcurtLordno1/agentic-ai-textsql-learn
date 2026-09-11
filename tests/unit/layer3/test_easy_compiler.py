@@ -1,3 +1,4 @@
+import sqlite3
 from pathlib import Path
 
 from agentic_text2sql.contracts.planning import (
@@ -35,6 +36,11 @@ def _plan(
                 *(
                     [f"{aggregate.table}.{aggregate.column}"]
                     if aggregate.column is not None
+                    else []
+                ),
+                *(
+                    [f"{aggregate.table}.{aggregate.weight_column}"]
+                    if aggregate.weight_column is not None
                     else []
                 ),
                 *(f"{predicate.table}.{predicate.column}" for predicate in predicates),
@@ -118,6 +124,35 @@ def test_compiles_typed_sum_and_distinct_count() -> None:
         _compile(_plan(distinct))
         == "SELECT COUNT(DISTINCT customer_unique_id) FROM olist_customers_dataset"
     )
+
+
+def test_compiles_weighted_average_and_explicit_rounding_from_typed_grain() -> None:
+    aggregate = AggregateSpec(
+        operator=AggregateOperator.AVG,
+        table="order_review_summary",
+        column="average_review_score",
+        evidence_id="semantic.metric.review_score",
+        source_grain="one row per order_id",
+        weight_column="review_row_count",
+        rounding_digits=6,
+    )
+    sql = _compile(_plan(aggregate))
+    assert sql == (
+        "SELECT ROUND(CAST(SUM(average_review_score * review_row_count) AS REAL) / "
+        "NULLIF(SUM(review_row_count), 0), 6) FROM order_review_summary"
+    )
+    assert sql is not None
+    connection = sqlite3.connect(":memory:")
+    connection.execute(
+        "CREATE TABLE order_review_summary (average_review_score REAL, review_row_count INTEGER)"
+    )
+    connection.executemany(
+        "INSERT INTO order_review_summary VALUES (?, ?)",
+        [(5.0, 1), (2.0, 3)],
+    )
+    weighted = connection.execute(sql).fetchone()
+    assert weighted == (2.75,)
+    connection.close()
 
 
 def test_compiles_typed_numeric_comparison_for_derived_semantics() -> None:

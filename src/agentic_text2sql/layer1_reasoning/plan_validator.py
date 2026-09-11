@@ -168,6 +168,11 @@ def validate_plan(
                 if typed_aggregate is not None and typed_aggregate.column is not None
                 else ()
             ),
+            *(
+                (f"{typed_aggregate.table}.{typed_aggregate.weight_column}",)
+                if typed_aggregate is not None and typed_aggregate.weight_column is not None
+                else ()
+            ),
         }
         if typed_owners != set(binding.required_tables) or typed_columns != set(
             binding.required_columns

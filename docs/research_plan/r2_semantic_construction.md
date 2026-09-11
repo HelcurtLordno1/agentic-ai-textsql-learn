@@ -13,20 +13,24 @@ routing**. It transfers DIN-SQL's decomposition boundary—schema linking, diffi
 query decomposition and correction—but adapts it to a local 14B model and the laptop budget.
 
 ```text
-question + versioned domain semantics + introspected schema
-    -> SemanticBinding(PROVEN | INCOMPLETE | AMBIGUOUS)
-    -> compact schema context containing every required owner/column
-    -> typed ClausePlan(aggregate, predicates, grain, joins, dependencies)
-    -> consistency validation
-    -> PROVEN scalar: deterministic SQLGlot compilation
-       unsupported EASY: frozen baseline generation
-       validated complex: DIN-SQL generation
-    -> normal policy, execution and bounded correction
+question
+    -> frozen P6 planner
+    -> AdaptiveRouteDecision
+       BASELINE_PRESERVE (default)
+         -> unchanged P6 grounding -> generator -> correction
+       DIN_SQL_ENHANCE (explicit complex dependency only)
+         -> semantic links + bounded schema context
+         -> schema-bounded DIN decomposition model
+         -> typed ClausePlan(grain, joins, predicates, dependencies)
+         -> consistency validation -> DIN generator/correction
 ```
 
 This is not a growing list of Python branches for benchmark sentences. Business meaning lives in a
 versioned, schema-validated catalog. Runtime code is a generic resolver/compiler over typed rules.
-The deterministic path is fail-closed: if the whole scalar meaning is not proven, it emits no SQL.
+The earlier deterministic scalar compiler remains independently tested research code, but no longer
+replaces the P6 EASY path. Catalog coverage is not a sufficient activation condition: a compiler can
+be internally consistent while changing population grain or colliding with mature validation. The
+adaptive policy defaults to baseline preservation and never routes from benchmark identity.
 
 ## 2. Advantage over the frozen baseline
 
@@ -34,9 +38,9 @@ The deterministic path is fail-closed: if the whole scalar meaning is not proven
 |---|---|---|
 | Meaning | free-text `LogicalPlan` and prompt interpretation | typed aggregate, predicate, owner and evidence IDs |
 | Domain grain | glossary is prompt context | executable semantic metadata validated against the live catalog |
-| Easy queries | model call can vary or select the wrong owner | zero-generation-call compilation only for complete proof |
+| Easy queries | mature P6 behavior at 57/60 | preserved planner, grounding, generator and corrector |
 | Unknown/ambiguous wording | model may guess | `INCOMPLETE`/`AMBIGUOUS` and baseline hand-off |
-| Complex queries | same broad generation path | `NON_NESTED`/`NESTED` clause and dependency plans |
+| Complex queries | same broad generation path | schema-bounded `NON_NESTED`/`NESTED` decomposition only when explicitly activated |
 | Integrity | human-readable clauses can drift | binding, clause fields, evidence and schema must agree |
 | Evaluation | final execution result | final result plus clause/owner/join/plan agreement |
 
@@ -46,18 +50,22 @@ paired benchmark gate.
 
 ## 3. Construction invariants
 
-1. A `PROVEN` binding has exactly one explicit aggregate and all required identifiers.
-2. Every semantic catalog identifier must exist in the introspected database at runtime startup.
-3. Canonical enum values and derived grains live in YAML, never in question-specific Python code.
-4. The scalar compiler reads typed fields only; display strings cannot alter generated SQL.
-5. Binding and clause aggregate/predicates must be structurally equal.
-6. Required columns must be present in the bounded `SchemaContext`.
-7. Multi-table, grouped, ranked, temporal, set and unresolved-qualified questions never enter the
+1. `BASELINE_PRESERVE` is the default; catalog coverage cannot activate DIN or compilation.
+2. A `PROVEN` binding has exactly one explicit aggregate and all required identifiers.
+3. Every entity/metric rule declares source grain; weighted averages declare their weight column
+   and requested rounding is carried as typed data.
+4. Every semantic catalog identifier must exist in the introspected database at runtime startup.
+5. Canonical enum values and derived grains live in YAML, never in question-specific Python code.
+6. The scalar compiler reads typed fields only; display strings cannot alter generated SQL.
+7. Binding and clause aggregate/predicates must be structurally equal.
+8. Required columns, including weight columns, must be present in the bounded `SchemaContext`.
+9. Multi-table, grouped, ranked, temporal, set and unresolved-qualified questions never enter the
    deterministic scalar compiler.
-8. Lack of a semantic catalog does not damage cross-domain execution: EASY falls back to baseline;
+10. Lack of a semantic catalog does not damage cross-domain execution: EASY stays on baseline;
    validated complex plans may still use the DIN path.
-9. Runtime remains gold-blind and imports neither `agentic_text2sql_eval` nor benchmark answers.
-10. No research module becomes `VERIFIED` without reproducible `make check` and paired benchmark
+11. Semantic validation consumes proven typed lineage before lexical compatibility guards.
+12. Runtime remains gold-blind and imports neither `agentic_text2sql_eval` nor benchmark answers.
+13. No research module becomes `VERIFIED` without reproducible `make check` and paired benchmark
     evidence.
 
 ## 4. Domain ontology construction
@@ -97,15 +105,18 @@ Spider holdout questions as implementation targets.
 |---|---|---|
 | C1 contracts/catalog | strict Pydantic contracts; schema validation | passed deterministic tests |
 | C2 runtime integration | startup → grounding → planner → validator → compiler/fallback | passed 6-path smoke |
-| C3 distribution tests | positive, metamorphic and fail-closed matrix | passed 20-case matrix |
-| C4 repository gate | full `make check`; no Ollama/GPU run | passed: 219 tests |
-| C5 frozen benchmark | guarded Olist first, then Spider only if Olist threshold holds | pending |
+| C3 distribution tests | positive, metamorphic and fail-closed matrix | passed route/semantic matrix |
+| C4 repository gate | full `make check`; no Ollama/GPU run | passed: 235 tests |
+| C5a initial frozen benchmark | revision `f70d191`, guarded Olist | rejected at 8/12; upper bound 56/60 |
+| C5b adaptive redesign | baseline-preserve + complex-only DIN | construction tests pass; benchmark pending |
 
 For C5, use only the approved guarded wrapper, batch size one, continuous resource monitoring,
 checkpointing, unload/cooldown and the thresholds in `AGENTS.md`. Stop Olist immediately if its final
 upper bound falls below 57/60; record the negative result instead of adding case-specific fixes.
-Only one architecture-level revision may follow a failed benchmark, justified by a failure-family
-analysis on the development split. Otherwise reject R2 promotion and keep the frozen baseline.
+This adaptive redesign is the one permitted architecture-level revision after the failed benchmark.
+It is constructed from failure families—activation boundary, grain/lineage and stage ownership—not
+from benchmark IDs. Once frozen, its benchmark is recorded without case-directed repair. If Olist
+again falls below 57/60, reject R2 and keep the frozen baseline.
 
 Promotion remains: medium+hard Spider +5 percentage points, overall +2 points, easy loses at most one
 case, Olist does not regress below 57/60, and end-to-end p95 rises no more than 20%. Until then R2 is

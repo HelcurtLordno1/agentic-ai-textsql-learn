@@ -77,11 +77,24 @@ class GroundedEasyCompiler:
         aggregate = binding.aggregate
         if aggregate.column is not None and aggregate.column not in catalog_columns:
             return None
-        selection = _aggregate_expression(aggregate.operator, aggregate.column)
+        selection = _aggregate_expression(
+            aggregate.operator,
+            aggregate.column,
+            aggregate.weight_column,
+        )
         if selection is None:
             return None
+        if aggregate.rounding_digits is not None:
+            selection = exp.Round(
+                this=selection,
+                decimals=exp.Literal.number(aggregate.rounding_digits),
+            )
 
         used_columns = [aggregate.column] if aggregate.column is not None else []
+        if aggregate.weight_column is not None:
+            if aggregate.weight_column not in catalog_columns:
+                return None
+            used_columns.append(aggregate.weight_column)
         predicates: list[exp.Expression] = []
         for predicate in binding.predicates:
             if predicate.column not in catalog_columns:
@@ -114,12 +127,21 @@ class GroundedEasyCompiler:
 def _aggregate_expression(
     operator: AggregateOperator,
     column: str | None,
+    weight_column: str | None = None,
 ) -> exp.Expression | None:
     if operator is AggregateOperator.COUNT_ROWS:
         return exp.Count(this=exp.Star()) if column is None else None
     if column is None:
         return None
     operand = exp.column(column)
+    if operator is AggregateOperator.AVG and weight_column is not None:
+        weight = exp.column(weight_column)
+        numerator = exp.Sum(this=exp.Mul(this=operand, expression=weight))
+        denominator = exp.Nullif(
+            this=exp.Sum(this=weight.copy()),
+            expression=exp.Literal.number(0),
+        )
+        return exp.Div(this=numerator, expression=denominator)
     if operator is AggregateOperator.COUNT_DISTINCT:
         return exp.Count(this=exp.Distinct(expressions=[operand]))
     constructors: dict[AggregateOperator, type[exp.Expression]] = {

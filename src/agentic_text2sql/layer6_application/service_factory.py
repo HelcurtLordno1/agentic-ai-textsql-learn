@@ -19,9 +19,6 @@ from agentic_text2sql.layer1_reasoning.planner import PlannerAgent
 from agentic_text2sql.layer1_reasoning.router import QueryRouter
 from agentic_text2sql.layer2_grounding.semantic_catalog import load_semantic_catalog
 from agentic_text2sql.layer2_grounding.service import GroundingService, IndexService
-from agentic_text2sql.layer3_generation.easy_compiler import (
-    GroundedEasyCompiler,
-)
 from agentic_text2sql.layer3_generation.generator import GeneratorAgent
 from agentic_text2sql.layer3_generation.normalizer import CandidateNormalizer
 from agentic_text2sql.layer3_generation.prompt_builder import (
@@ -89,15 +86,14 @@ class RuntimeBundle(AbstractContextManager["RuntimeBundle"]):
             },
             "prompt_versions": {
                 "planner": (
-                    "hybrid_deterministic_v1"
+                    "adaptive(planner_v2,planner_v3_din_sql)"
                     if hybrid
                     else "planner_v3_din_sql"
                     if din_sql
                     else "planner_v2"
                 ),
                 "generator": (
-                    "adaptive(generator_v7_typed_semantic,generator_v4_cross_domain,"
-                    "generator_v5_din_sql)"
+                    "adaptive(generator_v4_cross_domain,generator_v5_din_sql)"
                     if hybrid
                     else GENERATOR_PROMPT_VERSION
                     if din_sql
@@ -113,6 +109,15 @@ class RuntimeBundle(AbstractContextManager["RuntimeBundle"]):
             },
             "retrieval": {"mode": "hybrid", "top_k": 20, "token_budget": 1200},
             "planning_mode": settings.planning_mode,
+            "adaptive_policy": (
+                {
+                    "version": "adaptive_baseline_first_v2",
+                    "default_route": "BASELINE_PRESERVE",
+                    "din_activation": "explicit_complex_dependencies_only",
+                }
+                if hybrid
+                else None
+            ),
             "semantic_catalog": (
                 {
                     "version": semantic_catalog.version,
@@ -231,7 +236,6 @@ class RuntimeBundle(AbstractContextManager["RuntimeBundle"]):
                 GENERATOR_PROMPT_VERSION if din_sql else BASELINE_GENERATOR_PROMPT_VERSION,
             ),
             din_generation=din_generation,
-            easy_compiler=GroundedEasyCompiler(normalizer) if hybrid else None,
             policy=policy,
             executor=executor,
             grounding=grounding,

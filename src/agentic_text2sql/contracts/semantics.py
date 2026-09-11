@@ -39,6 +39,9 @@ class AggregateSpec(BaseModel):
     table: str
     column: str | None = None
     evidence_id: str
+    source_grain: str | None = Field(default=None, min_length=1, max_length=120)
+    weight_column: str | None = None
+    rounding_digits: int | None = Field(default=None, ge=0, le=15)
 
     @model_validator(mode="after")
     def validate_operand(self) -> Self:
@@ -46,6 +49,8 @@ class AggregateSpec(BaseModel):
             raise ValueError("COUNT_ROWS must not name a column")
         if self.operator is not AggregateOperator.COUNT_ROWS and self.column is None:
             raise ValueError(f"{self.operator} requires a column")
+        if self.weight_column is not None and self.operator is not AggregateOperator.AVG:
+            raise ValueError("only AVG may declare a weight column")
         return self
 
 
@@ -82,6 +87,7 @@ class EntityRule(BaseModel):
     aliases: tuple[str, ...] = Field(min_length=1)
     table: str
     identity_column: str | None = None
+    row_grain: str = Field(min_length=1, max_length=120)
 
 
 class MetricRule(BaseModel):
@@ -91,6 +97,8 @@ class MetricRule(BaseModel):
     table: str
     column: str | None = None
     allowed_operators: tuple[AggregateOperator, ...] = ()
+    source_grain: str = Field(min_length=1, max_length=120)
+    weight_column: str | None = None
 
 
 class EnumValueRule(BaseModel):

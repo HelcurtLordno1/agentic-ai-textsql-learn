@@ -131,3 +131,23 @@ Revision `f70d191` is rejected for promotion. Spider was not run because Olist f
 non-regression gate. R2 remains `IN_PROGRESS`, not `VERIFIED`; any continuation requires systemic
 grain/lineage/predicate invariants or a narrower complex-query-only activation, followed by a fresh
 revision and evaluation ID. The stopped checkpoint must not be resumed or blended with a later run.
+
+## One permitted architecture-level redesign
+
+The post-failure redesign does not repair benchmark IDs. It changes the global intervention
+boundary: hybrid mode first obtains the frozen P6 logical plan, then a typed gold-blind policy keeps
+the default `BASELINE_PRESERVE` route or selects `DIN_SQL_ENHANCE` only for explicit set/nested,
+aggregate-dependency, or multi-role grouped structure. Baseline-preserved requests use the original
+P6 planner, grounding, generator and corrector; the deterministic semantic compiler cannot replace
+them. Complex requests alone add schema links, the previously unused schema-bounded DIN planner
+prompt, typed plan validation, and DIN generation/correction.
+
+Semantic aggregate contracts now carry source grain, optional weight columns and requested rounding.
+Catalog validation checks those identifiers, the compiler supports weighted averages, and plan
+validation requires weight-column evidence. Semantic validation consumes proven derived lineage
+before applying legacy lexical guards. Distribution tests cover route invariance, baseline call/path
+preservation, complex three-stage hand-off, weighted-grain algebra and lineage compatibility.
+
+This redesign must be committed before any new evaluation begins. The next Olist artifact uses a
+fresh evaluation ID and is not resumed from `olist-paper2-semantic-f70d191-v1`. Its result will be
+accepted or rejected as measured; no failure-directed code change is permitted during that run.

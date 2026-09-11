@@ -6,7 +6,8 @@ import re
 
 from sqlglot import exp
 
-from agentic_text2sql.contracts.planning import LogicalPlan
+from agentic_text2sql.contracts.planning import DINSQLPlan, LogicalPlan
+from agentic_text2sql.contracts.semantics import BindingStatus
 from agentic_text2sql.contracts.validation import (
     ErrorClass,
     ValidationReport,
@@ -27,6 +28,11 @@ def validate_semantics(
     ordered = list(order.expressions) if isinstance(order, exp.Order) else []
     sql_lower = sql.casefold()
     olist_rules = db_id in {None, "olist"}
+    proven_rule_ids: frozenset[str] = frozenset()
+    if isinstance(plan, DINSQLPlan):
+        binding = plan.semantic_links.binding
+        if binding is not None and binding.status is BindingStatus.PROVEN:
+            proven_rule_ids = frozenset(binding.rule_ids)
 
     ranking_language = bool(re.search(r"\bnhiều\b.{0,40}\bnhất\b", normalized_question)) or any(
         phrase in normalized_question
@@ -85,7 +91,13 @@ def validate_semantics(
     asks_returning_customer = (
         "quay lại" in normalized_question or "returning customer" in normalized_question
     ) and any(token in normalized_question for token in ("customer", "khách hàng"))
-    if olist_rules and asks_returning_customer and "customer_unique_id" not in sql_lower:
+    returning_grain_is_proven = "derived.repeat_customer" in proven_rule_ids
+    if (
+        olist_rules
+        and asks_returning_customer
+        and not returning_grain_is_proven
+        and "customer_unique_id" not in sql_lower
+    ):
         signals.append("CUSTOMER_IDENTITY_NOT_UNIQUE")
     if olist_rules and asks_returning_customer and select is not None and len(select.selects) != 1:
         signals.append("RETURNING_CUSTOMER_OUTPUT_SHAPE")
@@ -99,6 +111,7 @@ def validate_semantics(
     if (
         olist_rules
         and asks_late_delivery
+        and "derived.late_delivery" not in proven_rule_ids
         and re.search(r"order_status\s*=\s*['\"]delivered['\"]", sql_lower)
     ):
         signals.append("DELIVERY_POPULATION_NARROWED_BY_STATUS")

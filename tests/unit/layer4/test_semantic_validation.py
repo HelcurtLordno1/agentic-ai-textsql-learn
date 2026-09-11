@@ -1,4 +1,20 @@
-from agentic_text2sql.contracts.planning import LogicalPlan
+from agentic_text2sql.contracts.planning import (
+    ClausePlan,
+    ComplexityDecision,
+    ComplexityKind,
+    DINSQLPlan,
+    LogicalPlan,
+    PlanningStrategy,
+    SemanticLinkPlan,
+)
+from agentic_text2sql.contracts.semantics import (
+    AggregateOperator,
+    AggregateSpec,
+    BindingStatus,
+    ComparisonOperator,
+    PredicateSpec,
+    SemanticBinding,
+)
 from agentic_text2sql.contracts.validation import ErrorClass, ResultPreview
 from agentic_text2sql.layer4_validation.result_validator import validate_result
 from agentic_text2sql.layer4_validation.semantic_checks import validate_semantics
@@ -10,6 +26,47 @@ def aggregate_plan(metric: str = "customer count") -> LogicalPlan:
         task_type="aggregation",
         metrics=[metric],
         required_concepts=[],
+    )
+
+
+def proven_derived_plan(rule_id: str, table: str, predicate: PredicateSpec) -> DINSQLPlan:
+    aggregate = AggregateSpec(
+        operator=AggregateOperator.COUNT_ROWS,
+        table=table,
+        evidence_id=f"semantic.{rule_id}",
+    )
+    binding = SemanticBinding(
+        db_id="olist",
+        catalog_hash="catalog",
+        status=BindingStatus.PROVEN,
+        aggregate=aggregate,
+        predicates=(predicate,),
+        required_tables=(table,),
+        required_columns=(f"{table}.{predicate.column}",),
+        rule_ids=(rule_id,),
+    )
+    return DINSQLPlan(
+        question_language="en",
+        task_type="aggregation",
+        metrics=["count"],
+        semantic_links=SemanticLinkPlan(
+            db_id="olist",
+            catalog_hash="catalog",
+            binding=binding,
+            required_tables=(table,),
+        ),
+        complexity=ComplexityDecision(
+            kind=ComplexityKind.AGGREGATE,
+            strategy=PlanningStrategy.EASY,
+        ),
+        clauses=ClausePlan(
+            select=[f"COUNT rows of {table}"],
+            from_tables=[table],
+            where=[f"{table}.{predicate.column} predicate"],
+            output_grain="one scalar row",
+            aggregate=aggregate,
+            predicates=[predicate],
+        ),
     )
 
 
@@ -42,6 +99,38 @@ def test_late_delivery_rule_rejects_status_population_narrowing() -> None:
     )
     assert not report.accepted
     assert "DELIVERY_POPULATION_NARROWED_BY_STATUS" in report.signals
+
+
+def test_semantic_validator_trusts_proven_derived_grain_lineage() -> None:
+    returning = proven_derived_plan(
+        "derived.repeat_customer",
+        "customer_order_facts",
+        PredicateSpec(
+            table="customer_order_facts",
+            column="order_count",
+            operator=ComparisonOperator.GT,
+            value=1,
+            evidence_id="semantic.derived.repeat_customer.order_count",
+        ),
+    )
+    report = validate_semantics(
+        "How many returning customers have more than one order?",
+        returning,
+        "SELECT COUNT(*) FROM customer_order_facts WHERE order_count > 1",
+        db_id="olist",
+    )
+    assert report.accepted
+
+
+def test_semantic_validator_keeps_lexical_guard_without_proven_lineage() -> None:
+    report = validate_semantics(
+        "How many returning customers have more than one order?",
+        aggregate_plan("returning customer count"),
+        "SELECT COUNT(*) FROM customer_order_facts WHERE order_count > 1",
+        db_id="olist",
+    )
+    assert not report.accepted
+    assert "CUSTOMER_IDENTITY_NOT_UNIQUE" in report.signals
 
 
 def test_valid_scalar_aggregate_has_no_semantic_suspicion() -> None:
