@@ -1,9 +1,10 @@
 # Gate R2 DIN-SQL implementation evidence
 
-**Date:** 2026-09-11 (Asia/Bangkok)
+**Date:** 2026-09-12 (Asia/Bangkok)
 
 **Status:** `IN_PROGRESS` — systemic construction verified; revision `f70d191` rejected by the
-paired Olist accuracy gate
+paired Olist accuracy gate; adaptive revision `e8fab80` is benchmark-inconclusive because its
+guarded pilot timed out before routing or SQL generation
 
 ## Hypothesis and locked comparator
 
@@ -148,6 +149,42 @@ validation requires weight-column evidence. Semantic validation consumes proven 
 before applying legacy lexical guards. Distribution tests cover route invariance, baseline call/path
 preservation, complex three-stage hand-off, weighted-grain algebra and lineage compatibility.
 
-This redesign must be committed before any new evaluation begins. The next Olist artifact uses a
-fresh evaluation ID and is not resumed from `olist-paper2-semantic-f70d191-v1`. Its result will be
-accepted or rejected as measured; no failure-directed code change is permitted during that run.
+This redesign was frozen before evaluation as
+`e8fab80582113263fa75e1f625fc7b9729fbe65f`. Its Olist artifact uses a fresh evaluation ID and is
+not resumed from `olist-paper2-semantic-f70d191-v1`. Its result must be accepted or rejected as
+measured; no failure-directed code change is permitted during a run.
+
+## Adaptive revision guarded-pilot evidence
+
+The fresh evaluation ID was `olist-paper2-adaptive-e8fab80-v1`. The run used the only approved
+Qwen3-14B Olist profile: one GPU layer, batch size one, 0.5-second monitoring, per-case unload and
+60-second cooldown, with an Administrator graphics-clock lock verified at 300–600 MHz.
+
+`olist_acc_001` reached the frozen P6 planner but the Ollama request returned `ReadTimeout` after
+approximately 600 seconds. No grounding, `AdaptiveRouteDecision`, candidate SQL or execution was
+produced. The wrapper removed that infrastructure terminal and performed its single permitted
+retry against the same checkpoint; the retry ended at the same planner timeout. Full Olist and
+Spider were therefore not started.
+
+The progress file mechanically contains one `MODEL_ERROR` and zero correct results. This is not an
+accepted `0/1` accuracy observation because the architecture under test never reached its routing
+boundary and emitted no SQL. The correct experimental status is infrastructure-inconclusive, not an
+accuracy rejection or promotion.
+
+Local uncommitted artifacts and hashes:
+
+- `evals/predictions/olist-paper2-adaptive-e8fab80-v1.jsonl`:
+  `264a1771a2ae3fa6afb3e717dc796ad3557f462d62ab0ad1349d9cb03cb7e751`;
+- `evals/reports/olist-paper2-adaptive-e8fab80-v1.progress.json`:
+  `32c4f6ba17f2f807ec566708ceca4c607349694ce2b84e13f2da89e16fc287c5`.
+
+Observed pilot peaks were 1.843 GiB system RAM used, zero swap, 1,682 MiB VRAM, 56 C, 45.07 W and
+600 MHz. No resource threshold, OOM or shutdown occurred. After stopping, all model/benchmark
+processes were absent; the verified idle sample showed 22 GiB available RAM, zero swap, 688 MiB
+VRAM, 50 C, 20.95 W and a reset 210 MHz clock.
+
+The one-layer safety profile is too slow to evaluate the restored P6 planner within the fixed
+600-second request deadline. The same run must not be retried a third time or silently resumed.
+Accuracy evaluation requires the unchanged frozen revision on a sufficiently capable server, or a
+separately calibrated and explicitly approved laptop profile with a new one-case pilot and a fresh
+evaluation ID. Until then R2 remains `IN_PROGRESS` and P6 remains champion.

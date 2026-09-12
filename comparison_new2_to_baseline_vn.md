@@ -1,11 +1,69 @@
 # So sánh kiến trúc Paper II / DIN-SQL với baseline Olist đã đóng băng
 
-**Trạng thái thí nghiệm:** đã dừng theo tiêu chí accuracy được định trước
+**Trạng thái thí nghiệm:** revision đầu đã dừng theo accuracy gate; revision adaptive mới chưa có
+kết quả accuracy vì guarded pilot không vượt qua planner timeout
 
 **Ngày:** 2026-09-11 (Asia/Bangkok)
 
-**Quyết định:** **LOẠI biến thể Paper II tích hợp hiện tại khỏi vị trí kiến trúc tốt nhất cho
-Olist.** Giữ baseline P6 làm champion; không chạy Spider từ revision này.
+**Quyết định:** **GIỮ baseline P6 làm champion.** Loại revision `f70d191`; revision adaptive
+`e8fab80` đã qua construction gate nhưng benchmark còn `INCONCLUSIVE`, nên chưa promote và chưa chạy
+Spider.
+
+## 0. Cập nhật revision adaptive baseline-first
+
+Sau kết quả `8/12` của revision đầu, project chỉ thực hiện một redesign ở cấp kiến trúc, không sửa
+theo benchmark ID. Revision sạch `e8fab80582113263fa75e1f625fc7b9729fbe65f` thay đổi intervention
+boundary như sau:
+
+```text
+frozen P6 planner
+  -> AdaptiveRouteDecision
+       mặc định BASELINE_PRESERVE
+         -> nguyên P6 grounding -> generator -> corrector
+       chỉ cấu trúc dependency phức tạp mới DIN_SQL_ENHANCE
+         -> semantic evidence -> schema-bounded DIN planner
+         -> typed plan validation -> DIN generator/corrector
+```
+
+DIN chỉ được kích hoạt bởi các family tổng quát: set/comparison, nested/anti-join, aggregate
+dependency, hoặc grouped aggregate/ranking có nhiều semantic role. Coverage của catalog không được
+dùng để tự kích hoạt DIN. EASY không còn đi qua deterministic semantic compiler trong hybrid
+runtime. Đồng thời, aggregate contract mang source grain, weight column và rounding; validator tiêu
+thụ proven lineage thay vì chỉ dò tên cột trong SQL.
+
+Construction gate của revision này đã pass `make check`: Ruff, format, strict mypy trên 111 source
+file và **235 pytest pass**, một Ollama test deselect. Test mới chứng minh route distribution,
+baseline path/call preservation, complex three-stage hand-off, schema-bounded DIN prompt,
+weighted-average grain và lineage compatibility.
+
+### Guarded pilot của revision adaptive
+
+Evaluation ID mới là `olist-paper2-adaptive-e8fab80-v1`; không resume hoặc trộn artifact của
+`f70d191`. Pilot dùng đúng profile `olist-paper1-ultrasafe`, hard clock 300–600 MHz, một GPU layer,
+batch một case, sampling 0,5 giây, unload/cooldown và checkpoint.
+
+Case đầu `olist_acc_001` dừng ở P6 planner với `Ollama request failed: ReadTimeout` sau khoảng 600
+giây, trước grounding, adaptive routing và SQL generation. Guarded wrapper dùng đúng một retry hạ
+tầng; retry cũng timeout ở cùng stage. Vì không có SQL/prediction về mặt nội dung, full Olist được
+dừng và Spider không chạy. Con số cơ học `result_correct_count=0` trong progress report **không phải
+accuracy 0/1 có thể dùng để đánh giá kiến trúc**; pilot này là infrastructure-inconclusive.
+
+Artifact local, không commit theo policy:
+
+- prediction terminal: `evals/predictions/olist-paper2-adaptive-e8fab80-v1.jsonl`;
+- progress report: `evals/reports/olist-paper2-adaptive-e8fab80-v1.progress.json`;
+- SHA-256 prediction: `264a1771a2ae3fa6afb3e717dc796ad3557f462d62ab0ad1349d9cb03cb7e751`;
+- SHA-256 progress: `32c4f6ba17f2f807ec566708ceca4c607349694ce2b84e13f2da89e16fc287c5`.
+
+Peak quan sát của pilot adaptive là RAM hệ thống dùng 1,843 GiB, swap 0, VRAM 1.682 MiB, 56°C,
+45,07 W và 600 MHz. Không có OOM, resource breach, throttle do guard hay shutdown. Sau khi dừng,
+không còn process model/benchmark; idle sample là RAM khả dụng 22 GiB, swap 0, VRAM 688 MiB, 50°C,
+20,95 W và clock 210 MHz sau reset.
+
+Kết quả này không bác bỏ redesign về accuracy. Nó cho thấy frozen baseline-first path gọi P6 planner
+không hoàn tất trong deadline 600 giây dưới profile một GPU layer bắt buộc. Đánh giá tiếp cần giữ
+nguyên commit/evaluation protocol và chuyển sang server đủ mạnh hoặc một profile laptop mới được
+calibrate, phê duyệt và pilot riêng; không được tăng timeout/clock rồi tự resume artifact này.
 
 ## 1. Kết luận điều hành
 
@@ -335,13 +393,15 @@ cao. Điều này sát với lợi ích gốc của paper và giảm bề mặt 
 ## 14. Quyết định cuối cùng
 
 Giữ baseline P6 `57/60` làm champion. Không chạy Spider và không resume checkpoint
-`olist-paper2-semantic-f70d191-v1`. Paper II chỉ đáng tiếp tục nếu được thu hẹp về adaptive complex
-planning hoặc được construct lại quanh grain/lineage/predicate invariants; mọi benchmark tiếp theo
-phải là run sạch từ revision và evaluation ID mới.
+`olist-paper2-semantic-f70d191-v1`. Hướng adaptive complex planning cùng grain/lineage invariants đã
+được construct tại `e8fab80`, nhưng guarded pilot chưa tạo được một SQL để đo accuracy. Do đó revision
+mới vẫn là candidate `IN_PROGRESS`, không phải winner hay failure. Bước hợp lệ tiếp theo là đánh giá
+đúng frozen revision trên môi trường chạy đủ nhanh và an toàn bằng evaluation ID sạch; không sửa code
+từ terminal timeout này và không resume `olist-paper2-adaptive-e8fab80-v1`.
 
 ## 15. Kiểm tra repository sau benchmark
 
-Sau khi dừng và cập nhật report/ledger, `make check` hoàn tất mà không gọi Ollama: Ruff lint pass,
-230 file pass format check, strict mypy pass 110 source file, và pytest non-Ollama pass **219 test**
-với một test Ollama deselect. Cảnh báo duy nhất là Starlette/httpx deprecation đã tồn tại. Không có
-benchmark/model process còn chạy khi bàn giao.
+Sau redesign, `make check` hoàn tất mà không gọi Ollama: Ruff lint pass, 232 file pass format check,
+strict mypy pass 111 source file, và pytest non-Ollama pass **235 test** với một test Ollama deselect.
+Cảnh báo duy nhất là Starlette/httpx deprecation đã tồn tại. Sau adaptive pilot, không có
+benchmark/model process còn chạy và hard clock đã được reset trước khi bàn giao.
