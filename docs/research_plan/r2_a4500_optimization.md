@@ -4,6 +4,10 @@
 
 **Gate:** one systemic optimization revision, then one source-locked Olist evaluation
 
+**Outcome:** architecture/runtime construction passed, but the source-locked evaluation stopped at
+`16/20`; upper bound `56/60` is below the `57/60` promotion threshold. Candidate rejected; see
+`comparison_new2_to_baseline_vn.md`.
+
 ## Objective and falsifiable criteria
 
 The candidate must run safely on the RTX A4500 Laptop GPU and preserve or improve the frozen P6
@@ -120,3 +124,17 @@ it cannot leave inference outside the guard.
 8. Stop on the accuracy upper-bound criterion; otherwise finish all 60 and write the report.
 9. Stop/unload Ollama, reset the hard clock, verify idle state, rerun `make check`, and update the
    canonical ledger without changing the measured score.
+
+## Recorded outcome and causal limitation
+
+Steps 1–9 were followed for evaluation `olist-paper2-a4500-c40b75c-v1`. The pilot succeeded, the
+same checkpoint continued, and accuracy exit 76 stopped the run at 20 cases with `16/20` correct
+and a maximum possible `56/60`. No resource guard was breached; Ollama was unloaded, the clock cap
+was reset, and idle resources were verified.
+
+The planned treatment did not isolate DIN planning: it replaced the frozen P6 planner LLM with a
+deterministic control skeleton and its laptop retrieval policy replaced hybrid retrieval with BM25.
+Nineteen of 20 cases took `BASELINE_PRESERVE`; all three paired regressions were in that route,
+while the single DIN-enhanced case was correct. A future gate must hold the P6 planner and
+retrieval/context constant and change one intervention at a time. It may not reuse this checkpoint
+or infer a general DIN-SQL effect from one complex-route observation.

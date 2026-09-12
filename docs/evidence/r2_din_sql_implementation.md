@@ -2,9 +2,8 @@
 
 **Date:** 2026-09-12 (Asia/Bangkok)
 
-**Status:** `IN_PROGRESS` — systemic construction verified; revision `f70d191` rejected by the
-paired Olist accuracy gate; adaptive revision `e8fab80` is benchmark-inconclusive because its
-guarded pilot timed out before routing or SQL generation
+**Status:** `IN_PROGRESS` — systemic construction verified, but revisions `f70d191` and
+`c40b75c` are rejected by the paired Olist accuracy gate; P6 remains the default champion
 
 ## Hypothesis and locked comparator
 
@@ -86,12 +85,12 @@ Command:
 make check
 ```
 
-Observed again after the benchmark report update on 2026-09-11:
+Observed after the source-locked benchmark report update on 2026-09-12:
 
 - Ruff lint: pass;
-- Ruff format check: 230 files already formatted;
-- strict mypy: 110 source files pass;
-- pytest excluding Ollama: 219 passed, 1 Ollama test deselected;
+- Ruff format check: 233 files already formatted;
+- strict mypy: 111 source files pass;
+- pytest excluding Ollama: 240 passed, 1 Ollama test deselected;
 - one pre-existing Starlette/httpx deprecation warning;
 - no Ollama request, embedding generation, GPU workload or benchmark inference ran.
 
@@ -102,6 +101,60 @@ Focused construction evidence:
 - `tests/unit/layer3/test_easy_compiler.py`: typed AST compile and tamper rejection;
 - `tests/unit/layer1/test_din_sql_planning.py`: planning/validator integrity;
 - `tests/integration/test_direct_baseline.py`: compiler, fallback and DIN routing boundaries.
+
+## A4500 optimized candidate result
+
+The architecture revision `924a1d336201ef7eae5471130da40f32d7bbd906` moved adaptive routing
+before any model call, reduced the EASY/complex budgets to one/two generation calls, reused one
+grounding pass, retained Qwen within each case, and selected BM25 at query time so BGE could not
+evict Qwen. Harness revision `c40b75cdc8a96c0064ccbf95c1c09cf75a924a0b` made prefix evaluation
+linear-time and ensured an interrupt stops the child process group and unloads models.
+
+The fresh evaluation `olist-paper2-a4500-c40b75c-v1` passed a one-case pilot and continued the same
+checkpoint. It stopped by the mandatory accuracy criterion at 20 cases:
+
+- candidate prefix: `16/20` (80.00%);
+- paired P6 prefix: `19/20` (95.00%);
+- paired regression/gain: three/zero;
+- full-suite upper bound: `16 + 40 = 56/60`, below the `57/60` champion;
+- adaptive routes: 19 `BASELINE_PRESERVE`, one `DIN_SQL_ENHANCE`;
+- the one DIN-enhanced case (`olist_acc_013`) was correct;
+- all three new regressions (`016`, `018`, `020`) were baseline-preserved routes;
+- p50/p95: 25.68/50.86 seconds; 27 LLM calls over the prefix;
+- corrections attempted/recovered: `6/4`.
+
+This rejects the integrated candidate, but it does not isolate a negative DIN-SQL effect. The
+laptop treatment replaced the frozen P6 planner LLM with a deterministic control skeleton and
+changed query-time retrieval from hybrid BGE to BM25. Consequently, `BASELINE_PRESERVE` preserved
+the generator/corrector route but not its upstream plan or schema context. The failure is an
+architecture-level intervention-isolation defect: control planning, retrieval and DIN activation
+changed in one treatment, while only one case exercised complex DIN planning. It must not be
+repaired with benchmark-ID branches.
+
+Artifact hashes:
+
+- predictions: `b223e0d779826878376eab672d50f05feb8671fa9c2e478620861de37b734384`;
+- progress report: `42b0012f3ac2b694f998cf4d82fdd010c4b011018d87d3c3dbcdc895b0bcac4c`;
+- frozen baseline report: `26fbb521ac3d693258429e6a22ba6847602ac3c0874dec4182618ad81264064e`.
+
+The source-locked report is `comparison_new2_to_baseline_vn.md`. Raw predictions and evaluator
+reports remain local and uncommitted under repository policy.
+
+The run used the dedicated six-layer A4500 profile under an Administrator 300–600 MHz graphics
+clock lock, with one-case batches, 0.5-second dual monitoring, per-case unload and 60-second
+cooldown. No monitor or resource guard stopped. Retained observations through checkpoint 13 reached
+2.148 GiB system RAM used, zero swap, 2,692 MiB VRAM, 58 C and 59.69 W, all within the 14 GiB
+available-RAM / 0.25 GiB swap / 4,096 MiB / 65 C / 70 W limits. Terminal stdout was not persisted,
+so those values are not claimed as exact full-prefix peaks; every full-run sample was nevertheless
+strictly below the stop limits or the guard would have exited 75. The actual terminal was accuracy
+exit 76. After unloading and resetting the hard clock, the verified idle sample was 22 GiB
+available RAM, zero swap, 575 MiB VRAM, 46 C, 17.50 W and 210 MHz, with no model or benchmark process.
+
+The valid next research gate is a factorial development ablation that holds the P6 planner and
+retrieval/context constant while changing only adaptive DIN planning, followed by sufficient
+complex-route coverage.
+Olist-60 and Spider must not be resumed from this checkpoint. Runtime default remains
+`TEXT2SQL_PLANNING_MODE=baseline`; Paper II remains opt-in and not verified.
 
 ## Frozen Olist benchmark result
 

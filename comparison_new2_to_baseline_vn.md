@@ -1,15 +1,129 @@
 # So sánh kiến trúc Paper II / DIN-SQL với baseline Olist đã đóng băng
 
-**Trạng thái thí nghiệm:** revision đầu đã dừng theo accuracy gate; revision adaptive mới chưa có
-kết quả accuracy vì guarded pilot không vượt qua planner timeout
+**Trạng thái thí nghiệm:** revision A4500 tối ưu đã dừng đúng accuracy gate tại checkpoint 20;
+candidate không đạt điều kiện non-regression
 
-**Ngày:** 2026-09-11 (Asia/Bangkok)
+**Ngày:** 2026-09-12 (Asia/Bangkok)
 
-**Quyết định:** **GIỮ baseline P6 làm champion.** Loại revision `f70d191`; revision adaptive
-`e8fab80` đã qua construction gate nhưng benchmark còn `INCONCLUSIVE`, nên chưa promote và chưa chạy
-Spider.
+**Quyết định:** **GIỮ baseline P6 làm champion.** Loại revision `f70d191` và candidate A4500
+`c40b75c`; không promote Paper II và không chạy Spider. Runtime mặc định vẫn là P6
+(`TEXT2SQL_PLANNING_MODE=baseline`); DIN-SQL chỉ còn là research opt-in.
 
-## 0. Cập nhật revision adaptive baseline-first
+## 0. Kết quả revision A4500 source-locked
+
+### Phán quyết
+
+Revision kiến trúc `924a1d3` và harness `c40b75c` đã giải quyết được vấn đề vận hành: một case hoàn
+thành trong khoảng 15,72 giây ở pilot ext4 thay vì 113,17 giây khi đọc model từ NTFS; run không có
+OOM, swap, thermal/power stop hoặc shutdown. Tuy nhiên candidate **không giữ được accuracy**.
+
+Evaluation ID sạch `olist-paper2-a4500-c40b75c-v1` được pilot một case rồi tiếp tục đúng cùng
+checkpoint. Tại case 20, evaluator offline đo `16/20`; do còn 40 case, cận trên toàn suite là:
+
+```text
+16 đúng + 40 chưa chạy = tối đa 56/60 < 57/60
+```
+
+Guarded wrapper vì vậy phát `ACCURACY_STOP` và không mở case 21–60. Đây không phải score full-suite
+`56/60`; kết quả có thể bảo vệ là prefix **16/20 (80,00%)** và upper bound **<=56/60**. Baseline P6
+đạt **19/20 (95,00%)** trên đúng prefix này, nên paired delta là **-3 case / -15 điểm phần trăm**.
+
+### Candidate thực sự đã chạy gì
+
+```text
+DecomposedQuestion
+  -> deterministic control plan (không gọi LLM)
+  -> adaptive route trước generation
+       BASELINE_PRESERVE: 19/20
+       DIN_SQL_ENHANCE:     1/20
+  -> một BM25 grounding pass
+  -> Qwen generator; optional bounded correction
+```
+
+Nhánh EASY dùng một model call thay vì planner + generator; nhánh complex dùng hai. Qwen được giữ
+resident trong một case, wrapper unload sau từng checkpoint và cooldown 60 giây. Query retrieval
+trên profile laptop dùng BM25 để BGE không thay Qwen trong one-model slot. Tổng cộng prefix dùng 27
+LLM calls, 26.146 prompt tokens, 1.651 output tokens; P50 là 25,68 giây và P95 50,86 giây.
+
+### Paired attribution, không sửa theo case
+
+| Nhóm paired trên 20 case | Số case |
+|---|---:|
+| Cả hai đúng | 16 |
+| Candidate sửa được baseline sai | 0 |
+| Candidate làm hỏng baseline đúng | 3 |
+| Cả hai sai | 1 |
+
+Ba hồi quy mới là `olist_acc_016`, `018`, `020`; cả ba đều mang provenance
+`BASELINE_PRESERVE`, không đi qua DIN planner. Case duy nhất kích hoạt `DIN_SQL_ENHANCE`,
+`olist_acc_013`, trả đúng và có clause/table/column/join recall cùng plan-to-SQL agreement bằng
+1,0. Case `014` sai ở cả baseline lẫn candidate vì tie-break direction, nên không tạo paired gain
+hay regression.
+
+Điều này chỉ ra lỗi thiết kế ở **intervention isolation**, không phải một danh sách ba câu cần
+hard-code: route được gọi là “baseline preserve” nhưng đã thay P6 planner LLM bằng deterministic
+control skeleton **và** đổi retrieval backend từ hybrid BGE sang BM25. Vì hai thay đổi cùng lúc,
+không thể quy ba hồi quy cho riêng planner hay retrieval; SQL sai ở `016`, `018`, `020` phù hợp với
+việc mất planning/schema evidence của baseline. Benchmark bác bỏ toàn bộ candidate tích hợp này,
+nhưng chỉ có một quan sát thật sự về DIN complex path; không đủ cơ sở để tuyên bố phương pháp
+DIN-SQL nói chung phản tác dụng.
+
+### Bằng chứng tái lập
+
+| Trường | Giá trị |
+|---|---|
+| Source revision | `c40b75cdc8a96c0064ccbf95c1c09cf75a924a0b` (parent kiến trúc `924a1d336201ef7eae5471130da40f32d7bbd906`) |
+| Evaluation ID | `olist-paper2-a4500-c40b75c-v1-prefix-20` |
+| Candidate prefix | 16/20 (80,00%) |
+| Paired baseline prefix | 19/20 (95,00%) |
+| Upper bound candidate | <=56/60 |
+| Candidate EN / VI | 6/10 / 10/10 |
+| Candidate easy / medium | 10/12 / 6/8 |
+| First pass | 13/20 |
+| Correction | thử 6, cứu 4 |
+| Prediction SHA-256 | `b223e0d779826878376eab672d50f05feb8671fa9c2e478620861de37b734384` |
+| Progress SHA-256 | `42b0012f3ac2b694f998cf4d82fdd010c4b011018d87d3c3dbcdc895b0bcac4c` |
+| Baseline report SHA-256 | `26fbb521ac3d693258429e6a22ba6847602ac3c0874dec4182618ad81264064e` |
+
+Raw prediction/report ở local theo policy và không commit:
+
+- `evals/predictions/olist-paper2-a4500-c40b75c-v1.jsonl`;
+- `evals/reports/olist-paper2-a4500-c40b75c-v1.progress.json`.
+
+### An toàn phần cứng và trạng thái sau run
+
+Run dùng profile `olist-paper2-a4500-safe`: batch một, sampling 0,5 giây ở cả guarded server lẫn
+wrapper, `TEXT2SQL_OLLAMA_NUM_GPU=6`, một model resident, 512 output tokens, request timeout 240
+giây, hard clock Administrator 300–600 MHz, stop ở VRAM 4.096 MiB / 65°C / 70 W / 650 MHz, RAM
+khả dụng tối thiểu 14 GiB và swap dưới 0,25 GiB. Exact Qwen manifest và năm blob được SHA-256 verify
+rồi stage trên ext4; generation và embedding không chạy đồng thời.
+
+Không guard nào bị breach; nếu một sample vi phạm thì server/wrapper đã dừng với exit 75 thay vì
+đi tới accuracy stop 76. Peak đã quan sát và giữ lại đến checkpoint 13 là RAM dùng 2,148 GiB, swap
+0, VRAM 2.692 MiB, 58°C và 59,69 W; terminal stdout sau checkpoint 20 không được lưu thành artifact,
+nên không trình bày các số này như peak chính xác của toàn prefix. Ràng buộc có thể khẳng định cho
+toàn run là mọi sample đều nằm nghiêm dưới các stop nói trên.
+
+Sau accuracy stop, Ollama/model đã unload và hard clock được reset bằng Administrator. Mẫu idle xác
+minh: RAM khả dụng 22 GiB, swap 0, VRAM 575 MiB, GPU 46°C, 17,50 W và graphics clock 210 MHz; không
+còn process model hoặc benchmark.
+
+### Quyết định phát triển
+
+Không resume checkpoint, không chạy Spider và không sửa ba case rồi rerun. Bước Paper II tiếp theo,
+nếu được mở thành revision nghiên cứu mới, phải là factorial ablation trên development set riêng:
+
+1. chứng minh `BASELINE_PRESERVE` giữ nguyên P6 planner, retrieval/context và model-call contract;
+2. tách deterministic routing/retrieval intervention khỏi DIN intervention; BM25 hoặc planner
+   skeleton không được gọi là baseline-preserving;
+3. nếu cần BGE trên laptop, chạy embedding tuần tự rồi unload trước Qwen và calibrate bằng pilot mới,
+   hoặc dùng một retriever không-model đã được đánh giá độc lập;
+4. đo đủ population của complex route trước khi kết luận về DIN;
+5. chỉ mở lại Olist-60 với commit/evaluation ID sạch sau construction gate và `make check`.
+
+Candidate hiện tại bị **REJECTED FOR PROMOTION**. R2 vẫn `IN_PROGRESS`, không `VERIFIED`.
+
+## 0A. Lịch sử revision adaptive baseline-first
 
 Sau kết quả `8/12` của revision đầu, project chỉ thực hiện một redesign ở cấp kiến trúc, không sửa
 theo benchmark ID. Revision sạch `e8fab80582113263fa75e1f625fc7b9729fbe65f` thay đổi intervention
@@ -392,16 +506,16 @@ cao. Điều này sát với lợi ích gốc của paper và giảm bề mặt 
 
 ## 14. Quyết định cuối cùng
 
-Giữ baseline P6 `57/60` làm champion. Không chạy Spider và không resume checkpoint
-`olist-paper2-semantic-f70d191-v1`. Hướng adaptive complex planning cùng grain/lineage invariants đã
-được construct tại `e8fab80`, nhưng guarded pilot chưa tạo được một SQL để đo accuracy. Do đó revision
-mới vẫn là candidate `IN_PROGRESS`, không phải winner hay failure. Bước hợp lệ tiếp theo là đánh giá
-đúng frozen revision trên môi trường chạy đủ nhanh và an toàn bằng evaluation ID sạch; không sửa code
-từ terminal timeout này và không resume `olist-paper2-adaptive-e8fab80-v1`.
+Giữ baseline P6 `57/60` làm champion. Không chạy Spider và không resume bất kỳ checkpoint Paper II
+nào. Candidate A4500 `c40b75c` đã có accuracy evidence hợp lệ và bị reject: prefix `16/20`, paired
+baseline `19/20`, upper bound `<=56/60`. Kết quả chỉ có một complex DIN case nên không bác bỏ DIN-SQL
+nói chung; nó bác bỏ phép tích hợp hiện tại vì “baseline preserve” đã bị confound bởi BM25 retrieval.
+R2 giữ `IN_PROGRESS`, research opt-in và không `VERIFIED`.
 
 ## 15. Kiểm tra repository sau benchmark
 
-Sau redesign, `make check` hoàn tất mà không gọi Ollama: Ruff lint pass, 232 file pass format check,
-strict mypy pass 111 source file, và pytest non-Ollama pass **235 test** với một test Ollama deselect.
-Cảnh báo duy nhất là Starlette/httpx deprecation đã tồn tại. Sau adaptive pilot, không có
-benchmark/model process còn chạy và hard clock đã được reset trước khi bàn giao.
+Trước source-locked run, `make check` hoàn tất mà không gọi Ollama: Ruff lint/format pass, strict
+mypy pass 111 source file, và pytest non-Ollama pass **240 test** với một test Ollama deselect. Cảnh
+báo duy nhất là Starlette/httpx deprecation đã tồn tại. Sau accuracy stop, không có benchmark/model
+process còn chạy và hard clock đã được reset trước khi bàn giao. Một `make check` cuối được chạy sau
+khi cập nhật evidence; kết quả cuối nằm trong phần bàn giao của commit evidence.

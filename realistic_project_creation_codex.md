@@ -1714,7 +1714,7 @@ Mỗi bug quan trọng cần:
 | E-M6 | Correction ablation | Yes | L5 | VERIFIED | frozen Olist 14/18 off vs 17/18 on; `docs/evidence/p4_gate.md` |
 | E-M7 | BIRD Mini-Dev | No | core complete | NOT_STARTED | — |
 | R1-M1 | PRACTIQ question reliability | No | R0 baseline lock | IN_PROGRESS | Typed/glossary-grounded gate, early-exit và clarification đã có, nhưng source-locked Olist v3 bị dừng tại 35/60 theo accuracy kill criterion: prefix 30/35 so với paired baseline 33/35 và full-suite upper bound chỉ 55/60 < champion 57/60. Current integrated variant bị reject promotion; chưa có final macro-F1 và không `VERIFIED`; `comparison_new_to_baseline.md`, `docs/evidence/r1_question_reliability.md`, `docs/evidence/r1_olist_benchmark.md`, `docs/evidence/r1_resource_guard_incident.md` |
-| R2-M1 | DIN-SQL semantic links + adaptive clause planner | No | R0 baseline lock, rejected R1 promotion | IN_PROGRESS | Revision `f70d191` failed guarded Olist at 8/12 (upper bound 56/60); adaptive `e8fab80` was infrastructure-inconclusive because EASY still paid a planner LLM call. The A4500 construction now uses a deterministic control plan before routing, one grounding pass, one-call EASY/two-call complex budgets, and BM25 query retrieval so BGE cannot evict Qwen. Candidate profile `olist-paper2-a4500-safe` uses six GPU layers under 300–600 MHz with strict 4 GiB/65 C/70 W stops and per-case model residency followed by wrapper unload/cooldown. Pinned blobs are hash-verified on ext4; evaluator prefix scoring is linear-time and guarded interrupt stops its child group. `make check` passes 240 tests with 1 Ollama test deselected. Fresh source-locked Olist remains pending, so not `VERIFIED`; `docs/research_plan/r2_a4500_optimization.md`, `comparison_new2_to_baseline_vn.md`, `docs/evidence/r2_din_sql_implementation.md` |
+| R2-M1 | DIN-SQL semantic links + adaptive clause planner | No | R0 baseline lock, rejected R1 promotion | IN_PROGRESS | Revision `f70d191` failed guarded Olist at 8/12 (upper bound 56/60); adaptive `e8fab80` was infrastructure-inconclusive. Optimized source `c40b75c` passed construction/runtime gates but stopped at 16/20, versus paired P6 19/20, because its full-suite upper bound was 56/60 < champion 57/60. It routed 19/20 through `BASELINE_PRESERVE`; all three new regressions were there, while the only `DIN_SQL_ENHANCE` case was correct. Replacing the frozen P6 planner with a deterministic skeleton and hybrid retrieval with BM25 confounded the DIN treatment, so the integrated candidate is rejected but a general DIN effect is not identified. P6 remains default; DIN is research opt-in. No OOM/resource breach; model unloaded and clock reset. Not `VERIFIED`; `docs/research_plan/r2_a4500_optimization.md`, `comparison_new2_to_baseline_vn.md`, `docs/evidence/r2_din_sql_implementation.md` |
 | X-M1 | PostgreSQL adapter | No | core complete | NOT_STARTED | — |
 
 Overall project status tại thời điểm cập nhật master plan: `GATE_P6_VERIFIED`. P0
@@ -1729,21 +1729,17 @@ vượt target interactive 60 giây nên được giữ như limitation. Full Sp
 
 Gate R2 Paper II hiện `IN_PROGRESS`: implementation DIN-SQL đã có typed semantic ownership,
 complexity routing, clause/subquery plan, plan consistency, catalog-checked scalar EASY compiler,
-prompt theo strategy, correction theo clause và offline planning metrics. Scalar path được construct
-theo semantic catalog versioned, schema-validated và fail-closed; compiler chỉ đọc typed
-aggregate/predicate, không parse display string hay chứa nhánh theo benchmark case. Clean guarded
-benchmark của revision `f70d191` bị dừng tại prefix 12: Paper II đạt 8/12 so với paired P6 12/12,
-nên cận trên toàn suite chỉ 56/60 < champion 57/60. Spider không chạy. Revision này bị reject
-promotion. Một redesign tổng thể sau failure đã chuyển hybrid thành baseline-first: EASY giữ nguyên
-P6, chỉ dependency phức tạp mới chạy schema-bounded DIN planner/generator; semantic aggregate có
-typed source grain/weight/rounding và validator dùng proven lineage. Pilot `e8fab80` cho thấy EASY
-vẫn trả chi phí planner LLM trước route. Construction A4500 mới chuyển route sang deterministic
-control plane, chỉ còn một model call cho EASY/hai cho complex, grounding một lần, dùng BM25 để BGE
-không thay Qwen trong one-model slot, và giữ Qwen resident nội bộ một case trước khi wrapper unload.
-Profile sáu GPU layer bị chặn ở 4 GiB/65 C/70 W dưới hard clock 300–600 MHz. Model pin được stage
-và verify hash trên ext4; evaluator không còn chạy lại toàn prefix theo O(n²), và interrupt không thể
-để child inference ngoài guard. `make check` pass 240 test, một Ollama test deselect; fresh guarded
-Olist source-locked còn pending, nên module vẫn không `VERIFIED`. Evidence nằm tại
+prompt theo strategy, correction theo clause và offline planning metrics. Revision A4500 chuyển
+route sang deterministic control plane, dùng một model call cho EASY/hai cho complex, grounding một
+lần và model pin hash-verified trên ext4; evaluator prefix là linear-time và interrupt dừng child
+inference. Source-locked evaluation `olist-paper2-a4500-c40b75c-v1` dừng đúng accuracy gate tại
+16/20, so với paired P6 19/20, vì cận trên chỉ còn 56/60 < champion 57/60. 19/20 case đi qua
+`BASELINE_PRESERVE`; cả ba hồi quy mới nằm ở route này, còn complex DIN case duy nhất đúng. Việc
+thay P6 planner bằng deterministic skeleton và frozen hybrid retrieval bằng BM25 làm treatment bị
+confound: candidate tích hợp bị reject, nhưng chưa đủ dữ liệu kết luận DIN-SQL nói chung. P6 vẫn là
+runtime default, DIN chỉ opt-in;
+Spider không chạy. Guard không breach, Ollama đã unload và Administrator clock cap đã reset. Module
+không `VERIFIED`. Evidence nằm tại
 `docs/research_plan/r2_a4500_optimization.md`,
 `comparison_new2_to_baseline_vn.md` và `docs/evidence/r2_din_sql_implementation.md`.
 
