@@ -9,6 +9,7 @@ import signal
 import subprocess
 import time
 from pathlib import Path
+from typing import Any
 
 import httpx
 
@@ -113,6 +114,7 @@ def main() -> None:
     if preflight_reason:
         raise SystemExit(f"RESOURCE_GUARD_REFUSED_START: {preflight_reason}")
     retry_counts: dict[int, int] = {}
+    expected_rows_cache: dict[str, list[list[Any]]] = {}
     peak: dict[str, float] = {
         "ram_used_gib": 0,
         "swap_used_gib": 0,
@@ -179,6 +181,14 @@ def main() -> None:
                 if reason:
                     break
                 time.sleep(args.sample_seconds)
+        except KeyboardInterrupt:
+            stop_process_group(process)
+            unload_models(base_url)
+            print(
+                "GUARDED_INTERRUPT: stopped child process group and unloaded models; "
+                f"checkpoint={count_predictions(predictions)}/{total_cases}"
+            )
+            raise
         except (OSError, subprocess.SubprocessError, ValueError) as exc:
             reason = f"monitor failure: {type(exc).__name__}"
         if reason:
@@ -214,6 +224,7 @@ def main() -> None:
                 database=Settings().resolved_data_dir / "processed/olist.sqlite",
                 report_path=progress_report,
                 evaluation_id=f"{args.evaluation_id}-prefix-{len(persisted)}",
+                expected_rows_cache=expected_rows_cache,
             )
             correct = int(progress["result_correct_count"])
             maximum_final = correct + (total_cases - len(persisted))

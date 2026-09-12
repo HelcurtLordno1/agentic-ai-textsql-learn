@@ -67,3 +67,42 @@ def test_evaluator_hashes_gold_and_reports_slices(tmp_path: Path) -> None:
     assert report["by_language"]["en"]["correct"] == 1
     assert "gold_sql" not in report_path.read_text(encoding="utf-8")
     assert json.loads(report_path.read_text())["details"][0]["expected_result_hash"]
+
+
+def test_evaluator_reuses_explicit_gold_result_cache(tmp_path: Path) -> None:
+    database = tmp_path / "tiny.sqlite"
+    with sqlite3.connect(database) as connection:
+        connection.execute("CREATE TABLE values_table(value INTEGER)")
+        connection.execute("INSERT INTO values_table VALUES (999)")
+    case = OlistAcceptanceCase(
+        id="cached",
+        partition="dev",
+        language="en",
+        question="cached value?",
+        difficulty="easy",
+        required_concepts=("value",),
+        gold_sql="SELECT value FROM missing_table",
+        reviewed=True,
+    )
+    prediction = SmokePrediction(
+        case_id="cached",
+        result=DirectRunResult(
+            run_id="run",
+            question=case.question,
+            status=DirectStatus.SUCCEEDED,
+            route_reason="query",
+            prompt_versions={},
+            result_rows=[[7]],
+            latency_ms={"total": 1},
+        ),
+    )
+    cache = {"cached": [[7]]}
+    report = evaluate_olist_acceptance(
+        cases=[case],
+        predictions=[prediction],
+        database=database,
+        report_path=tmp_path / "cached-report.json",
+        expected_rows_cache=cache,
+    )
+    assert report["result_correct_count"] == 1
+    assert cache == {"cached": [[7]]}

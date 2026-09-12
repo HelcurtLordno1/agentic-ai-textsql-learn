@@ -1714,7 +1714,7 @@ Mỗi bug quan trọng cần:
 | E-M6 | Correction ablation | Yes | L5 | VERIFIED | frozen Olist 14/18 off vs 17/18 on; `docs/evidence/p4_gate.md` |
 | E-M7 | BIRD Mini-Dev | No | core complete | NOT_STARTED | — |
 | R1-M1 | PRACTIQ question reliability | No | R0 baseline lock | IN_PROGRESS | Typed/glossary-grounded gate, early-exit và clarification đã có, nhưng source-locked Olist v3 bị dừng tại 35/60 theo accuracy kill criterion: prefix 30/35 so với paired baseline 33/35 và full-suite upper bound chỉ 55/60 < champion 57/60. Current integrated variant bị reject promotion; chưa có final macro-F1 và không `VERIFIED`; `comparison_new_to_baseline.md`, `docs/evidence/r1_question_reliability.md`, `docs/evidence/r1_olist_benchmark.md`, `docs/evidence/r1_resource_guard_incident.md` |
-| R2-M1 | DIN-SQL semantic links + adaptive clause planner | No | R0 baseline lock, rejected R1 promotion | IN_PROGRESS | Revision `f70d191` failed guarded Olist at 8/12 (upper bound 56/60); adaptive `e8fab80` was infrastructure-inconclusive because EASY still paid a planner LLM call. The A4500 construction now uses a deterministic control plan before routing, one grounding pass, one-call EASY/two-call complex budgets, and BM25 query retrieval so BGE cannot evict Qwen. Candidate profile `olist-paper2-a4500-safe` uses six GPU layers under 300–600 MHz with strict 4 GiB/65 C/70 W stops and per-case model residency followed by wrapper unload/cooldown. `make check` passes 239 tests with 1 Ollama test deselected. Fresh one-case calibration and source-locked Olist remain pending, so not `VERIFIED`; `docs/research_plan/r2_a4500_optimization.md`, `comparison_new2_to_baseline_vn.md`, `docs/evidence/r2_din_sql_implementation.md` |
+| R2-M1 | DIN-SQL semantic links + adaptive clause planner | No | R0 baseline lock, rejected R1 promotion | IN_PROGRESS | Revision `f70d191` failed guarded Olist at 8/12 (upper bound 56/60); adaptive `e8fab80` was infrastructure-inconclusive because EASY still paid a planner LLM call. The A4500 construction now uses a deterministic control plan before routing, one grounding pass, one-call EASY/two-call complex budgets, and BM25 query retrieval so BGE cannot evict Qwen. Candidate profile `olist-paper2-a4500-safe` uses six GPU layers under 300–600 MHz with strict 4 GiB/65 C/70 W stops and per-case model residency followed by wrapper unload/cooldown. Pinned blobs are hash-verified on ext4; evaluator prefix scoring is linear-time and guarded interrupt stops its child group. `make check` passes 240 tests with 1 Ollama test deselected. Fresh source-locked Olist remains pending, so not `VERIFIED`; `docs/research_plan/r2_a4500_optimization.md`, `comparison_new2_to_baseline_vn.md`, `docs/evidence/r2_din_sql_implementation.md` |
 | X-M1 | PostgreSQL adapter | No | core complete | NOT_STARTED | — |
 
 Overall project status tại thời điểm cập nhật master plan: `GATE_P6_VERIFIED`. P0
@@ -1740,9 +1740,11 @@ typed source grain/weight/rounding và validator dùng proven lineage. Pilot `e8
 vẫn trả chi phí planner LLM trước route. Construction A4500 mới chuyển route sang deterministic
 control plane, chỉ còn một model call cho EASY/hai cho complex, grounding một lần, dùng BM25 để BGE
 không thay Qwen trong one-model slot, và giữ Qwen resident nội bộ một case trước khi wrapper unload.
-Profile sáu GPU layer bị chặn ở 4 GiB/65 C/70 W dưới hard clock 300–600 MHz. `make check` pass 239
-test, một Ollama test deselect; fresh guarded pilot và Olist source-locked còn pending, nên module vẫn
-không `VERIFIED`. Evidence nằm tại `docs/research_plan/r2_a4500_optimization.md`,
+Profile sáu GPU layer bị chặn ở 4 GiB/65 C/70 W dưới hard clock 300–600 MHz. Model pin được stage
+và verify hash trên ext4; evaluator không còn chạy lại toàn prefix theo O(n²), và interrupt không thể
+để child inference ngoài guard. `make check` pass 240 test, một Ollama test deselect; fresh guarded
+Olist source-locked còn pending, nên module vẫn không `VERIFIED`. Evidence nằm tại
+`docs/research_plan/r2_a4500_optimization.md`,
 `comparison_new2_to_baseline_vn.md` và `docs/evidence/r2_din_sql_implementation.md`.
 
 Post-P6 usability hardening ngày 2026-08-16 đã sửa lỗi thực tế trong câu hỏi Olist “Top 5 danh mục

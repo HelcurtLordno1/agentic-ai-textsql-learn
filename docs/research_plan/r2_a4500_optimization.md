@@ -74,12 +74,24 @@ guarded wrapper still unloads all models after every one-case batch and applies 
 Typed profile fields define request timeout, run deadline, and output-token cap instead of hidden
 script overrides.
 
+The pinned Qwen manifest and its five content-addressed blobs are staged on native ext4 and each
+blob SHA-256 is verified before use. This removes repeated NTFS/WSL model-load latency without
+changing model bytes, digest, prompt, GPU offload, or accuracy semantics.
+
 ### 5. Calibrated A4500 profile
 
 Start with six GPU layers—the previously measured P6 offload—under a verified 300–600 MHz hard
 clock lock. Use one model, one request at a time, 10 CPU cores, q8 KV, 512 output tokens, 240-second
 request timeout, and 180-second correction deadline. The safety stops are not loosened: VRAM 4 GiB,
 65 C, 70 W, clock watchdog 650 MHz, minimum 14 GiB available RAM, and swap below 0.25 GiB.
+
+### 6. Linear-time evaluator and safe interruption
+
+The guarded wrapper keeps evaluator-only expected rows in memory so each newly exposed gold query
+executes once, rather than recomputing the entire prefix after every checkpoint. Runtime remains a
+separate gold-blind subprocess. The final report still evaluates the complete manifest. A keyboard
+interrupt during monitoring must stop the child process group and unload models before returning;
+it cannot leave inference outside the guard.
 
 ## Verification matrix
 
@@ -91,6 +103,8 @@ request timeout, and 180-second correction deadline. The safety stops are not lo
 - BM25 profile cannot invoke the embedding callback;
 - profile environment explicitly bounds GPU layers, tokens, deadlines, concurrency, and residency;
 - guards reject every threshold boundary and unload after each batch;
+- repeated prefix scoring reuses an explicit evaluator-only cache;
+- guarded interruption stops the child group before exiting;
 - runtime/evaluator dependency separation remains intact.
 
 ## Benchmark protocol

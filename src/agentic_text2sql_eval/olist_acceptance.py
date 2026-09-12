@@ -102,8 +102,9 @@ def evaluate_olist_acceptance(
     database: Path,
     report_path: Path,
     evaluation_id: str = "olist-acceptance-60-p5-v1",
+    expected_rows_cache: dict[str, list[list[Any]]] | None = None,
 ) -> dict[str, Any]:
-    """Evaluate gold-blind predictions after inference has completely stopped."""
+    """Evaluate gold-blind predictions, optionally reusing evaluator-only expected rows."""
     by_id = {prediction.case_id: prediction for prediction in predictions}
     if set(by_id) != {case.id for case in cases}:
         raise ValueError("Predictions must match the complete acceptance manifest")
@@ -112,11 +113,15 @@ def evaluate_olist_acceptance(
     latencies: list[float] = []
     catalog = SQLiteIntrospector().inspect(database, "olist")
     connection = sqlite3.connect(f"file:{database.resolve()}?mode=ro", uri=True)
+    expected_rows_cache = expected_rows_cache if expected_rows_cache is not None else {}
     try:
         connection.execute("PRAGMA query_only=ON")
         for case in cases:
             result = by_id[case.id].result
-            expected_rows = [list(row) for row in connection.execute(case.gold_sql).fetchall()]
+            expected_rows = expected_rows_cache.get(case.id)
+            if expected_rows is None:
+                expected_rows = [list(row) for row in connection.execute(case.gold_sql).fetchall()]
+                expected_rows_cache[case.id] = expected_rows
             correct = result.status is DirectStatus.SUCCEEDED and _rows_equal(
                 result.result_rows,
                 expected_rows,

@@ -112,6 +112,11 @@ swap below 0.25 GiB, VRAM below 4 GiB, below 65 C, below 70 W, and below the 650
 valid only for the RTX A4500 Qwen3-14B Olist workload after its own pilot; it is not permission to
 run Spider, another model, another GPU, or an unguarded command.
 
+For repeated per-case unloads, stage only the pinned Qwen manifest and its referenced blobs on a
+native Linux filesystem and verify every blob hash against its `sha256-*` filename. Do not copy or
+commit the cache into the repository. The model digest and evaluation identity remain unchanged;
+record the storage class in benchmark provenance because it materially affects load latency.
+
 ## 3. Laptop recovery and hard-cap procedure
 
 After an unexpected shutdown:
