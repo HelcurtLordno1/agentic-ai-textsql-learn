@@ -19,6 +19,7 @@ def test_settings_paths_are_relocatable(tmp_path: Path) -> None:
     assert settings.ollama_seed == 42
     assert settings.ollama_max_output_tokens == 1024
     assert settings.planning_mode == "baseline"
+    assert settings.retrieval_mode == "hybrid"
 
 
 def test_planning_mode_is_bounded_to_reproducible_ablation_variants() -> None:
@@ -26,3 +27,9 @@ def test_planning_mode_is_bounded_to_reproducible_ablation_variants() -> None:
     assert Settings(TEXT2SQL_PLANNING_MODE="hybrid").planning_mode == "hybrid"
     with pytest.raises(ValidationError):
         Settings(TEXT2SQL_PLANNING_MODE="experimental-untracked")
+
+
+def test_retrieval_mode_is_bounded() -> None:
+    assert Settings(TEXT2SQL_RETRIEVAL_MODE="bm25").retrieval_mode == "bm25"
+    with pytest.raises(ValidationError):
+        Settings(TEXT2SQL_RETRIEVAL_MODE="case-specific")

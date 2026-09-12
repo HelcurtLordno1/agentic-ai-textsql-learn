@@ -7,6 +7,7 @@ from agentic_text2sql.contracts.planning import LogicalPlan
 from agentic_text2sql.layer1_reasoning.decomposer import Decomposer
 from agentic_text2sql.layer1_reasoning.planner import (
     BASELINE_PLANNER_PROMPT_VERSION,
+    CONTROL_PLANNER_VERSION,
     PLANNER_PROMPT_VERSION,
     PlannerAgent,
     align_plan,
@@ -18,11 +19,13 @@ ROOT = Path(__file__).resolve().parents[3]
 class RecordingProvider:
     def __init__(self) -> None:
         self.prompt = ""
+        self.calls = 0
 
     def generate_structured(
         self, *, prompt: str, response_model: type[BaseModel], model: str | None = None
     ) -> Any:
         del response_model, model
+        self.calls += 1
         self.prompt = prompt
         return LogicalPlan(
             question_language="vi",
@@ -48,6 +51,14 @@ def test_decomposer_extracts_hints_without_sql() -> None:
     assert "select" not in result.model_dump_json().lower()
 
 
+def test_decomposer_normalizes_regular_english_plural_morphology() -> None:
+    singular = Decomposer().decompose("Top product category by revenue")
+    plural = Decomposer().decompose("Top product categories by revenue")
+    assert singular.metric_hints == plural.metric_hints == ["revenue"]
+    assert singular.entity_hints == plural.entity_hints == ["products"]
+    assert singular.dimension_hints == plural.dimension_hints == ["category"]
+
+
 def test_planner_uses_versioned_schema_agnostic_prompt() -> None:
     provider = RecordingProvider()
     planner = PlannerAgent(provider, ROOT / "configs/prompts/planner_v2.j2")
@@ -60,6 +71,20 @@ def test_planner_uses_versioned_schema_agnostic_prompt() -> None:
     assert "Do not produce SQL" in provider.prompt
     assert "Required JSON Schema" in provider.prompt
     assert "olist_orders_dataset" not in provider.prompt
+
+
+def test_control_planner_is_deterministic_and_spends_no_model_call() -> None:
+    provider = RecordingProvider()
+    planner = PlannerAgent(provider, ROOT / "configs/prompts/planner_v2.j2")
+    question = "Top 5 danh mục theo doanh thu năm 2017"
+    plan = planner.plan_control(question, Decomposer().decompose(question))
+    assert plan.task_type == "ranking"
+    assert plan.metrics == ["revenue"]
+    assert plan.dimensions == ["category", "time"]
+    assert plan.filters == ["2017"]
+    assert plan.limit == 5
+    assert provider.calls == 0
+    assert CONTROL_PLANNER_VERSION == "planner_v4_deterministic_control"
 
 
 def test_superlative_and_late_delivery_hints_are_deterministic() -> None:

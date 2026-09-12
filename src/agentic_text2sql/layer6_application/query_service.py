@@ -24,6 +24,7 @@ from agentic_text2sql.layer1_reasoning.decomposer import Decomposer
 from agentic_text2sql.layer1_reasoning.plan_validator import validate_plan
 from agentic_text2sql.layer1_reasoning.planner import (
     BASELINE_PLANNER_PROMPT_VERSION,
+    CONTROL_PLANNER_VERSION,
     PLANNER_PROMPT_VERSION,
     PlannerAgent,
 )
@@ -79,7 +80,7 @@ class DirectBaselineService:
         hybrid = self.planning_mode == "hybrid"
         versions = {
             "planner": (
-                BASELINE_PLANNER_PROMPT_VERSION
+                CONTROL_PLANNER_VERSION
                 if hybrid
                 else PLANNER_PROMPT_VERSION
                 if din_sql
@@ -118,7 +119,15 @@ class DirectBaselineService:
         decomposition = self.decomposer.decompose(question)
         schema_context = None
         semantic_links = None
-        if self.grounding is not None and din_sql:
+        plan: LogicalPlan
+        if hybrid:
+            planning_started = time.monotonic()
+            plan = self.planner.plan_control(question, decomposition)
+            timings["control_planning"] = (time.monotonic() - planning_started) * 1000
+            adaptive_route = choose_adaptive_route(question, decomposition, plan)
+            versions["adaptive_route"] = adaptive_route.route.value
+
+        if self.grounding is not None and (din_sql or hybrid):
             grounding_started = time.monotonic()
             try:
                 schema_context, semantic_links = self.grounding.prepare_for_planning(
@@ -138,61 +147,43 @@ class DirectBaselineService:
                 )
             timings["grounding"] = (time.monotonic() - grounding_started) * 1000
 
-        planning_started = time.monotonic()
-        plan: LogicalPlan
-        try:
-            if din_sql and schema_context is not None and semantic_links is not None:
-                plan = self.planner.plan_grounded(
-                    question, decomposition, semantic_links, schema_context
+        if not hybrid:
+            planning_started = time.monotonic()
+            try:
+                if din_sql and schema_context is not None and semantic_links is not None:
+                    plan = self.planner.plan_grounded(
+                        question, decomposition, semantic_links, schema_context
+                    )
+                else:
+                    plan = self.planner.plan(question, decomposition)
+            except (StructuredOutputError, Text2SQLError, ValueError) as exc:
+                timings["planning"] = (time.monotonic() - planning_started) * 1000
+                finish_timings()
+                return DirectRunResult(
+                    run_id=run_id,
+                    question=question,
+                    status=DirectStatus.MODEL_ERROR,
+                    route_reason=route.reason,
+                    prompt_versions=versions,
+                    schema_context=(
+                        schema_context.model_dump(mode="json") if schema_context else None
+                    ),
+                    safe_message=str(exc),
+                    latency_ms=timings,
                 )
-            else:
-                plan = self.planner.plan(question, decomposition)
-        except (StructuredOutputError, Text2SQLError, ValueError) as exc:
             timings["planning"] = (time.monotonic() - planning_started) * 1000
-            finish_timings()
-            return DirectRunResult(
-                run_id=run_id,
-                question=question,
-                status=DirectStatus.MODEL_ERROR,
-                route_reason=route.reason,
-                prompt_versions=versions,
-                schema_context=(schema_context.model_dump(mode="json") if schema_context else None),
-                safe_message=str(exc),
-                latency_ms=timings,
-            )
-        timings["planning"] = (time.monotonic() - planning_started) * 1000
 
         if hybrid:
             if not isinstance(plan, LogicalPlan):
-                raise TypeError("adaptive routing requires the frozen baseline logical plan")
-            adaptive_route = choose_adaptive_route(question, decomposition, plan)
-            versions["adaptive_route"] = adaptive_route.route.value
+                raise TypeError("adaptive routing requires a typed control plan")
+            if adaptive_route is None:
+                raise RuntimeError("hybrid control planning did not produce an adaptive route")
             if adaptive_route.route is AdaptiveRoute.DIN_SQL_ENHANCE:
                 versions["planner"] = (
-                    f"adaptive({BASELINE_PLANNER_PROMPT_VERSION},{PLANNER_PROMPT_VERSION})"
+                    f"adaptive({CONTROL_PLANNER_VERSION},{PLANNER_PROMPT_VERSION})"
                 )
-                if self.grounding is None:
+                if self.grounding is None or schema_context is None or semantic_links is None:
                     raise RuntimeError("adaptive DIN-SQL requires grounding")
-                grounding_started = time.monotonic()
-                try:
-                    schema_context, semantic_links = self.grounding.prepare_for_planning(
-                        question, decomposition
-                    )
-                except (ValueError, Text2SQLError) as exc:
-                    timings["grounding"] = (time.monotonic() - grounding_started) * 1000
-                    finish_timings()
-                    return DirectRunResult(
-                        run_id=run_id,
-                        question=question,
-                        status=DirectStatus.GROUNDING_ERROR,
-                        route_reason=route.reason,
-                        prompt_versions=versions,
-                        adaptive_route=adaptive_route.model_dump(mode="json"),
-                        plan=plan.model_dump(mode="json"),
-                        safe_message=str(exc),
-                        latency_ms=timings,
-                    )
-                timings["grounding"] = (time.monotonic() - grounding_started) * 1000
                 din_planning_started = time.monotonic()
                 try:
                     plan = self.planner.plan_grounded(

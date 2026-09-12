@@ -35,6 +35,30 @@ ENTITIES = {
 }
 
 
+def _english_plural(phrase: str) -> str | None:
+    """Return a conservative regular-English plural for lexical hint matching."""
+    words = phrase.split()
+    if not words or not all(word.isascii() and word.isalpha() for word in words):
+        return None
+    last = words[-1]
+    if last.endswith("s"):
+        return None
+    if len(last) > 1 and last.endswith("y") and last[-2] not in "aeiou":
+        words[-1] = f"{last[:-1]}ies"
+    elif last.endswith(("ch", "sh", "x", "z")):
+        words[-1] = f"{last}es"
+    else:
+        words[-1] = f"{last}s"
+    return " ".join(words)
+
+
+def _mentions_alias(text: str, alias: str) -> bool:
+    forms = (alias, _english_plural(alias))
+    return any(
+        form is not None and re.search(rf"(?<!\w){re.escape(form)}(?!\w)", text) for form in forms
+    )
+
+
 def _language(question: str) -> Literal["vi", "en", "other"]:
     lowered = question.casefold()
     if any(
@@ -61,12 +85,20 @@ def _language(question: str) -> Literal["vi", "en", "other"]:
 class Decomposer:
     def decompose(self, question: str) -> DecomposedQuestion:
         lowered = question.casefold()
-        metrics = [name for name, aliases in METRICS.items() if any(x in lowered for x in aliases)]
+        metrics = [
+            name
+            for name, aliases in METRICS.items()
+            if any(_mentions_alias(lowered, x) for x in aliases)
+        ]
         entities = [
-            name for name, aliases in ENTITIES.items() if any(x in lowered for x in aliases)
+            name
+            for name, aliases in ENTITIES.items()
+            if any(_mentions_alias(lowered, x) for x in aliases)
         ]
         dimensions = [
-            name for name, aliases in DIMENSIONS.items() if any(x in lowered for x in aliases)
+            name
+            for name, aliases in DIMENSIONS.items()
+            if any(_mentions_alias(lowered, x) for x in aliases)
         ]
         limit_match = re.search(
             r"\b(?:top|limit|return|trả về)\s+(\d+)\b|"

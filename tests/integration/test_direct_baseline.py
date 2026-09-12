@@ -27,10 +27,7 @@ from agentic_text2sql.contracts.semantics import (
 from agentic_text2sql.contracts.sql import DirectRunResult, DirectStatus, SqlCandidate
 from agentic_text2sql.exceptions import StructuredOutputError
 from agentic_text2sql.layer1_reasoning.decomposer import Decomposer
-from agentic_text2sql.layer1_reasoning.planner import (
-    BASELINE_PLANNER_PROMPT_VERSION,
-    PlannerAgent,
-)
+from agentic_text2sql.layer1_reasoning.planner import CONTROL_PLANNER_VERSION, PlannerAgent
 from agentic_text2sql.layer1_reasoning.router import QueryRouter
 from agentic_text2sql.layer2_grounding.introspector import SQLiteIntrospector
 from agentic_text2sql.layer2_grounding.service import GroundingService
@@ -139,6 +136,8 @@ def test_write_and_returns_stop_before_model() -> None:
 
 class StubGrounding:
     def __init__(self, catalog_hash: str, *, proven: bool = False) -> None:
+        self.prepare_calls = 0
+        self.ground_calls = 0
         self.context = SchemaContext(
             db_id="synthetic",
             selected_tables=["orders"],
@@ -183,15 +182,19 @@ class StubGrounding:
 
     def prepare_for_planning(self, question: str, decomposition: object) -> tuple[Any, Any]:
         del question, decomposition
+        self.prepare_calls += 1
         return self.context, self.links
 
     def ground(self, question: str, plan: object) -> SchemaContext:
         del question, plan
+        self.ground_calls += 1
         return self.context
 
 
 class ComplexStubGrounding:
     def __init__(self, catalog_hash: str) -> None:
+        self.prepare_calls = 0
+        self.ground_calls = 0
         self.context = SchemaContext(
             db_id="synthetic",
             selected_tables=["order_items", "products"],
@@ -238,10 +241,12 @@ class ComplexStubGrounding:
 
     def prepare_for_planning(self, question: str, decomposition: object) -> tuple[Any, Any]:
         del question, decomposition
+        self.prepare_calls += 1
         return self.context, self.links
 
     def ground(self, question: str, plan: object) -> SchemaContext:
         del question, plan
+        self.ground_calls += 1
         return self.context
 
 
@@ -310,36 +315,29 @@ def test_din_sql_handoff_uses_one_model_call_and_records_plan_validation() -> No
     assert provider.calls == 1
 
 
-def test_hybrid_easy_route_preserves_the_complete_baseline_path() -> None:
+def test_hybrid_easy_route_uses_one_call_and_the_baseline_generator() -> None:
     catalog = SQLiteIntrospector().inspect(DATABASE, "synthetic")
-    provider = QueueProvider(
-        [plan(), SqlCandidate(sql="SELECT COUNT(*) FROM orders", confidence=1)]
-    )
-    result = grounded_service(provider, catalog.catalog_hash, "hybrid").run(
-        "How many orders?", DATABASE, catalog
-    )
+    provider = QueueProvider([SqlCandidate(sql="SELECT COUNT(*) FROM orders", confidence=1)])
+    runtime = grounded_service(provider, catalog.catalog_hash, "hybrid")
+    result = runtime.run("How many orders?", DATABASE, catalog)
     assert result.status is DirectStatus.SUCCEEDED
     assert result.candidate is not None
     assert result.candidate.prompt_version == BASELINE_GENERATOR_PROMPT_VERSION
     assert result.candidate.model_name == "fake-local"
-    assert result.prompt_versions["planner"] == BASELINE_PLANNER_PROMPT_VERSION
+    assert result.prompt_versions["planner"] == CONTROL_PLANNER_VERSION
     assert result.adaptive_route is not None
     assert result.adaptive_route["route"] == AdaptiveRoute.BASELINE_PRESERVE
     assert result.plan is not None and "complexity" not in result.plan
     assert result.plan_validation is None
-    assert provider.calls == 2
+    assert provider.calls == 1
+    assert "control_planning" in result.latency_ms
+    grounding = cast(StubGrounding, runtime.grounding)
+    assert grounding.prepare_calls == 1
+    assert grounding.ground_calls == 0
 
 
 def test_hybrid_complex_route_adds_bounded_din_planning_and_generation() -> None:
     catalog = SQLiteIntrospector().inspect(DATABASE, "synthetic")
-    baseline_plan = LogicalPlan(
-        question_language="en",
-        task_type="ranking",
-        metrics=["item revenue"],
-        dimensions=["product category"],
-        sort=["revenue descending"],
-        limit=5,
-    )
     din_plan = DINSQLDraft(
         question_language="en",
         task_type="ranking",
@@ -377,9 +375,10 @@ def test_hybrid_complex_route_adds_bounded_din_planning_and_generation() -> None
         ),
         confidence=1,
     )
-    provider = QueueProvider([baseline_plan, din_plan, candidate])
+    provider = QueueProvider([din_plan, candidate])
     runtime = grounded_service(provider, catalog.catalog_hash, "hybrid")
-    runtime.grounding = cast(GroundingService, ComplexStubGrounding(catalog.catalog_hash))
+    complex_grounding = ComplexStubGrounding(catalog.catalog_hash)
+    runtime.grounding = cast(GroundingService, complex_grounding)
     result = runtime.run(
         "Top 5 product categories by item revenue",
         DATABASE,
@@ -393,7 +392,9 @@ def test_hybrid_complex_route_adds_bounded_din_planning_and_generation() -> None
     assert result.plan_validation is not None and result.plan_validation["accepted"]
     assert result.candidate is not None
     assert result.candidate.prompt_version == GENERATOR_PROMPT_VERSION
-    assert provider.calls == 3
+    assert provider.calls == 2
+    assert complex_grounding.prepare_calls == 1
+    assert complex_grounding.ground_calls == 0
 
 
 def test_din_sql_mode_refuses_to_start_without_grounding() -> None:

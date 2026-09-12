@@ -42,6 +42,9 @@ class Settings(BaseSettings):
     planning_mode: Literal["baseline", "hybrid", "din_sql"] = Field(
         default="baseline", alias="TEXT2SQL_PLANNING_MODE"
     )
+    retrieval_mode: Literal["bm25", "dense", "hybrid"] = Field(
+        default="hybrid", alias="TEXT2SQL_RETRIEVAL_MODE"
+    )
 
     @field_validator("ollama_base_url")
     @classmethod

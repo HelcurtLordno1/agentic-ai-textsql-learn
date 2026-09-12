@@ -34,6 +34,7 @@ from agentic_text2sql.contracts.semantics import (
 
 BASELINE_PLANNER_PROMPT_VERSION = "planner_v2"
 PLANNER_PROMPT_VERSION = "planner_v3_din_sql"
+CONTROL_PLANNER_VERSION = "planner_v4_deterministic_control"
 
 
 class PlannerAgent:
@@ -58,6 +59,43 @@ class PlannerAgent:
         )
         generated = self.provider.generate_structured(prompt=prompt, response_model=LogicalPlan)
         return align_plan(question, decomposition, generated)
+
+    def plan_control(self, question: str, decomposition: DecomposedQuestion) -> LogicalPlan:
+        """Build the routing/generation skeleton without spending an LLM call.
+
+        This control plan contains only deterministic hints. Schema ownership remains delegated to
+        grounding and SQL semantics remain delegated to the selected generation path.
+        """
+        if decomposition.set_operation_hint is not None:
+            task_type: Literal["lookup", "aggregation", "ranking", "comparison", "set"] = "set"
+        elif decomposition.sort_hints or decomposition.limit_hint is not None:
+            task_type = "ranking"
+        elif decomposition.metric_hints:
+            task_type = "aggregation"
+        else:
+            task_type = "lookup"
+        required_concepts = list(
+            dict.fromkeys(
+                [
+                    *decomposition.entity_hints,
+                    *decomposition.metric_hints,
+                    *decomposition.dimension_hints,
+                    *decomposition.filter_hints,
+                    *decomposition.time_hints,
+                ]
+            )
+        )
+        plan = LogicalPlan(
+            question_language=decomposition.question_language,
+            task_type=task_type,
+            metrics=decomposition.metric_hints,
+            dimensions=decomposition.dimension_hints,
+            filters=[*decomposition.filter_hints, *decomposition.time_hints],
+            sort=decomposition.sort_hints,
+            limit=decomposition.limit_hint,
+            required_concepts=required_concepts,
+        )
+        return align_plan(question, decomposition, plan)
 
     def plan_grounded(
         self,

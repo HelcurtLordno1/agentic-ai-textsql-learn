@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from collections.abc import Callable
 from contextlib import AbstractContextManager
 from pathlib import Path
 from types import TracebackType
@@ -15,7 +16,7 @@ from agentic_text2sql.adapters.llm.ollama_provider import OllamaProvider
 from agentic_text2sql.contracts.catalog import CatalogSnapshot
 from agentic_text2sql.contracts.sql import DirectRunResult
 from agentic_text2sql.layer1_reasoning.decomposer import Decomposer
-from agentic_text2sql.layer1_reasoning.planner import PlannerAgent
+from agentic_text2sql.layer1_reasoning.planner import CONTROL_PLANNER_VERSION, PlannerAgent
 from agentic_text2sql.layer1_reasoning.router import QueryRouter
 from agentic_text2sql.layer2_grounding.semantic_catalog import load_semantic_catalog
 from agentic_text2sql.layer2_grounding.service import GroundingService, IndexService
@@ -86,7 +87,7 @@ class RuntimeBundle(AbstractContextManager["RuntimeBundle"]):
             },
             "prompt_versions": {
                 "planner": (
-                    "adaptive(planner_v2,planner_v3_din_sql)"
+                    f"adaptive({CONTROL_PLANNER_VERSION},planner_v3_din_sql)"
                     if hybrid
                     else "planner_v3_din_sql"
                     if din_sql
@@ -107,7 +108,7 @@ class RuntimeBundle(AbstractContextManager["RuntimeBundle"]):
                     else BASELINE_CORRECTOR_PROMPT_VERSION
                 ),
             },
-            "retrieval": {"mode": "hybrid", "top_k": 20, "token_budget": 1200},
+            "retrieval": {"mode": settings.retrieval_mode, "top_k": 20, "token_budget": 1200},
             "planning_mode": settings.planning_mode,
             "adaptive_policy": (
                 {
@@ -145,11 +146,23 @@ class RuntimeBundle(AbstractContextManager["RuntimeBundle"]):
         grounding = None
         index_root = settings.resolved_data_dir / "indexes/p3_1_semantic"
         if (index_root / catalog.db_id / "active.json").is_file():
-            pointer = json.loads(
-                (index_root / catalog.db_id / "active.json").read_text(encoding="utf-8")
-            )
-            self.embedding = OllamaEmbeddingClient(settings.ollama_base_url, "bge-m3:latest")
-            digest = self.embedding.model_digest()
+            pointer_path = index_root / catalog.db_id / "active.json"
+            pointer = json.loads(pointer_path.read_text(encoding="utf-8"))
+            embed_many: Callable[[list[str]], list[list[float]]]
+            embed_query: Callable[[str], list[float]]
+            if settings.retrieval_mode == "bm25":
+                digest = str(model_config["embedding"]["digest"])
+                embed_many = _disabled_embed_many
+                embed_query = _disabled_embed_query
+            else:
+                self.embedding = OllamaEmbeddingClient(settings.ollama_base_url, "bge-m3:latest")
+                digest = self.embedding.model_digest()
+                embed_many = self._embed_many
+
+                def active_embed_query(text: str) -> list[float]:
+                    return self._embed_many([text])[0]
+
+                embed_query = active_embed_query
             self.provenance.update(
                 {
                     "embedding_model_digest": digest,
@@ -161,13 +174,13 @@ class RuntimeBundle(AbstractContextManager["RuntimeBundle"]):
                 index_root,
                 "bge-m3:latest",
                 digest,
-                lambda texts: self._embed_many(texts),
+                embed_many,
             )
-            retriever = index_service.load(catalog.db_id, lambda text: self._embed_many([text])[0])
+            retriever = index_service.load(catalog.db_id, embed_query)
             grounding = GroundingService(
                 retriever,
                 catalog,
-                mode="hybrid",
+                mode=settings.retrieval_mode,
                 top_k=20,
                 token_budget=1200,
                 semantic_catalog=semantic_catalog,
@@ -286,3 +299,11 @@ def runtime_bundle(
     settings: Settings, catalog: CatalogSnapshot, correction_enabled: bool
 ) -> RuntimeBundle:
     return RuntimeBundle(settings, catalog, correction_enabled=correction_enabled)
+
+
+def _disabled_embed_many(_: list[str]) -> list[list[float]]:
+    raise RuntimeError("BM25 runtime must not invoke the embedding model")
+
+
+def _disabled_embed_query(_: str) -> list[float]:
+    raise RuntimeError("BM25 runtime must not invoke the embedding model")

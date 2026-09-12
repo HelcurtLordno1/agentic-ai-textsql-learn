@@ -1,6 +1,6 @@
 # Hardware safety, guarded benchmarks, and fresh-server reproduction
 
-Last updated: 2026-09-03 (Asia/Bangkok)
+Last updated: 2026-09-12 (Asia/Bangkok)
 Operational status: laptop model runs are blocked until a hard GPU clock/power cap passes a new
 one-case pilot. Non-LLM tests, documentation, and dataset verification remain safe to run.
 
@@ -94,6 +94,23 @@ uv run text2sql hardware-health --profile olist-paper1-ultrasafe
 
 Exit code `75` means an intentional resource-guard stop. Preserve the checkpoint and incident log;
 do not turn it into a failed model prediction and do not increase the threshold.
+
+### 2.1 Paper II A4500 calibration candidate
+
+`olist-paper2-a4500-safe` is a separately typed calibration candidate for the optimized Paper II
+runtime. It is not approved for a suite merely because it exists in code: a fresh one-case pilot
+under an Administrator 300–600 MHz hard clock must pass first.
+
+The candidate uses six Qwen GPU layers, 10 CPU cores, one loaded model, one request at a time, q8 KV,
+512 output tokens, a 240-second request timeout, and a 180-second run/correction deadline. It keeps
+Qwen resident for calls within one case, while the guarded wrapper still explicitly unloads after
+every one-case checkpoint and cools for 60 seconds. Query-time retrieval is BM25-only, so BGE is not
+loaded while Qwen runs.
+
+Its stops are stricter than or equal to the default long-run limits: at least 14 GiB available RAM,
+swap below 0.25 GiB, VRAM below 4 GiB, below 65 C, below 70 W, and below the 650 MHz watchdog. It is
+valid only for the RTX A4500 Qwen3-14B Olist workload after its own pilot; it is not permission to
+run Spider, another model, another GPU, or an unguarded command.
 
 ## 3. Laptop recovery and hard-cap procedure
 

@@ -74,6 +74,22 @@ def test_index_build_reload_and_budget(tmp_path: Path) -> None:
     assert first.version_id == second.version_id
 
 
+def test_bm25_retrieval_never_invokes_embedding_callback(tmp_path: Path) -> None:
+    catalog = fixture_catalog()
+    service = index_service(tmp_path)
+    service.build(catalog)
+
+    def forbidden(_: str) -> list[float]:
+        raise AssertionError("embedding callback must stay cold in BM25 mode")
+
+    result = service.load(catalog.db_id, forbidden).retrieve(
+        "orders customers", mode="bm25", top_k=6
+    )
+    assert result.mode == "bm25"
+    assert result.candidates
+    assert result.latency_ms["query_embedding"] == 0
+
+
 def test_checksum_and_cross_database_are_rejected(tmp_path: Path) -> None:
     catalog = fixture_catalog()
     service = index_service(tmp_path)

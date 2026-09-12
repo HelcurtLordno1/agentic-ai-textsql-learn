@@ -6,6 +6,7 @@ import subprocess
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -17,6 +18,7 @@ class ProfileName(StrEnum):
     ACCEPTANCE = "acceptance-safe"
     CPU_FALLBACK = "cpu-fallback"
     OLIST_PAPER1 = "olist-paper1-ultrasafe"
+    OLIST_PAPER2_A4500 = "olist-paper2-a4500-safe"
 
 
 class ResourceLimits(BaseModel):
@@ -42,6 +44,10 @@ class HardwareProfile(BaseModel):
     kv_cache_type: str
     batch_size: int = Field(ge=1, le=3)
     cooldown_seconds: int = Field(ge=0)
+    retrieval_mode: Literal["bm25", "dense", "hybrid"] = "hybrid"
+    max_output_tokens: int = Field(default=768, ge=128, le=2048)
+    request_timeout_seconds: int = Field(default=240, ge=30, le=900)
+    run_deadline_seconds: int = Field(default=120, ge=30, le=300)
     limits: ResourceLimits = ResourceLimits()
 
     def ollama_environment(self) -> dict[str, str]:
@@ -54,8 +60,10 @@ class HardwareProfile(BaseModel):
             "OLLAMA_FLASH_ATTENTION": "1" if self.flash_attention else "0",
             "OLLAMA_KV_CACHE_TYPE": self.kv_cache_type,
             "TEXT2SQL_OLLAMA_NUM_GPU": str(self.ollama_num_gpu),
-            "TEXT2SQL_OLLAMA_MAX_OUTPUT_TOKENS": "768",
-            "TEXT2SQL_RUN_DEADLINE_SECONDS": "120",
+            "TEXT2SQL_OLLAMA_MAX_OUTPUT_TOKENS": str(self.max_output_tokens),
+            "TEXT2SQL_REQUEST_TIMEOUT_SECONDS": str(self.request_timeout_seconds),
+            "TEXT2SQL_RUN_DEADLINE_SECONDS": str(self.run_deadline_seconds),
+            "TEXT2SQL_RETRIEVAL_MODE": self.retrieval_mode,
         }
 
 
@@ -115,6 +123,30 @@ PROFILES = {
             maximum_gpu_memory_mib=4096,
             maximum_gpu_temperature_c=65,
             maximum_gpu_power_w=78,
+            maximum_gpu_graphics_clock_mhz=650,
+        ),
+    ),
+    ProfileName.OLIST_PAPER2_A4500: HardwareProfile(
+        name=ProfileName.OLIST_PAPER2_A4500,
+        description=("Qwen3-14B Olist DIN-SQL evaluation on RTX A4500 with one-case residency."),
+        ollama_num_gpu=6,
+        cpu_cores=10,
+        max_loaded_models=1,
+        keep_alive="5m",
+        flash_attention=True,
+        kv_cache_type="q8_0",
+        batch_size=1,
+        cooldown_seconds=60,
+        retrieval_mode="bm25",
+        max_output_tokens=512,
+        request_timeout_seconds=240,
+        run_deadline_seconds=180,
+        limits=ResourceLimits(
+            minimum_available_ram_gib=14,
+            maximum_swap_used_gib=0.25,
+            maximum_gpu_memory_mib=4096,
+            maximum_gpu_temperature_c=65,
+            maximum_gpu_power_w=70,
             maximum_gpu_graphics_clock_mhz=650,
         ),
     ),

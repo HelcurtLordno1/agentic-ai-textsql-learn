@@ -101,9 +101,6 @@ def main() -> None:
     environment = {
         **os.environ,
         "OLLAMA_BASE_URL": base_url,
-        "TEXT2SQL_REQUEST_TIMEOUT_SECONDS": (
-            "600" if profile.name is ProfileName.OLIST_PAPER1 else "240"
-        ),
         **profile.ollama_environment(),
     }
     try:
