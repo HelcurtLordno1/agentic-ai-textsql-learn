@@ -16,7 +16,7 @@ from agentic_text2sql.contracts.semantics import (
 from agentic_text2sql.contracts.sql import CandidateRecord, SqlCandidate
 from agentic_text2sql.layer3_generation.normalizer import CandidateNormalizer
 
-GROUNDED_EASY_COMPILER_VERSION = "generator_v7_typed_semantic"
+GROUNDED_EASY_COMPILER_VERSION = "generator_v8_proof_compiler"
 GROUNDED_EASY_COMPILER_MODEL = "deterministic-grounded-compiler"
 
 
@@ -39,8 +39,14 @@ class GroundedEasyCompiler:
             or binding.status is not BindingStatus.PROVEN
             or binding.db_id != catalog.db_id
             or binding.catalog_hash != catalog.catalog_hash
-            or binding.aggregate is None
+        ):
+            return None
+        if binding.frequency_ranking is not None:
+            return self._compile_frequency_ranking(plan, catalog)
+        if (
+            binding.aggregate is None
             or clauses.aggregate != binding.aggregate
+            or clauses.frequency_ranking is not None
             or tuple(clauses.predicates) != binding.predicates
             or plan.complexity.strategy is not PlanningStrategy.EASY
             or clauses.output_grain.casefold() != "one scalar row"
@@ -113,6 +119,62 @@ class GroundedEasyCompiler:
             sql=query.sql(dialect="sqlite"),
             used_tables=[table_name],
             used_columns=list(dict.fromkeys(used_columns)),
+            assumptions=[],
+            confidence=1.0,
+        )
+        return self.normalizer.normalize(
+            candidate,
+            model_name=GROUNDED_EASY_COMPILER_MODEL,
+            prompt_version=self.prompt_version,
+            catalog_hash=catalog.catalog_hash,
+        )
+
+    def _compile_frequency_ranking(
+        self, plan: DINSQLPlan, catalog: CatalogSnapshot
+    ) -> CandidateRecord | None:
+        clauses = plan.clauses
+        binding = plan.semantic_links.binding
+        if binding is None or binding.frequency_ranking is None:
+            return None
+        ranking = binding.frequency_ranking
+        if (
+            clauses.frequency_ranking != ranking
+            or clauses.aggregate is not None
+            or clauses.predicates
+            or plan.complexity.strategy is not PlanningStrategy.EASY
+            or len(clauses.select) != 2
+            or clauses.from_tables != [ranking.table]
+            or clauses.joins
+            or clauses.where
+            or len(clauses.group_by) != 1
+            or clauses.having
+            or len(clauses.order_by) != 2
+            or clauses.limit != ranking.limit
+            or clauses.subqueries
+            or clauses.set_operation is not None
+            or set(binding.required_tables) != {ranking.table}
+            or set(binding.required_columns) != {f"{ranking.table}.{ranking.dimension_column}"}
+        ):
+            return None
+        table = next((item for item in catalog.tables if item.name == ranking.table), None)
+        if table is None or ranking.dimension_column not in {
+            column.name for column in table.columns
+        }:
+            return None
+
+        dimension = exp.column(ranking.dimension_column)
+        count_alias = "frequency_count"
+        query = (
+            exp.select(dimension.copy(), exp.Count(this=exp.Star()).as_(count_alias))
+            .from_(ranking.table)
+            .group_by(dimension.copy())
+            .order_by(exp.column(count_alias).desc(), dimension.copy().asc())
+            .limit(ranking.limit)
+        )
+        candidate = SqlCandidate(
+            sql=query.sql(dialect="sqlite"),
+            used_tables=[ranking.table],
+            used_columns=[ranking.dimension_column],
             assumptions=[],
             confidence=1.0,
         )

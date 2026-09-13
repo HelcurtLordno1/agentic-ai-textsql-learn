@@ -257,9 +257,12 @@ def build_semantic_link_plan(
         )
     )
     if binding is not None and binding.status is BindingStatus.PROVEN:
-        if binding.aggregate is None:  # Defensive boundary for externally constructed payloads.
-            raise ValueError("proven semantic binding has no aggregate")
-        population_owner = binding.aggregate.table
+        if binding.aggregate is not None:
+            population_owner = binding.aggregate.table
+        elif binding.frequency_ranking is not None:
+            population_owner = binding.frequency_ranking.table
+        else:  # Defensive boundary for externally constructed payloads.
+            raise ValueError("proven semantic binding has no typed proof")
     return SemanticLinkPlan(
         db_id=context.db_id,
         catalog_hash=context.catalog_hash,

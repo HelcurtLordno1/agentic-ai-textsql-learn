@@ -42,10 +42,6 @@ def _plan(
             _plan(metrics=["order count"], filters=["late arrival"]),
         ),
         (
-            "Count returning customers with more than one order",
-            _plan(metrics=["customer count"], filters=["order count > 1"]),
-        ),
-        (
             "Which state has the most sellers?",
             _plan(
                 task_type="ranking",
@@ -95,6 +91,41 @@ def test_scalar_and_single_role_queries_preserve_baseline(question: str, plan: L
             "Tổng doanh thu trên mỗi danh mục sản phẩm",
             _plan(metrics=["revenue"], dimensions=["category"]),
             "MULTI_ROLE_GROUP_AGGREGATE",
+        ),
+        (
+            "Count returning customers with more than one order",
+            _plan(metrics=["customer count"], filters=["order count > 1"]),
+            "GROUP_FILTER_AGGREGATE_DEPENDENCY",
+        ),
+        (
+            "Có bao nhiêu khách hàng quay lại với hơn một đơn hàng?",
+            _plan(metrics=["customer count"], filters=["order count > 1"]),
+            "GROUP_FILTER_AGGREGATE_DEPENDENCY",
+        ),
+        (
+            "Which review score appears most often?",
+            _plan(task_type="ranking", metrics=["review count"], dimensions=["review score"]),
+            "FREQUENCY_RANKING_DEPENDENCY",
+        ),
+        (
+            "Which payment type has the most payment records? Return type and count.",
+            _plan(task_type="ranking", metrics=["payment count"], dimensions=["payment type"]),
+            "FREQUENCY_RANKING_DEPENDENCY",
+        ),
+        (
+            "What is the average freight amount per order in cents rounded to 2 decimals?",
+            _plan(metrics=["freight amount"]),
+            "DERIVED_AVERAGE_DEPENDENCY",
+        ),
+        (
+            "Trung bình mỗi đơn có bao nhiêu item?",
+            _plan(metrics=["item count"]),
+            "DERIVED_AVERAGE_DEPENDENCY",
+        ),
+        (
+            "Số đơn hàng lớn nhất từng được ghi nhận cho một customer_unique_id là bao nhiêu?",
+            _plan(metrics=["order count"]),
+            "GROUPED_SCALAR_MAX_DEPENDENCY",
         ),
     ],
 )

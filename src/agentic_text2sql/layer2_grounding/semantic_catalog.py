@@ -16,6 +16,7 @@ from agentic_text2sql.contracts.semantics import (
     AggregateSpec,
     BindingStatus,
     ComparisonOperator,
+    FrequencyRankingSpec,
     PredicateSpec,
     SemanticBinding,
     SemanticCatalog,
@@ -78,7 +79,28 @@ def _normalize(text: str) -> str:
 def _contains_alias(question: str, alias: str) -> bool:
     normalized_alias = _normalize(alias)
     if "_" in normalized_alias:
-        return normalized_alias in question
+        if normalized_alias in question:
+            return True
+        # Compositional aliases containing an explicit schema identifier may tolerate short
+        # natural-language modifiers between their ordered terms.  This keeps matching anchored
+        # by the exact identifier while handling phrases such as "maximum ... for a
+        # customer_unique_id" without fuzzy embedding guesses.
+        terms = normalized_alias.split()
+        if len(terms) < 2:
+            return False
+        cursor = 0
+        start: int | None = None
+        end = 0
+        for term in terms:
+            match = re.search(rf"(?<!\w){re.escape(term)}(?!\w)", question[cursor:])
+            if match is None:
+                return False
+            absolute_start = cursor + match.start()
+            end = cursor + match.end()
+            if start is None:
+                start = absolute_start
+            cursor = end
+        return start is not None and end - start <= 160
     return re.search(rf"(?<!\w){re.escape(normalized_alias)}(?!\w)", question) is not None
 
 
@@ -134,6 +156,7 @@ def validate_semantic_catalog(semantic_catalog: SemanticCatalog, catalog: Catalo
     _validate_aliases("entity", semantic_catalog.entities)
     _validate_aliases("metric", semantic_catalog.metrics)
     _validate_aliases("derived", semantic_catalog.derived)
+    _validate_aliases("frequency ranking", semantic_catalog.frequency_rankings)
     for name, entity_rule in semantic_catalog.entities.items():
         if entity_rule.table not in tables:
             raise ValueError(f"semantic entity {name} references unknown table {entity_rule.table}")
@@ -183,6 +206,11 @@ def validate_semantic_catalog(semantic_catalog: SemanticCatalog, catalog: Catalo
         }
         if len(owners) != 1:
             raise ValueError(f"semantic derived rule {name} is not a single-owner scalar rule")
+    for name, ranking_rule in semantic_catalog.frequency_rankings.items():
+        if ranking_rule.table not in tables:
+            raise ValueError(f"semantic frequency ranking {name} references unknown table")
+        if _qualified(ranking_rule.table, ranking_rule.dimension_column) not in columns:
+            raise ValueError(f"semantic frequency ranking {name} references unknown column")
 
 
 def load_semantic_catalog(path: Path, catalog: CatalogSnapshot) -> SemanticCatalog:
@@ -261,10 +289,42 @@ def resolve_semantic_binding(
             reasons=("NO_SEMANTIC_CATALOG",),
         )
     normalized = f" {_normalize(question)} "
+    frequency_rankings = _matched_rules(normalized, semantic_catalog.frequency_rankings)
     derived = _matched_rules(normalized, semantic_catalog.derived)
     metrics = _matched_rules(normalized, semantic_catalog.metrics)
     entities = _matched_rules(normalized, semantic_catalog.entities)
     asks_count = any(marker in normalized for marker in _COUNT_MARKERS)
+    if len(frequency_rankings) > 1:
+        return SemanticBinding(
+            db_id=catalog.db_id,
+            catalog_hash=catalog.catalog_hash,
+            status=BindingStatus.AMBIGUOUS,
+            reasons=("MULTIPLE_FREQUENCY_RANKINGS",),
+        )
+    if len(frequency_rankings) == 1:
+        name, rule = frequency_rankings[0]
+        ranking = FrequencyRankingSpec(
+            table=rule.table,
+            dimension_column=rule.dimension_column,
+            evidence_id=f"semantic.frequency_ranking.{name}",
+            source_grain=rule.source_grain,
+            limit=decomposition.limit_hint or 1,
+        )
+        ranking_reasons: list[str] = []
+        if decomposition.filter_hints or decomposition.time_hints:
+            ranking_reasons.append("FILTERED_FREQUENCY_RANKING_UNSUPPORTED")
+        if decomposition.set_operation_hint is not None:
+            ranking_reasons.append("SET_FREQUENCY_RANKING_UNSUPPORTED")
+        return SemanticBinding(
+            db_id=catalog.db_id,
+            catalog_hash=catalog.catalog_hash,
+            status=(BindingStatus.PROVEN if not ranking_reasons else BindingStatus.INCOMPLETE),
+            frequency_ranking=ranking,
+            required_tables=(rule.table,),
+            required_columns=(_qualified(rule.table, rule.dimension_column),),
+            rule_ids=(f"frequency_ranking.{name}",),
+            reasons=tuple(ranking_reasons),
+        )
     derived_operator_is_explicit = bool(
         len(derived) == 1
         and (derived[0][1].aggregate.operator is not AggregateOperator.COUNT_ROWS or asks_count)
@@ -345,11 +405,16 @@ def resolve_semantic_binding(
         selected_operator = (
             requested_operators[0] if len(requested_operators) == 1 else metric_rule.operator
         )
+        count_marker_is_metric_phrase = any(
+            marker.strip() in _normalize(alias) and _contains_alias(normalized, alias)
+            for marker in _COUNT_MARKERS
+            for alias in metric_rule.aliases
+        )
         if len(requested_operators) > 1:
             operator_reason = "MULTIPLE_AGGREGATE_OPERATORS"
         elif selected_operator not in allowed_operators:
             operator_reason = "AGGREGATE_OPERATOR_NOT_ALLOWED"
-        elif asks_count:
+        elif asks_count and not count_marker_is_metric_phrase:
             operator_reason = "COUNT_METRIC_CONFLICT"
         aggregate = AggregateSpec(
             operator=selected_operator,

@@ -7,6 +7,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from agentic_text2sql.contracts.semantics import (
     AggregateSpec,
+    FrequencyRankingSpec,
     PredicateSpec,
     SemanticBinding,
 )
@@ -165,6 +166,7 @@ class ClausePlan(BaseModel):
     subqueries: list[SubqueryStep] = Field(default_factory=list, max_length=6)
     set_operation: Literal["UNION", "INTERSECT", "EXCEPT"] | None = None
     aggregate: AggregateSpec | None = None
+    frequency_ranking: FrequencyRankingSpec | None = None
     predicates: list[PredicateSpec] = Field(default_factory=list, max_length=12)
 
 

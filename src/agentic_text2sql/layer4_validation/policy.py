@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 from sqlglot import exp
+from sqlglot.optimizer.scope import Scope, traverse_scope
 
-from agentic_text2sql.contracts.catalog import CatalogSnapshot
+from agentic_text2sql.contracts.catalog import CatalogSnapshot, TableInfo
 from agentic_text2sql.contracts.validation import ErrorClass, PolicyDecision
 from agentic_text2sql.layer4_validation.parser import SQLParseError, parse_one
 
@@ -29,6 +30,46 @@ FORBIDDEN_NODE_NAMES = {
 
 def _blocked(message: str, error: ErrorClass = ErrorClass.POLICY_VIOLATION) -> PolicyDecision:
     return PolicyDecision(allowed=False, error_class=error, safe_message=message)
+
+
+def _scope_output_columns(
+    scope: Scope,
+    allowed_tables: dict[str, TableInfo],
+    cache: dict[int, set[str]],
+) -> set[str]:
+    """Resolve names exported by one CTE/derived-table scope without trusting SQL text."""
+    key = id(scope)
+    if key in cache:
+        return cache[key]
+    outputs = {
+        selection.alias_or_name
+        for selection in scope.expression.selects
+        if selection.alias_or_name and not selection.is_star
+    }
+    if any(selection.is_star for selection in scope.expression.selects):
+        for source in scope.sources.values():
+            if isinstance(source, Scope):
+                outputs.update(_scope_output_columns(source, allowed_tables, cache))
+            elif isinstance(source, exp.Table) and source.name in allowed_tables:
+                table = allowed_tables[source.name]
+                outputs.update(column.name for column in table.columns)
+    cache[key] = outputs
+    return outputs
+
+
+def _source_columns(
+    scope: Scope,
+    allowed_tables: dict[str, TableInfo],
+    cache: dict[int, set[str]],
+) -> dict[str, set[str]]:
+    columns: dict[str, set[str]] = {}
+    for alias, source in scope.sources.items():
+        if isinstance(source, Scope):
+            columns[alias] = _scope_output_columns(source, allowed_tables, cache)
+        elif isinstance(source, exp.Table) and source.name in allowed_tables:
+            table = allowed_tables[source.name]
+            columns[alias] = {column.name for column in table.columns}
+    return columns
 
 
 class SQLSafetyPolicy:
@@ -65,31 +106,48 @@ class SQLSafetyPolicy:
             referenced_tables.add(name)
             aliases[table_expression.alias_or_name] = name
 
-        for column in statement.find_all(exp.Column):
-            if column.is_star:
-                continue
-            qualifier = column.table
-            if qualifier:
-                table_name = aliases.get(qualifier, qualifier)
-                if table_name in cte_names:
+        scope_output_cache: dict[int, set[str]] = {}
+        for scope in traverse_scope(statement):
+            source_columns = _source_columns(scope, allowed_tables, scope_output_cache)
+            projection_aliases = {
+                item.alias for item in scope.expression.selects if getattr(item, "alias", "")
+            }
+            external_columns = set(scope.external_columns)
+            for column in scope.columns:
+                if column.is_star:
                     continue
-                table_info = allowed_tables.get(table_name)
-                if table_info is None:
+                qualifier = column.table
+                if qualifier:
+                    if qualifier in source_columns:
+                        if column.name not in source_columns[qualifier]:
+                            return _blocked(
+                                f"Unknown column: {qualifier}.{column.name}",
+                                ErrorClass.UNKNOWN_COLUMN,
+                            )
+                        continue
+                    table_name = aliases.get(qualifier, qualifier)
+                    table_info = allowed_tables.get(table_name)
+                    if table_info is not None and column.name not in {
+                        item.name for item in table_info.columns
+                    }:
+                        return _blocked(
+                            f"Unknown column: {qualifier}.{column.name}",
+                            ErrorClass.UNKNOWN_COLUMN,
+                        )
                     continue
-                if column.name not in {item.name for item in table_info.columns}:
-                    return _blocked(
-                        f"Unknown column: {qualifier}.{column.name}", ErrorClass.UNKNOWN_COLUMN
-                    )
-            elif referenced_tables and not any(
-                column.name in {item.name for item in allowed_tables[name].columns}
-                for name in referenced_tables
-            ):
-                # Projection aliases are valid in ORDER BY/GROUP BY and are not catalog columns.
-                projection_aliases = {
-                    item.alias for item in statement.selects if getattr(item, "alias", "")
-                }
-                if column.name not in projection_aliases:
-                    return _blocked(f"Unknown column: {column.name}", ErrorClass.UNKNOWN_COLUMN)
+                if column.name in projection_aliases or any(
+                    column.name in names for names in source_columns.values()
+                ):
+                    continue
+                # sqlglot marks correlated references as external to the child scope. Resolve
+                # these against catalog columns visible to an outer scope, preserving support for
+                # safe correlated subqueries without letting an invented local name through.
+                if column in external_columns and any(
+                    column.name in {item.name for item in table.columns}
+                    for table in allowed_tables.values()
+                ):
+                    continue
+                return _blocked(f"Unknown column: {column.name}", ErrorClass.UNKNOWN_COLUMN)
 
         limit_injected = False
         scalar_aggregate = (

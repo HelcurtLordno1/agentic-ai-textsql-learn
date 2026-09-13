@@ -16,10 +16,11 @@ from agentic_text2sql.adapters.llm.ollama_provider import OllamaProvider
 from agentic_text2sql.contracts.catalog import CatalogSnapshot
 from agentic_text2sql.contracts.sql import DirectRunResult
 from agentic_text2sql.layer1_reasoning.decomposer import Decomposer
-from agentic_text2sql.layer1_reasoning.planner import CONTROL_PLANNER_VERSION, PlannerAgent
+from agentic_text2sql.layer1_reasoning.planner import PlannerAgent
 from agentic_text2sql.layer1_reasoning.router import QueryRouter
 from agentic_text2sql.layer2_grounding.semantic_catalog import load_semantic_catalog
 from agentic_text2sql.layer2_grounding.service import GroundingService, IndexService
+from agentic_text2sql.layer3_generation.easy_compiler import GroundedEasyCompiler
 from agentic_text2sql.layer3_generation.generator import GeneratorAgent
 from agentic_text2sql.layer3_generation.normalizer import CandidateNormalizer
 from agentic_text2sql.layer3_generation.prompt_builder import (
@@ -87,7 +88,7 @@ class RuntimeBundle(AbstractContextManager["RuntimeBundle"]):
             },
             "prompt_versions": {
                 "planner": (
-                    f"adaptive({CONTROL_PLANNER_VERSION},planner_v3_din_sql)"
+                    "adaptive(planner_v2,planner_v3_din_sql)"
                     if hybrid
                     else "planner_v3_din_sql"
                     if din_sql
@@ -101,7 +102,7 @@ class RuntimeBundle(AbstractContextManager["RuntimeBundle"]):
                     else BASELINE_GENERATOR_PROMPT_VERSION
                 ),
                 "corrector": (
-                    "adaptive(corrector_v3_cross_domain,corrector_v4_din_sql)"
+                    "adaptive(corrector_v3_semantic_proof,corrector_v5_din_semantic_proof)"
                     if hybrid
                     else CORRECTOR_PROMPT_VERSION
                     if din_sql
@@ -112,9 +113,10 @@ class RuntimeBundle(AbstractContextManager["RuntimeBundle"]):
             "planning_mode": settings.planning_mode,
             "adaptive_policy": (
                 {
-                    "version": "adaptive_baseline_first_v2",
+                    "version": "adaptive_semantic_proof_first_v4",
                     "default_route": "BASELINE_PRESERVE",
-                    "din_activation": "explicit_complex_dependencies_only",
+                    "din_activation": "proven_semantic_binding_or_explicit_complex_dependency",
+                    "fallback": "frozen_p6_planner_grounding_generation_correction",
                 }
                 if hybrid
                 else None
@@ -129,8 +131,8 @@ class RuntimeBundle(AbstractContextManager["RuntimeBundle"]):
             ),
             "correction": {
                 "enabled": correction_enabled,
-                "max_repairs": 1 if correction_enabled else 0,
-                "max_llm_calls": 1 if correction_enabled else 0,
+                "max_repairs": 2 if correction_enabled else 0,
+                "max_llm_calls": 2 if correction_enabled else 0,
             },
         }
         self.embedding: OllamaEmbeddingClient | None = None
@@ -200,8 +202,8 @@ class RuntimeBundle(AbstractContextManager["RuntimeBundle"]):
                     (CORRECTOR_PROMPT_VERSION if din_sql else BASELINE_CORRECTOR_PROMPT_VERSION),
                 ),
                 validation=ValidationService(policy, executor),
-                max_repairs=1,
-                max_llm_calls=1,
+                max_repairs=2,
+                max_llm_calls=2,
             )
         din_correction = None
         if correction_enabled and hybrid:
@@ -215,8 +217,8 @@ class RuntimeBundle(AbstractContextManager["RuntimeBundle"]):
                     CORRECTOR_PROMPT_VERSION,
                 ),
                 validation=ValidationService(policy, executor),
-                max_repairs=1,
-                max_llm_calls=1,
+                max_repairs=2,
+                max_llm_calls=2,
             )
         din_generation = None
         if hybrid:
@@ -251,6 +253,7 @@ class RuntimeBundle(AbstractContextManager["RuntimeBundle"]):
             din_generation=din_generation,
             policy=policy,
             executor=executor,
+            easy_compiler=GroundedEasyCompiler(normalizer),
             grounding=grounding,
             correction=correction,
             din_correction=din_correction,

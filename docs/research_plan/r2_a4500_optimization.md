@@ -138,3 +138,40 @@ Nineteen of 20 cases took `BASELINE_PRESERVE`; all three paired regressions were
 while the single DIN-enhanced case was correct. A future gate must hold the P6 planner and
 retrieval/context constant and change one intervention at a time. It may not reuse this checkpoint
 or infer a general DIN-SQL effect from one complex-route observation.
+
+## Revision B: baseline-equivalent control (2026-09-12)
+
+Revision B removes both confounds. Hybrid mode first runs the frozen planner v2. Preserve cases then
+use the normal `ground()` and baseline generator/corrector; only DIN-routed cases call decomposed
+grounding and planner v3. Integration tests assert the preserve call sequence and the bounded extra
+calls on a complex route. `make check` passed 240 non-Ollama tests.
+
+Administrator hard-capped the GPU at 300--600 MHz. A new one-case pilot passed, and the exact same
+checkpoint continued under `olist-paper1-ultrasafe`. Accuracy exit 76 stopped it at 14 cases with
+`10/14` correct: its maximum possible full-suite score was `56/60`, below the frozen `57/60` gate.
+P6 was `13/14` on the same prefix. The only DIN-routed case was correct; three new paired failures
+were preserve cases, so one complex observation cannot identify a DIN effect and ordinary model
+variance remains a plausible contributor.
+
+No resource breaker fired. Continuous monitoring observed peak VRAM 1,719 MiB, 57 C, 72.26 W,
+98% utilization and 600 MHz; minimum available RAM was 22.31 GiB and swap use was zero. Ollama and
+benchmark processes were removed after the accuracy stop. Revision B is rejected for promotion,
+must not resume this checkpoint, and Spider remains blocked. The next revision must use a separate
+development partition to quantify control variance and isolate exactly one of proof-graph
+validation or join-hop-aware decomposition before another source-locked Olist run.
+
+## Revision C: semantic proof and bounded hierarchical backtracking (2026-09-13)
+
+Revision C is a new construction gate informed by SQLens, DAC, multi-grained error identification,
+and DART-SQL. It adds gold-blind question/entity/skeleton checks for explicit values and identity,
+scalar group-filter grain, distributions, and tie breaks. Semantic checks inspect original SQL while
+the executor retains its normalized safety limit. Correction may make two clause-local attempts,
+stops on repeated SQL/error, and expands schema only for owner/join evidence when the whole catalog
+is at most 12 tables and 1,600 estimated tokens.
+
+The reused four-case failure diagnostic is not promotion evidence. It recovered cases 003 and 007
+from incorrect first passes. Case 014 exposed and motivated the safety-limit separation. Case 011
+showed that even two corrections and bounded full-catalog expansion preserve the wrong baseline
+skeleton; therefore returning-customer with a more-than-one-order predicate is now classified as a
+group-filter aggregate dependency and routed to DIN semantic planning. A fresh construction check
+and clean evaluation are required; R2 remains `IN_PROGRESS` and Spider remains blocked.

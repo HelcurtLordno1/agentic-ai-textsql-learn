@@ -39,9 +39,37 @@ SIGNAL_GUIDANCE = {
     "RETURNING_CUSTOMER_OUTPUT_SHAPE": (
         "Project only the single requested returning-customer count."
     ),
+    "RETURNING_CUSTOMER_REQUIRES_OUTER_COUNT": (
+        "Count returning customers at customer grain: prefer customer_order_facts with "
+        "order_count > 1, or wrap a customer_unique_id GROUP BY/HAVING subquery in an outer COUNT."
+    ),
+    "EXPLICIT_CUSTOMER_UNIQUE_ID_MISSING": (
+        "The question explicitly names customer_unique_id; count that field from its owning "
+        "customer relation and do not substitute customer_id."
+    ),
+    "EXPLICIT_ORDER_STATUS_MISMATCH": (
+        "Preserve the explicitly requested order status using olist_orders_dataset.order_status; "
+        "do not substitute another entity, column, or status value."
+    ),
     "DELIVERY_POPULATION_NARROWED_BY_STATUS": (
         "Do not filter order_status='delivered'; use non-null delivered timestamps "
         "and the requested date comparison."
+    ),
+    "PAYMENT_TYPE_RECORD_GRAIN_MISMATCH": (
+        "The requested groups are raw payment_type records. Use "
+        "olist_order_payments_dataset.payment_type and count rows at payment-record grain; "
+        "do not substitute a per-order distinct-payment count."
+    ),
+    "REVIEW_FREQUENCY_GRAIN_MISMATCH": (
+        "Count raw review rows by olist_order_reviews_dataset.review_score; do not substitute "
+        "per-order summary maxima or review_row_count."
+    ),
+    "FREQUENCY_TIE_BREAK_MISSING": (
+        "After row count DESC, order the grouped value ASC for deterministic ties."
+    ),
+    "PRODUCT_CATEGORY_NULL_POPULATION_MISMATCH": (
+        "Missing product category means product_category_name IS NULL. Do not broaden the "
+        "population with translation-field nulls."
     ),
     "TOP_K_MISSING_ORDER": "Add deterministic ORDER BY matching the ranking intent.",
     "TOP_K_MISSING_LIMIT": "Add the requested LIMIT.",
@@ -50,6 +78,10 @@ SIGNAL_GUIDANCE = {
     "RANKING_LIMIT_MISMATCH": "Use the exact top-k LIMIT requested; use LIMIT 1 for 'most'.",
     "ALPHABETICAL_TIE_BREAK_MISSING": (
         "After the descending metric, add the requested name/dimension ASC tie-break."
+    ),
+    "DISTRIBUTION_LIMIT_UNREQUESTED": (
+        "Return the complete grouped distribution; remove LIMIT because the question asks to list "
+        "all groups, not only the maximum group."
     ),
     "SCALAR_MAXIMUM_AGGREGATE_MISSING": "Return one scalar MAX(...) value, not the winning row.",
     "RECORD_COUNT_MUST_NOT_BE_DISTINCT": (
@@ -92,6 +124,20 @@ SIGNAL_CLAUSES: dict[str, tuple[str, ...]] = {
     "SCALAR_AGGREGATE_COLUMN_COUNT": ("SELECT",),
     "AVERAGE_AGGREGATE_MISSING": ("SELECT",),
     "CUSTOMER_IDENTITY_NOT_UNIQUE": ("FROM", "JOIN", "GROUP_BY"),
+    "RETURNING_CUSTOMER_OUTPUT_SHAPE": ("SELECT",),
+    "RETURNING_CUSTOMER_REQUIRES_OUTER_COUNT": (
+        "SELECT",
+        "FROM",
+        "JOIN",
+        "GROUP_BY",
+        "HAVING",
+    ),
+    "EXPLICIT_CUSTOMER_UNIQUE_ID_MISSING": ("SELECT", "FROM", "JOIN"),
+    "EXPLICIT_ORDER_STATUS_MISMATCH": ("FROM", "WHERE"),
+    "PAYMENT_TYPE_RECORD_GRAIN_MISMATCH": ("SELECT", "FROM", "GROUP_BY", "ORDER_BY"),
+    "REVIEW_FREQUENCY_GRAIN_MISMATCH": ("SELECT", "FROM", "GROUP_BY", "ORDER_BY"),
+    "FREQUENCY_TIE_BREAK_MISSING": ("ORDER_BY",),
+    "PRODUCT_CATEGORY_NULL_POPULATION_MISMATCH": ("FROM", "WHERE"),
     "DELIVERY_POPULATION_NARROWED_BY_STATUS": ("WHERE",),
     "TOP_K_MISSING_ORDER": ("ORDER_BY",),
     "TOP_K_MISSING_LIMIT": ("LIMIT",),
@@ -99,6 +145,7 @@ SIGNAL_CLAUSES: dict[str, tuple[str, ...]] = {
     "RANKING_PRIMARY_NOT_DESC": ("ORDER_BY",),
     "RANKING_LIMIT_MISMATCH": ("LIMIT",),
     "ALPHABETICAL_TIE_BREAK_MISSING": ("ORDER_BY",),
+    "DISTRIBUTION_LIMIT_UNREQUESTED": ("LIMIT",),
     "SCALAR_MAXIMUM_AGGREGATE_MISSING": ("SELECT", "GROUP_BY", "ORDER_BY", "LIMIT"),
 }
 

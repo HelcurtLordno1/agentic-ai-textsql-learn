@@ -1,3 +1,5 @@
+import sqlite3
+
 from agentic_text2sql.contracts.planning import (
     ClausePlan,
     ComplexityDecision,
@@ -16,8 +18,10 @@ from agentic_text2sql.contracts.semantics import (
     SemanticBinding,
 )
 from agentic_text2sql.contracts.validation import ErrorClass, ResultPreview
+from agentic_text2sql.layer2_grounding.introspector import SQLiteIntrospector
 from agentic_text2sql.layer4_validation.result_validator import validate_result
 from agentic_text2sql.layer4_validation.semantic_checks import validate_semantics
+from agentic_text2sql.layer4_validation.service import ValidationService
 
 
 def aggregate_plan(metric: str = "customer count") -> LogicalPlan:
@@ -101,6 +105,18 @@ def test_late_delivery_rule_rejects_status_population_narrowing() -> None:
     assert "DELIVERY_POPULATION_NARROWED_BY_STATUS" in report.signals
 
 
+def test_late_delivery_does_not_require_delivered_status_filter() -> None:
+    report = validate_semantics(
+        "How many orders were delivered late based on actual versus estimated delivery timestamp?",
+        aggregate_plan("late order count"),
+        "SELECT COUNT(*) FROM olist_orders_dataset "
+        "WHERE order_delivered_customer_date IS NOT NULL "
+        "AND order_delivered_customer_date > order_estimated_delivery_date",
+        db_id="olist",
+    )
+    assert report.accepted
+
+
 def test_semantic_validator_trusts_proven_derived_grain_lineage() -> None:
     returning = proven_derived_plan(
         "derived.repeat_customer",
@@ -131,6 +147,53 @@ def test_semantic_validator_keeps_lexical_guard_without_proven_lineage() -> None
     )
     assert not report.accepted
     assert "CUSTOMER_IDENTITY_NOT_UNIQUE" in report.signals
+
+
+def test_explicit_customer_identity_trusts_proven_source_grain() -> None:
+    aggregate = AggregateSpec(
+        operator=AggregateOperator.MAX,
+        table="customer_order_facts",
+        column="order_count",
+        evidence_id="semantic.derived.customer_order_max",
+        source_grain="one row per customer_unique_id",
+    )
+    binding = SemanticBinding(
+        db_id="olist",
+        catalog_hash="catalog",
+        status=BindingStatus.PROVEN,
+        aggregate=aggregate,
+        required_tables=("customer_order_facts",),
+        required_columns=("customer_order_facts.order_count",),
+        rule_ids=("derived.customer_order_max",),
+    )
+    plan = DINSQLPlan(
+        question_language="vi",
+        task_type="aggregation",
+        metrics=["order count"],
+        semantic_links=SemanticLinkPlan(
+            db_id="olist",
+            catalog_hash="catalog",
+            binding=binding,
+            required_tables=("customer_order_facts",),
+        ),
+        complexity=ComplexityDecision(
+            kind=ComplexityKind.AGGREGATE,
+            strategy=PlanningStrategy.EASY,
+        ),
+        clauses=ClausePlan(
+            select=["MAX customer_order_facts.order_count"],
+            from_tables=["customer_order_facts"],
+            output_grain="one scalar row",
+            aggregate=aggregate,
+        ),
+    )
+    report = validate_semantics(
+        "Số đơn hàng lớn nhất từng được ghi nhận cho một customer_unique_id là bao nhiêu?",
+        plan,
+        "SELECT MAX(order_count) FROM customer_order_facts",
+        db_id="olist",
+    )
+    assert report.accepted
 
 
 def test_valid_scalar_aggregate_has_no_semantic_suspicion() -> None:
@@ -222,3 +285,141 @@ def test_olist_business_rules_do_not_leak_into_cross_domain_database() -> None:
         db_id="generic_photos",
     )
     assert report.accepted
+
+
+def test_explicit_olist_status_and_customer_identity_are_proof_checked() -> None:
+    wrong_status = validate_semantics(
+        "Có bao nhiêu đơn hàng đã hủy?",
+        aggregate_plan("order count"),
+        "SELECT COUNT(*) FROM olist_order_reviews_dataset WHERE review_row_id IS NOT NULL",
+        db_id="olist",
+    )
+    wrong_identity = validate_semantics(
+        "Có bao nhiêu người mua duy nhất theo customer_unique_id?",
+        aggregate_plan("customer count"),
+        "SELECT COUNT(DISTINCT customer_id) FROM olist_orders_dataset",
+        db_id="olist",
+    )
+    assert "EXPLICIT_ORDER_STATUS_MISMATCH" in wrong_status.signals
+    assert "EXPLICIT_CUSTOMER_UNIQUE_ID_MISSING" in wrong_identity.signals
+
+
+def test_returning_customer_scalar_rejects_top_level_grouping() -> None:
+    report = validate_semantics(
+        "Có bao nhiêu khách hàng quay lại với hơn một đơn hàng?",
+        aggregate_plan("returning customer count"),
+        "SELECT COUNT(DISTINCT customer_unique_id) FROM customers "
+        "GROUP BY customer_unique_id HAVING COUNT(*) > 1",
+        db_id="olist",
+    )
+    assert "RETURNING_CUSTOMER_REQUIRES_OUTER_COUNT" in report.signals
+
+
+def test_ordered_distribution_forbids_unrequested_top_one() -> None:
+    mistaken_plan = LogicalPlan(
+        question_language="en",
+        task_type="ranking",
+        metrics=["order count"],
+        dimensions=["status"],
+        limit=1,
+    )
+    report = validate_semantics(
+        "List order counts by status ordered from highest count, breaking ties by status.",
+        mistaken_plan,
+        "SELECT order_status, COUNT(*) c FROM orders GROUP BY order_status "
+        "ORDER BY c DESC, order_status DESC LIMIT 1",
+    )
+    assert "DISTRIBUTION_LIMIT_UNREQUESTED" in report.signals
+    assert "ALPHABETICAL_TIE_BREAK_MISSING" in report.signals
+    assert "TOP_K_MISSING_LIMIT" not in report.signals
+
+    corrected = validate_semantics(
+        "List order counts by status ordered from highest count, breaking ties by status.",
+        mistaken_plan,
+        "SELECT order_status, COUNT(*) c FROM orders GROUP BY order_status "
+        "ORDER BY c DESC, order_status ASC",
+    )
+    assert corrected.accepted
+
+
+def test_safety_default_limit_is_not_mistaken_for_user_requested_limit(tmp_path) -> None:
+    database = tmp_path / "distribution.sqlite"
+    with sqlite3.connect(database) as connection:
+        connection.execute("CREATE TABLE orders(status TEXT)")
+        connection.executemany("INSERT INTO orders VALUES (?)", [("done",), ("new",)])
+    catalog = SQLiteIntrospector().inspect(database, "olist")
+    plan = LogicalPlan(
+        question_language="en",
+        task_type="ranking",
+        metrics=["order count"],
+        dimensions=["status"],
+        limit=1,
+    )
+    report, result = ValidationService().run(
+        database,
+        "SELECT status, COUNT(*) c FROM orders GROUP BY status ORDER BY c DESC, status ASC",
+        catalog,
+        question="List order counts by status ordered from highest count, breaking ties by status.",
+        plan=plan,
+    )
+    assert report.accepted
+    assert result is not None and len(result.rows) == 2
+
+
+def test_olist_role_proof_rejects_payment_and_category_population_substitution() -> None:
+    payment = validate_semantics(
+        "Which payment type has the most payment records? Return type and count.",
+        aggregate_plan("payment count"),
+        "SELECT distinct_payment_type_count, COUNT(*) FROM order_payment_totals "
+        "GROUP BY distinct_payment_type_count ORDER BY 2 DESC LIMIT 1",
+        db_id="olist",
+    )
+    category = validate_semantics(
+        "Có bao nhiêu sản phẩm thiếu danh mục?",
+        aggregate_plan("product count"),
+        "SELECT COUNT(*) FROM products_semantic WHERE product_category_name IS NULL "
+        "OR product_category_name_english IS NULL",
+        db_id="olist",
+    )
+    assert "PAYMENT_TYPE_RECORD_GRAIN_MISMATCH" in payment.signals
+    assert "PRODUCT_CATEGORY_NULL_POPULATION_MISMATCH" in category.signals
+
+
+def test_review_frequency_requires_raw_grain_and_deterministic_tie_break() -> None:
+    question = "Điểm review nào xuất hiện nhiều nhất? Trả về điểm và số review."
+    wrong = validate_semantics(
+        question,
+        aggregate_plan("review count"),
+        "SELECT maximum_review_score, review_row_count FROM order_review_summary "
+        "ORDER BY review_row_count DESC LIMIT 1",
+        db_id="olist",
+    )
+    correct = validate_semantics(
+        question,
+        aggregate_plan("review count"),
+        "SELECT review_score, COUNT(*) AS review_count "
+        "FROM olist_order_reviews_dataset GROUP BY review_score "
+        "ORDER BY review_count DESC, review_score ASC LIMIT 1",
+        db_id="olist",
+    )
+    assert "REVIEW_FREQUENCY_GRAIN_MISMATCH" in wrong.signals
+    assert "FREQUENCY_TIE_BREAK_MISSING" in wrong.signals
+    assert correct.accepted
+
+
+def test_olist_role_proof_accepts_exact_payment_and_category_populations() -> None:
+    payment = validate_semantics(
+        "Which payment type has the most payment records? Return type and count.",
+        aggregate_plan("payment count"),
+        "SELECT payment_type, COUNT(*) c FROM olist_order_payments_dataset "
+        "GROUP BY payment_type ORDER BY c DESC LIMIT 1",
+        db_id="olist",
+    )
+    category = validate_semantics(
+        "Có bao nhiêu sản phẩm thiếu danh mục?",
+        aggregate_plan("product count"),
+        "SELECT COUNT(*) FROM olist_products_dataset WHERE product_category_name IS NULL",
+        db_id="olist",
+    )
+    assert payment.accepted
+    assert category.accepted

@@ -8,7 +8,9 @@ from typing import Any
 
 from pydantic import BaseModel
 
+from agentic_text2sql.contracts.correction import CorrectionPlan
 from agentic_text2sql.contracts.planning import LogicalPlan
+from agentic_text2sql.contracts.retrieval import SchemaContext
 from agentic_text2sql.contracts.sql import CandidateRecord, SqlCandidate
 from agentic_text2sql.contracts.validation import ErrorClass, ValidationReport
 from agentic_text2sql.layer2_grounding.introspector import SQLiteIntrospector
@@ -16,7 +18,7 @@ from agentic_text2sql.layer3_generation.normalizer import CandidateNormalizer
 from agentic_text2sql.layer4_validation.executor import ReadOnlySQLiteExecutor
 from agentic_text2sql.layer4_validation.policy import SQLSafetyPolicy
 from agentic_text2sql.layer4_validation.service import ValidationService
-from agentic_text2sql.layer5_correction.corrector import CorrectorAgent
+from agentic_text2sql.layer5_correction.corrector import CorrectorAgent, correction_schema_context
 from agentic_text2sql.layer5_correction.service import CorrectionService
 
 
@@ -187,6 +189,68 @@ def test_loop_stops_on_repeated_sql(tmp_path: Path) -> None:
     )
     assert outcome.stop_reason.value == "REPEATED_SQL"
     assert outcome.repairs == outcome.llm_calls == 1
+
+
+def test_hierarchical_repair_can_backtrack_after_error_class_changes(tmp_path: Path) -> None:
+    database = make_database(tmp_path)
+    catalog = SQLiteIntrospector().inspect(database, "test")
+    provider = FakeProvider(
+        [
+            SqlCandidate(sql="SELECT AVG(missing_score) FROM reviews", confidence=0.7),
+            SqlCandidate(sql="SELECT AVG(review_score) FROM reviews", confidence=0.9),
+        ]
+    )
+    service = make_service(tmp_path, provider, max_repairs=2, max_llm_calls=2)
+    failed = initial_candidate("SELECT review_score FROM reviews", catalog.catalog_hash)
+    initial_report = ValidationReport(
+        accepted=False,
+        error_class=ErrorClass.SEMANTIC_MISMATCH,
+        signals=["AVERAGE_AGGREGATE_MISSING"],
+        repair_eligible=True,
+    )
+    outcome, candidate, report, result = service.run(
+        question="What is the average review score?",
+        plan=average_plan(),
+        catalog=catalog,
+        database=database,
+        failed_candidate=failed,
+        initial_report=initial_report,
+    )
+    assert outcome.recovered
+    assert outcome.repairs == outcome.llm_calls == 2
+    assert [item.validation.error_class for item in outcome.attempts] == [
+        ErrorClass.UNKNOWN_COLUMN,
+        None,
+    ]
+    assert candidate.normalized_sql == "SELECT AVG(review_score) FROM reviews"
+    assert report.accepted and result is not None
+
+
+def test_owner_failure_expands_only_a_bounded_small_catalog(tmp_path: Path) -> None:
+    database = make_database(tmp_path)
+    with sqlite3.connect(database) as connection:
+        connection.execute("CREATE TABLE customer_facts(customer_unique_id TEXT)")
+    catalog = SQLiteIntrospector().inspect(database, "test")
+    narrow = SchemaContext(
+        db_id="test",
+        selected_tables=["reviews"],
+        selected_columns=["reviews.review_score"],
+        joins=[],
+        evidence=[],
+        catalog_hash=catalog.catalog_hash,
+        rendered_context="TABLE reviews(review_score INTEGER)",
+    )
+    plan = CorrectionPlan(
+        error_class=ErrorClass.UNKNOWN_COLUMN,
+        suspected_cause="owner missing",
+        changes_required=("resolve owner",),
+        should_retry=True,
+    )
+    expanded = correction_schema_context(catalog, narrow, plan)
+    assert "customer_facts" in expanded
+
+    ordinary = plan.model_copy(update={"error_class": ErrorClass.SYNTAX_ERROR})
+    assert correction_schema_context(catalog, narrow, ordinary) == narrow.rendered_context
 
 
 def test_expired_deadline_prevents_model_call(tmp_path: Path) -> None:

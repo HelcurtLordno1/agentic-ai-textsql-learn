@@ -1,5 +1,163 @@
 # So sánh kiến trúc Paper II / DIN-SQL với baseline Olist đã đóng băng
 
+## Revision G — global semantic proof-first (đang đánh giá)
+
+Revision E đã nâng prefix sạch lên 28/31 nhưng không thể vượt champion 57/60. Revision F sửa ba
+failure class tổng quát: raw payment-record frequency, freight-per-order aggregate và
+`customer_unique_id` source-grain lineage. Pilot Revision F không kết luận accuracy vì planner v2
+timeout hai lần ở case đầu, dù guard không breach (đỉnh 2.125 MiB VRAM, 56 C, 45,18 W, swap 0).
+
+Revision G loại bottleneck đó cho mọi semantic contract được chứng minh đầy đủ: resolver chạy trước
+retrieval/model, dựng context tối thiểu từ catalog hash + owner + required columns, rồi typed planner
+và `generator_v8_proof_compiler` sinh SQL. Binding thiếu hoặc ambiguous vẫn backtrack sang explicit
+DIN hoặc frozen P6, nên không ép rule đoán. Fast path dùng 0 LLM call và 0 embedding call; baseline
+mode độc lập vẫn tồn tại làm ablation. Construction gate pass Ruff/format, mypy 111 source và 271
+pytest non-Ollama (1 test Ollama deselect). Kết quả benchmark chỉ được điền sau evaluation ID sạch;
+checkpoint timeout Revision F không được resume hay gộp.
+
+Nguồn thiết kế: [SQLens, NeurIPS 2025](https://proceedings.neurips.cc/paper_files/paper/2025/hash/c57812dee8acade8c5e385260b2cde28-Abstract-Conference.html),
+[Multi-grained Error Identification, COLING 2025](https://aclanthology.org/2025.coling-main.289/),
+[DAC, Findings EMNLP 2025](https://aclanthology.org/2025.findings-emnlp.22/), và
+[DART-SQL, Findings ACL 2024](https://aclanthology.org/2024.findings-acl.120/).
+
+## Revision C — semantic proof và hierarchical backtracking (2026-09-13)
+
+Revision C xử lý failure class, không hard-code gold SQL. Phân tích prefix revision B cho thấy bốn
+SQL đều executable nhưng sai entity/value, identity/grain hoặc distribution shape. Thiết kế mới:
+
+1. proof gate question--entity--skeleton bắt explicit order status, explicit
+   `customer_unique_id`, returning-customer scalar grain, full distribution và tie-break;
+2. semantic validation dùng SQL nguyên bản, còn safety policy vẫn execute bản normalized có
+   `LIMIT 200`, tránh nhầm safety limit thành model intent;
+3. correction target đúng clause và được backtrack tối đa hai bước, nhưng dừng ngay khi SQL/error
+   lặp;
+4. owner/join failure chỉ mở rộng schema khi catalog <=12 bảng và context <=1.600 token;
+5. returning-customer + more-than-one-order được route sang DIN vì đây là group-filter aggregate
+   dependency, thay vì giả định là scalar EASY.
+
+Cách này phù hợp với evidence mới: SQLens dùng database+LLM signal theo clause và báo tăng execution
+accuracy của hệ có sẵn tới 20%; multi-grained identification tách system/skeleton/value error; DAC
+so entity+skeleton trước correction và báo tăng trung bình 1,4 điểm trên Spider/BIRD/KaggleDBQA.
+DART-SQL cũng cho thấy database content + execution-guided refinement cải thiện trung bình 12,41%
+cho DAIL-SQL và 5,38% cho C3. Các con số paper chỉ là external prior, không phải claim cho project.
+
+Diagnostic source-locked trên bốn regression revision B, dưới guarded profile, cho revision C bước
+đầu đạt 2/4: `003` và `007` đều sai first pass nhưng correction cứu đúng; `011` chứng minh hai bước
+shape -> owner vẫn không đủ khi baseline route giữ skeleton sai; `014` phát hiện bug safety-limit và
+đã có deterministic regression test. V3 schema expansion vẫn không cứu `011` (0/1, 149,59 giây),
+nên route được sửa ở reasoning thay vì tăng retry tiếp. Đây là diagnostic reused-development set,
+không phải benchmark/promotion score; cần evaluation ID sạch trên Olist gate mới.
+
+Nguồn chính: [SQLens, NeurIPS 2025](https://proceedings.neurips.cc/paper_files/paper/2025/hash/c57812dee8acade8c5e385260b2cde28-Abstract-Conference.html),
+[Multi-grained Error Identification, COLING 2025](https://aclanthology.org/2025.coling-main.289/),
+[DAC, Findings EMNLP 2025](https://aclanthology.org/2025.findings-emnlp.22/), và
+[DART-SQL, Findings ACL 2024](https://aclanthology.org/2024.findings-acl.120/).
+
+## Cập nhật revision B — baseline-equivalent selective DIN
+
+### Kết luận
+
+Revision B sửa đúng confound của A4500: `BASELINE_PRESERVE` không còn dùng deterministic control
+planner và không còn gọi `prepare_for_planning()`/BM25 thay cho đường P6. Nó chạy planner v2, hybrid
+`ground()`, generator v4 và corrector v3 theo cùng thứ tự với baseline; chỉ plan có dependency phức
+tạp rõ ràng mới gọi thêm grounded DIN planner/generator. Đây là điều kiện cần để paired transition
+có thể quy cho DIN thay vì cho một baseline bị thay thế.
+
+Code và dependency tests đã hoàn tất; `make check` pass **240 test**, 1 Ollama test deselect. Sau khi
+Administrator hard-cap GPU ở 300--600 MHz, pilot một case pass và đúng checkpoint được tiếp tục.
+Accuracy kill dừng source-locked run tại **10/14 (71,43%)**: bốn lỗi đã làm cận trên toàn suite chỉ
+còn `10 + 46 = 56/60`, thấp hơn gate 57/60. Baseline P6 đúng **13/14 (92,86%)** trên cùng prefix;
+paired delta là -3 case / -21,43 điểm phần trăm. Vì vậy revision B không được promote và Spider vẫn
+bị khóa.
+
+Đây không phải resource failure. Peak monitor liên tục của guarded server là VRAM 1.719 MiB, 57 C,
+72,26 W, utilization 98%, graphics clock 600 MHz, RAM khả dụng tối thiểu 22,31 GiB và swap 0. Sau
+run không còn Ollama/benchmark process. Hard clock vẫn cần được reset từ Administrator PowerShell
+bằng `nvidia-smi -i 0 -rgc`.
+
+### Cơ sở nghiên cứu và thiết kế
+
+DIN-SQL cho thấy decomposition có lợi khi tách schema linking, difficulty classification,
+difficulty-specific generation và self-correction, nhưng kết quả paper không chứng minh rằng mọi
+query nên đi qua decomposition.^1 DEA-SQL củng cố cách nhìn workflow theo độ khó và lọc thông tin để
+giảm attention diffusion.^2 RoSL đặc biệt phù hợp với Qwen local nhỏ hơn: decomposition ở schema
+linking được báo cáo tăng schema recall và execution accuracy trên BIRD, nên nên đặt nó trong nhánh
+specialist thay vì thay retrieval của control.^3
+
+Hai bổ sung tiếp theo nên được làm theo gate riêng, không nhồi vào revision B:
+
+1. **Semantic proof graph / SQLens-inspired validation.** So khớp question-plan-SQL theo từng
+   clause, owner, population, grain và modifier; chỉ correction khi có signal từ database/AST.
+   SQLens báo fine-grained database+LLM signals tốt hơn self-evaluation và có thể cải thiện hệ
+   Text-to-SQL có sẵn, nhưng project chỉ chuyển giao interface deterministic/typed, không nhập
+   model hay data của paper.^4
+2. **Join-hop-aware DIN.** Tính hop depth từ FK graph sau retrieval; chỉ decomposition sâu khi
+   đường join dài hoặc có anti-join/subquery dependency. SchemaScope 2026 cho thấy accuracy giảm
+   mạnh theo join-hop và decomposition theo subquery là một remedy, nhưng evidence dùng frontier
+   models/benchmark khác nên chỉ là prior cho Spider, chưa phải claim Olist.^5
+
+Không mở best-of-N lúc này. Tailored prompting cho thấy schema-link granularity và clause order có
+ảnh hưởng, nhưng multi-solution + selector sẽ tăng inference/latency và không giải quyết confound
+control trước.^6
+
+### Kiến trúc revision B
+
+```text
+question
+  -> P6 router + decomposer + planner v2
+  -> conservative complexity route
+       BASELINE_PRESERVE
+         -> P6 hybrid ground -> generator v4 -> validator -> corrector v3
+       DIN_SQL_ENHANCE
+         -> decomposed semantic linking -> DIN typed clause plan
+         -> plan consistency -> DIN generator -> shared validator/corrector
+```
+
+### Gate tiếp theo
+
+- Revision B đã hoàn thành phép đo và bị reject; không resume checkpoint và không sửa theo ID lỗi.
+- Giữ P6 làm champion. Bước nghiên cứu kế tiếp phải đo control variance nhiều seed/run trên một
+  development partition tách biệt, rồi mới thử proof-graph validator hoặc join-hop-aware DIN như
+  một intervention độc lập.
+- Chỉ mở evaluation Olist-60 mới sau construction gate, `make check`, pilot mới và evaluation ID
+  sạch. Promotion tối thiểu 57/60; research target 58/60. Không chạy Spider trước non-regression.
+
+### Bằng chứng revision B
+
+| Trường | Giá trị |
+|---|---|
+| Evaluation ID | `olist-paper2-revb-baseline-equivalent-v1-prefix-14` |
+| Candidate prefix | 10/14 (71,43%) |
+| Baseline P6 cùng prefix | 13/14 (92,86%) |
+| Upper bound candidate | 56/60 |
+| Candidate EN / VI | 6/7 / 4/7 |
+| Candidate easy / medium | 7/9 / 3/5 |
+| Workflow / valid candidate | 14/14 / 14/14 |
+| P50 / P95 | 54,26 s / 213,16 s |
+| Correction | thử 1, cứu 0 |
+| Prediction SHA-256 | `cd9ec9b3a595f9229b8f1fb45fbaf27d0625c88da596e6e6f122e636102ed29f` |
+| Progress SHA-256 | `c1dc4364c7be8e72033e5fdb6ebca9a2c6d4523eb4e0124dced374dbd9c28243` |
+
+Ba paired regression là `olist_acc_003`, `007`, `011`; `olist_acc_014` sai ở cả candidate và P6.
+Case DIN-enhanced duy nhất trong prefix, `olist_acc_013`, đúng với clause/schema/plan-to-SQL metrics
+đều 1,0. Quan sát này vẫn quá ít để ước lượng DIN effect; kết quả chủ yếu cho thấy một LLM baseline
+run không mặc nhiên tái lập champion lịch sử dù call graph đã tương đương. Raw artifacts ở local,
+gitignored theo policy:
+
+- `evals/predictions/olist-paper2-revb-baseline-equivalent-v1.jsonl`;
+- `evals/reports/olist-paper2-revb-baseline-equivalent-v1.progress.json`.
+
+### Nguồn của cập nhật revision B
+
+1. Pourreza & Rafiei. [DIN-SQL: Decomposed In-Context Learning of Text-to-SQL with Self-Correction](https://proceedings.neurips.cc/paper_files/paper/2023/hash/72223cc66f63ca1aa59edaec1b3670e6-Abstract-Conference.html). NeurIPS 2023.
+2. Xie et al. [Decomposition for Enhancing Attention: Improving LLM-based Text-to-SQL through Workflow Paradigm](https://aclanthology.org/2024.findings-acl.641/). Findings of ACL 2024.
+3. Pradeep et al. [Divide, Link, and Conquer: Recall-oriented Schema Linking for NL-to-SQL via Question Decomposition](https://aclanthology.org/2025.emnlp-industry.122/). EMNLP Industry 2025.
+4. Gong et al. [SQLens: An End-to-End Framework for Error Detection and Correction in Text-to-SQL](https://proceedings.neurips.cc/paper_files/paper/2025/hash/c57812dee8acade8c5e385260b2cde28-Abstract-Conference.html). NeurIPS 2025.
+5. Bukkapatnam & Malik. [SchemaScope: How Join-Hop Depth Breaks Text-to-SQL in Large Language Models, and a Decomposition-Based Remedy](https://aclanthology.org/2026.surgellm-1.17/). SURGeLLM 2026.
+6. Tan et al. [Enhancing Text-to-SQL Capabilities of Large Language Models through Tailored Promptings](https://aclanthology.org/2024.lrec-main.539/). LREC-COLING 2024.
+
+---
+
 **Trạng thái thí nghiệm:** revision A4500 tối ưu đã dừng đúng accuracy gate tại checkpoint 20;
 candidate không đạt điều kiện non-regression
 

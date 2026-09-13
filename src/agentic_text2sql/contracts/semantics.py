@@ -63,12 +63,26 @@ class PredicateSpec(BaseModel):
     evidence_id: str
 
 
+class FrequencyRankingSpec(BaseModel):
+    """Typed proof for a bounded most-frequent-value query on one physical relation."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+    table: str
+    dimension_column: str
+    evidence_id: str
+    source_grain: str = Field(min_length=1, max_length=120)
+    limit: int = Field(default=1, ge=1, le=100)
+    descending_count: Literal[True] = True
+    ascending_dimension_tie_break: Literal[True] = True
+
+
 class SemanticBinding(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
     db_id: str
     catalog_hash: str
     status: BindingStatus
     aggregate: AggregateSpec | None = None
+    frequency_ranking: FrequencyRankingSpec | None = None
     predicates: tuple[PredicateSpec, ...] = ()
     required_tables: tuple[str, ...] = ()
     required_columns: tuple[str, ...] = ()
@@ -77,8 +91,11 @@ class SemanticBinding(BaseModel):
 
     @model_validator(mode="after")
     def validate_proof(self) -> Self:
-        if self.status is BindingStatus.PROVEN and self.aggregate is None:
-            raise ValueError("a PROVEN binding requires an aggregate")
+        proof_count = sum(item is not None for item in (self.aggregate, self.frequency_ranking))
+        if self.status is BindingStatus.PROVEN and proof_count != 1:
+            raise ValueError("a PROVEN binding requires exactly one typed proof")
+        if self.frequency_ranking is not None and self.predicates:
+            raise ValueError("frequency ranking does not support predicates")
         return self
 
 
@@ -121,6 +138,14 @@ class DerivedRule(BaseModel):
     predicates: tuple[PredicateSpec, ...] = ()
 
 
+class FrequencyRankingRule(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+    aliases: tuple[str, ...] = Field(min_length=1)
+    table: str
+    dimension_column: str
+    source_grain: str = Field(min_length=1, max_length=120)
+
+
 class SemanticCatalog(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
     version: Literal[1]
@@ -129,3 +154,4 @@ class SemanticCatalog(BaseModel):
     metrics: dict[str, MetricRule] = Field(default_factory=dict)
     filters: dict[str, FilterRule] = Field(default_factory=dict)
     derived: dict[str, DerivedRule] = Field(default_factory=dict)
+    frequency_rankings: dict[str, FrequencyRankingRule] = Field(default_factory=dict)

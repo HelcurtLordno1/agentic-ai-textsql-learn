@@ -14,6 +14,7 @@ from agentic_text2sql.contracts.semantics import (
     AggregateSpec,
     BindingStatus,
     ComparisonOperator,
+    FrequencyRankingSpec,
     PredicateSpec,
     SemanticBinding,
 )
@@ -171,6 +172,59 @@ def test_compiles_typed_numeric_comparison_for_derived_semantics() -> None:
     assert (
         _compile(_plan(aggregate, (predicate,)))
         == "SELECT COUNT(*) FROM customer_order_facts WHERE order_count > 1"
+    )
+
+
+def test_compiles_proven_frequency_ranking_with_deterministic_tie_break() -> None:
+    catalog = SQLiteIntrospector().inspect(DATABASE, "olist")
+    ranking = FrequencyRankingSpec(
+        table="olist_order_reviews_dataset",
+        dimension_column="review_score",
+        evidence_id="semantic.frequency_ranking.review_score_frequency",
+        source_grain="one row per review record",
+    )
+    binding = SemanticBinding(
+        db_id="olist",
+        catalog_hash=catalog.catalog_hash,
+        status=BindingStatus.PROVEN,
+        frequency_ranking=ranking,
+        required_tables=(ranking.table,),
+        required_columns=(f"{ranking.table}.{ranking.dimension_column}",),
+        rule_ids=("frequency_ranking.review_score_frequency",),
+    )
+    plan = DINSQLPlan(
+        question_language="vi",
+        task_type="ranking",
+        metrics=["review row count"],
+        dimensions=["review score"],
+        sort=["row count descending", "review score ascending tie-break"],
+        limit=1,
+        semantic_links=SemanticLinkPlan(
+            db_id="olist",
+            catalog_hash=catalog.catalog_hash,
+            required_tables=(ranking.table,),
+            binding=binding,
+        ),
+        complexity=ComplexityDecision(
+            kind=ComplexityKind.AGGREGATE,
+            strategy=PlanningStrategy.EASY,
+        ),
+        clauses=ClausePlan(
+            select=["review score", "review row count"],
+            from_tables=[ranking.table],
+            group_by=["review score"],
+            order_by=["row count DESC", "review score ASC"],
+            limit=1,
+            output_grain="one row per review score",
+            frequency_ranking=ranking,
+        ),
+    )
+    candidate = GroundedEasyCompiler(CandidateNormalizer()).compile(plan, catalog)
+    assert candidate is not None
+    assert candidate.normalized_sql == (
+        "SELECT review_score, COUNT(*) AS frequency_count "
+        "FROM olist_order_reviews_dataset GROUP BY review_score "
+        "ORDER BY frequency_count DESC, review_score LIMIT 1"
     )
 
 

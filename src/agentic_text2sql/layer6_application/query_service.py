@@ -16,6 +16,7 @@ from agentic_text2sql.contracts.planning import (
     PlanningStrategy,
     RouteIntent,
 )
+from agentic_text2sql.contracts.semantics import BindingStatus
 from agentic_text2sql.contracts.sql import DirectRunResult, DirectStatus
 from agentic_text2sql.contracts.validation import ErrorClass, ValidationReport
 from agentic_text2sql.exceptions import StructuredOutputError, Text2SQLError
@@ -30,6 +31,7 @@ from agentic_text2sql.layer1_reasoning.planner import (
 )
 from agentic_text2sql.layer1_reasoning.router import QueryRouter
 from agentic_text2sql.layer2_grounding.service import GroundingService
+from agentic_text2sql.layer3_generation.easy_compiler import GroundedEasyCompiler
 from agentic_text2sql.layer3_generation.service import GenerationService
 from agentic_text2sql.layer4_validation.error_normalizer import normalize_error
 from agentic_text2sql.layer4_validation.executor import ReadOnlySQLiteExecutor
@@ -51,6 +53,7 @@ class DirectBaselineService:
         din_generation: GenerationService | None = None,
         policy: SQLSafetyPolicy,
         executor: ReadOnlySQLiteExecutor,
+        easy_compiler: GroundedEasyCompiler | None = None,
         grounding: GroundingService | None = None,
         correction: CorrectionService | None = None,
         din_correction: CorrectionService | None = None,
@@ -64,6 +67,7 @@ class DirectBaselineService:
         self.din_generation = din_generation
         self.policy = policy
         self.executor = executor
+        self.easy_compiler = easy_compiler
         self.grounding = grounding
         self.correction = correction
         self.din_correction = din_correction
@@ -80,7 +84,7 @@ class DirectBaselineService:
         hybrid = self.planning_mode == "hybrid"
         versions = {
             "planner": (
-                CONTROL_PLANNER_VERSION
+                BASELINE_PLANNER_PROMPT_VERSION
                 if hybrid
                 else PLANNER_PROMPT_VERSION
                 if din_sql
@@ -120,14 +124,77 @@ class DirectBaselineService:
         schema_context = None
         semantic_links = None
         plan: LogicalPlan
+        hybrid_planner_origin = BASELINE_PLANNER_PROMPT_VERSION
         if hybrid:
-            planning_started = time.monotonic()
-            plan = self.planner.plan_control(question, decomposition)
-            timings["control_planning"] = (time.monotonic() - planning_started) * 1000
-            adaptive_route = choose_adaptive_route(question, decomposition, plan)
+            # Explicit structural signals can be detected without spending a model call. The
+            # deterministic plan is used only as a routing skeleton: when no DIN signal exists,
+            # the frozen P6 planner is still replayed unchanged for a valid paired control arm.
+            control_started = time.monotonic()
+            control_plan = self.planner.plan_control(question, decomposition)
+            timings["control_planning"] = (time.monotonic() - control_started) * 1000
+            if self.grounding is None:
+                raise RuntimeError("hybrid planning requires grounding")
+            proof_started = time.monotonic()
+            try:
+                proven_context = self.grounding.prepare_semantic_proof(question, decomposition)
+            except (ValueError, Text2SQLError) as exc:
+                timings["semantic_proof"] = (time.monotonic() - proof_started) * 1000
+                finish_timings()
+                return DirectRunResult(
+                    run_id=run_id,
+                    question=question,
+                    status=DirectStatus.GROUNDING_ERROR,
+                    route_reason=route.reason,
+                    prompt_versions=versions,
+                    safe_message=str(exc),
+                    latency_ms=timings,
+                )
+            timings["semantic_proof"] = (time.monotonic() - proof_started) * 1000
+            if proven_context is not None:
+                schema_context, semantic_links = proven_context
+                adaptive_route = AdaptiveRouteDecision(
+                    route=AdaptiveRoute.DIN_SQL_ENHANCE,
+                    signals=("PROVEN_SEMANTIC_BINDING",),
+                )
+                plan = control_plan
+                hybrid_planner_origin = CONTROL_PLANNER_VERSION
+            else:
+                adaptive_route = choose_adaptive_route(question, decomposition, control_plan)
+                if adaptive_route.route is AdaptiveRoute.DIN_SQL_ENHANCE:
+                    plan = control_plan
+                    hybrid_planner_origin = CONTROL_PLANNER_VERSION
+                else:
+                    planning_started = time.monotonic()
+                    try:
+                        plan = self.planner.plan(question, decomposition)
+                    except (StructuredOutputError, Text2SQLError, ValueError) as exc:
+                        timings["planning"] = (time.monotonic() - planning_started) * 1000
+                        finish_timings()
+                        return DirectRunResult(
+                            run_id=run_id,
+                            question=question,
+                            status=DirectStatus.MODEL_ERROR,
+                            route_reason=route.reason,
+                            prompt_versions=versions,
+                            safe_message=str(exc),
+                            latency_ms=timings,
+                        )
+                    timings["planning"] = (time.monotonic() - planning_started) * 1000
+                    adaptive_route = choose_adaptive_route(question, decomposition, plan)
             versions["adaptive_route"] = adaptive_route.route.value
 
-        if self.grounding is not None and (din_sql or hybrid):
+        if (
+            self.grounding is not None
+            and schema_context is None
+            and (
+                din_sql
+                or (
+                    hybrid
+                    and adaptive_route is not None
+                    and adaptive_route.route is AdaptiveRoute.DIN_SQL_ENHANCE
+                )
+            )
+        ):
             grounding_started = time.monotonic()
             try:
                 schema_context, semantic_links = self.grounding.prepare_for_planning(
@@ -179,11 +246,17 @@ class DirectBaselineService:
             if adaptive_route is None:
                 raise RuntimeError("hybrid control planning did not produce an adaptive route")
             if adaptive_route.route is AdaptiveRoute.DIN_SQL_ENHANCE:
-                versions["planner"] = (
-                    f"adaptive({CONTROL_PLANNER_VERSION},{PLANNER_PROMPT_VERSION})"
-                )
                 if self.grounding is None or schema_context is None or semantic_links is None:
                     raise RuntimeError("adaptive DIN-SQL requires grounding")
+                proven_binding = bool(
+                    semantic_links.binding is not None
+                    and semantic_links.binding.status is BindingStatus.PROVEN
+                )
+                versions["planner"] = (
+                    f"adaptive({hybrid_planner_origin},typed_semantic_plan_v1)"
+                    if proven_binding
+                    else f"adaptive({hybrid_planner_origin},{PLANNER_PROMPT_VERSION})"
+                )
                 din_planning_started = time.monotonic()
                 try:
                     plan = self.planner.plan_grounded(
@@ -191,7 +264,7 @@ class DirectBaselineService:
                         decomposition,
                         semantic_links,
                         schema_context,
-                        use_model=True,
+                        use_model=not proven_binding,
                     )
                 except (StructuredOutputError, Text2SQLError, ValueError) as exc:
                     timings["din_planning"] = (time.monotonic() - din_planning_started) * 1000
@@ -262,6 +335,16 @@ class DirectBaselineService:
             )
         )
 
+        compiled_candidate = (
+            self.easy_compiler.compile(plan, catalog)
+            if (
+                isinstance(plan, DINSQLPlan)
+                and adaptive_route is not None
+                and adaptive_route.route is AdaptiveRoute.DIN_SQL_ENHANCE
+                and self.easy_compiler is not None
+            )
+            else None
+        )
         use_din_generation = bool(
             isinstance(plan, DINSQLPlan)
             and (
@@ -280,13 +363,14 @@ class DirectBaselineService:
             if use_din_generation and self.din_generation is not None
             else self.generation
         )
+        use_semantic_path = use_din_generation or compiled_candidate is not None
         active_correction = (
             self.din_correction
-            if use_din_generation and self.din_correction is not None
+            if use_semantic_path and self.din_correction is not None
             else self.correction
         )
         generation_plan: LogicalPlan = plan
-        if isinstance(plan, DINSQLPlan) and not use_din_generation:
+        if isinstance(plan, DINSQLPlan) and not use_semantic_path:
             generation_plan = LogicalPlan.model_validate(
                 plan.model_dump(
                     include={
@@ -303,13 +387,19 @@ class DirectBaselineService:
                     }
                 )
             )
-        versions["generator"] = active_generation.prompt_version
+        versions["generator"] = (
+            compiled_candidate.prompt_version
+            if compiled_candidate is not None
+            else active_generation.prompt_version
+        )
         if active_correction is not None:
             versions["corrector"] = active_correction.corrector.prompt_version
 
         generation_started = time.monotonic()
         try:
-            candidate = active_generation.run(question, generation_plan, catalog, schema_context)
+            candidate = compiled_candidate or active_generation.run(
+                question, generation_plan, catalog, schema_context
+            )
         except SQLParseError as exc:
             timings["generation"] = (time.monotonic() - generation_started) * 1000
             finish_timings()

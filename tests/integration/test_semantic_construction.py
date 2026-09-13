@@ -83,6 +83,35 @@ class FixedRetriever:
             "SELECT AVG(item_count) FROM order_item_totals",
             False,
         ),
+        (
+            "Trung bình mỗi đơn có bao nhiêu item, làm tròn 4 chữ số?",
+            "SELECT ROUND(AVG(item_count), 4) FROM order_item_totals",
+            False,
+        ),
+        (
+            "Số đơn hàng lớn nhất từng được ghi nhận cho một customer_unique_id là bao nhiêu?",
+            "SELECT MAX(order_count) FROM customer_order_facts",
+            False,
+        ),
+        (
+            "Điểm review nào xuất hiện nhiều nhất? Trả về điểm và số review.",
+            "SELECT review_score, COUNT(*) AS frequency_count "
+            "FROM olist_order_reviews_dataset GROUP BY review_score "
+            "ORDER BY frequency_count DESC, review_score LIMIT 1",
+            False,
+        ),
+        (
+            "Which payment type has the most payment records? Return type and count.",
+            "SELECT payment_type, COUNT(*) AS frequency_count "
+            "FROM olist_order_payments_dataset GROUP BY payment_type "
+            "ORDER BY frequency_count DESC, payment_type LIMIT 1",
+            False,
+        ),
+        (
+            "What is the average freight amount per order in cents rounded to 2 decimals?",
+            "SELECT ROUND(AVG(freight_cents), 2) FROM order_item_totals",
+            False,
+        ),
     ],
 )
 def test_semantic_construction_runs_end_to_end_without_a_model_call(

@@ -28,6 +28,24 @@ _COMPARATIVE_AGGREGATE_PATTERNS = (
     re.compile(r"\b(above|below|greater than|less than)\s+(the\s+)?(average|total)\b"),
     re.compile(r"\b(cao hơn|thấp hơn|lớn hơn|nhỏ hơn)\s+(mức\s+)?(trung bình|tổng)\b"),
 )
+_GROUP_FILTER_AGGREGATE_PATTERNS = (
+    re.compile(r"\b(returning|repeat)\s+customers?\b.{0,50}\b(more than|over)\s+one\s+orders?\b"),
+    re.compile(r"\bkhách hàng quay lại\b.{0,50}\b(hơn|nhiều hơn)\s+một\s+đơn hàng\b"),
+)
+_FREQUENCY_RANKING_PATTERNS = (
+    re.compile(r"\b(most common|most frequent|appears? most often)\b"),
+    re.compile(r"\bhas the most\b.{0,50}\brecords?\b"),
+    re.compile(r"\b(xuất hiện nhiều nhất|phổ biến nhất)\b"),
+    re.compile(r"\bcó nhiều\b.{0,50}\bbản ghi\b.{0,20}\bnhất\b"),
+)
+_DERIVED_AVERAGE_PATTERNS = (
+    re.compile(r"\b(average|avg)\b.{0,60}\b(per|for each)\b"),
+    re.compile(r"\btrung bình\b.{0,60}\b(mỗi|trên mỗi)\b"),
+)
+_GROUPED_SCALAR_MAX_PATTERNS = (
+    re.compile(r"\b(maximum|max)\b.{0,80}\bcustomer_unique_id\b"),
+    re.compile(r"\b(lớn nhất|cao nhất)\b.{0,80}\bcustomer_unique_id\b"),
+)
 
 
 def choose_adaptive_route(
@@ -45,6 +63,14 @@ def choose_adaptive_route(
         signals.append("EXPLICIT_NESTED_OR_ANTI_JOIN")
     if any(pattern.search(normalized) for pattern in _COMPARATIVE_AGGREGATE_PATTERNS):
         signals.append("AGGREGATE_DEPENDENCY")
+    if any(pattern.search(normalized) for pattern in _GROUP_FILTER_AGGREGATE_PATTERNS):
+        signals.append("GROUP_FILTER_AGGREGATE_DEPENDENCY")
+    if any(pattern.search(normalized) for pattern in _FREQUENCY_RANKING_PATTERNS):
+        signals.append("FREQUENCY_RANKING_DEPENDENCY")
+    if any(pattern.search(normalized) for pattern in _DERIVED_AVERAGE_PATTERNS):
+        signals.append("DERIVED_AVERAGE_DEPENDENCY")
+    if any(pattern.search(normalized) for pattern in _GROUPED_SCALAR_MAX_PATTERNS):
+        signals.append("GROUPED_SCALAR_MAX_DEPENDENCY")
 
     grouped = bool(baseline_plan.dimensions or decomposition.dimension_hints)
     ranked = baseline_plan.task_type == "ranking" or bool(

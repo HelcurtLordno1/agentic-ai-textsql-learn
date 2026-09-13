@@ -63,3 +63,25 @@ def test_injects_limit_only_for_non_scalar_query(catalog) -> None:
     scalar = SQLSafetyPolicy(default_limit=17).evaluate("SELECT COUNT(*) FROM customers", catalog)
     assert rows.limit_injected and "LIMIT 17" in (rows.normalized_sql or "")
     assert not scalar.limit_injected and "LIMIT" not in (scalar.normalized_sql or "")
+
+
+def test_validates_derived_table_aliases_in_their_sql_scope(catalog) -> None:
+    valid = SQLSafetyPolicy().evaluate(
+        "SELECT MAX(order_count) FROM ("
+        "SELECT COUNT(*) AS order_count FROM orders GROUP BY customer_id) AS counts",
+        catalog,
+    )
+    invented_outer = SQLSafetyPolicy().evaluate(
+        "SELECT MAX(invented_count) FROM ("
+        "SELECT COUNT(*) AS order_count FROM orders GROUP BY customer_id) AS counts",
+        catalog,
+    )
+    invented_inner = SQLSafetyPolicy().evaluate(
+        "SELECT MAX(order_count) FROM ("
+        "SELECT COUNT(invented) AS order_count FROM orders GROUP BY customer_id) AS counts",
+        catalog,
+    )
+
+    assert valid.allowed
+    assert invented_outer.error_class is ErrorClass.UNKNOWN_COLUMN
+    assert invented_inner.error_class is ErrorClass.UNKNOWN_COLUMN

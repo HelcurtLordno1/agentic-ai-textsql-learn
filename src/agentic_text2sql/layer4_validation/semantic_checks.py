@@ -29,10 +29,15 @@ def validate_semantics(
     sql_lower = sql.casefold()
     olist_rules = db_id in {None, "olist"}
     proven_rule_ids: frozenset[str] = frozenset()
+    proven_source_grain = ""
     if isinstance(plan, DINSQLPlan):
         binding = plan.semantic_links.binding
         if binding is not None and binding.status is BindingStatus.PROVEN:
             proven_rule_ids = frozenset(binding.rule_ids)
+            if binding.aggregate is not None:
+                proven_source_grain = binding.aggregate.source_grain or ""
+            elif binding.frequency_ranking is not None:
+                proven_source_grain = binding.frequency_ranking.source_grain
 
     ranking_language = bool(re.search(r"\bnhiều\b.{0,40}\bnhất\b", normalized_question)) or any(
         phrase in normalized_question
@@ -46,9 +51,20 @@ def validate_semantics(
         )
     )
     requested_top = re.search(r"\btop\s+(\d+)\b", normalized_question)
-    expects_ranked_rows = ranking_language and not any(
-        phrase in normalized_question
-        for phrase in ("là bao nhiêu", "what is the maximum", "maximum number")
+    asks_distribution = (
+        any(normalized_question.startswith(prefix) for prefix in ("list ", "show ", "liệt kê "))
+        and any(token in normalized_question for token in (" by ", " theo "))
+        and requested_top is None
+        and "most " not in normalized_question
+        and "nhiều nhất" not in normalized_question
+    )
+    expects_ranked_rows = (
+        ranking_language
+        and not asks_distribution
+        and not any(
+            phrase in normalized_question
+            for phrase in ("là bao nhiêu", "what is the maximum", "maximum number")
+        )
     )
     if expects_ranked_rows:
         if not ordered:
@@ -67,12 +83,21 @@ def validate_semantics(
 
     asks_alphabetical_tie_break = any(
         phrase in normalized_question
-        for phrase in ("alphabetical tie-break", "hòa thì", "tie-break by")
+        for phrase in (
+            "alphabetical tie-break",
+            "breaking ties by",
+            "hòa thì",
+            "tie-break by",
+        )
     )
     if asks_alphabetical_tie_break and (len(ordered) < 2 or bool(ordered[1].args.get("desc"))):
         signals.append("ALPHABETICAL_TIE_BREAK_MISSING")
 
-    if plan.task_type == "ranking" or plan.limit is not None:
+    limit = statement.args.get("limit")
+    if asks_distribution and limit is not None:
+        signals.append("DISTRIBUTION_LIMIT_UNREQUESTED")
+
+    if not asks_distribution and (plan.task_type == "ranking" or plan.limit is not None):
         if statement.args.get("order") is None:
             signals.append("TOP_K_MISSING_ORDER")
         if plan.limit is not None:
@@ -101,6 +126,24 @@ def validate_semantics(
         signals.append("CUSTOMER_IDENTITY_NOT_UNIQUE")
     if olist_rules and asks_returning_customer and select is not None and len(select.selects) != 1:
         signals.append("RETURNING_CUSTOMER_OUTPUT_SHAPE")
+    if (
+        olist_rules
+        and asks_returning_customer
+        and not returning_grain_is_proven
+        and select is not None
+        and (select.args.get("group") is not None or select.args.get("having") is not None)
+    ):
+        signals.append("RETURNING_CUSTOMER_REQUIRES_OUTER_COUNT")
+
+    explicit_customer_identity = "customer_unique_id" in normalized_question
+    customer_unique_grain_is_proven = "customer_unique_id" in proven_source_grain.casefold()
+    if (
+        olist_rules
+        and explicit_customer_identity
+        and not customer_unique_grain_is_proven
+        and "customer_unique_id" not in sql_lower
+    ):
+        signals.append("EXPLICIT_CUSTOMER_UNIQUE_ID_MISSING")
 
     asks_late_delivery = (
         "giao trễ" in normalized_question
@@ -108,6 +151,28 @@ def validate_semantics(
         or "late deliver" in normalized_question
         or "delivered late" in normalized_question
     )
+    requested_order_status = next(
+        (
+            status
+            for status, phrases in {
+                "canceled": ("canceled", "cancelled", "đã hủy", "bị hủy"),
+                "delivered": ("delivered", "đã giao"),
+                "unavailable": ("unavailable", "không khả dụng"),
+            }.items()
+            if any(phrase in normalized_question for phrase in phrases)
+        ),
+        None,
+    )
+    if olist_rules and requested_order_status is not None and not asks_late_delivery:
+        has_status_predicate = bool(
+            re.search(
+                rf"order_status\s*=\s*['\"]{re.escape(requested_order_status)}['\"]",
+                sql_lower,
+            )
+        )
+        if "olist_orders_dataset" not in sql_lower or not has_status_predicate:
+            signals.append("EXPLICIT_ORDER_STATUS_MISMATCH")
+
     if (
         olist_rules
         and asks_late_delivery
@@ -115,6 +180,64 @@ def validate_semantics(
         and re.search(r"order_status\s*=\s*['\"]delivered['\"]", sql_lower)
     ):
         signals.append("DELIVERY_POPULATION_NARROWED_BY_STATUS")
+
+    asks_payment_type_records = any(
+        phrase in normalized_question for phrase in ("payment type", "loại thanh toán")
+    ) and any(phrase in normalized_question for phrase in ("record", "bản ghi", "dòng"))
+    if (
+        olist_rules
+        and asks_payment_type_records
+        and (
+            "olist_order_payments_dataset" not in sql_lower
+            or not re.search(r"\bpayment_type\b", sql_lower)
+        )
+    ):
+        signals.append("PAYMENT_TYPE_RECORD_GRAIN_MISMATCH")
+
+    asks_review_frequency = any(
+        phrase in normalized_question
+        for phrase in (
+            "most common review score",
+            "most frequent review score",
+            "review score appears most often",
+            "điểm review nào xuất hiện nhiều nhất",
+            "điểm đánh giá xuất hiện nhiều nhất",
+        )
+    )
+    if olist_rules and asks_review_frequency:
+        group = statement.args.get("group")
+        groups_review_score = isinstance(group, exp.Group) and any(
+            column.name.casefold() == "review_score"
+            for expression in group.expressions
+            for column in (
+                [expression]
+                if isinstance(expression, exp.Column)
+                else list(expression.find_all(exp.Column))
+            )
+        )
+        if (
+            "olist_order_reviews_dataset" not in sql_lower
+            or not re.search(r"\breview_score\b", sql_lower)
+            or statement.find(exp.Count) is None
+            or not groups_review_score
+        ):
+            signals.append("REVIEW_FREQUENCY_GRAIN_MISMATCH")
+        if len(ordered) < 2 or bool(ordered[1].args.get("desc")):
+            signals.append("FREQUENCY_TIE_BREAK_MISSING")
+
+    asks_missing_product_category = any(
+        phrase in normalized_question
+        for phrase in (
+            "products missing category",
+            "products without category",
+            "sản phẩm thiếu danh mục",
+            "sản phẩm không có danh mục",
+        )
+    )
+    if olist_rules and asks_missing_product_category:
+        raw_category_null = re.search(r"\bproduct_category_name\b\s+is\s+null", sql_lower)
+        if raw_category_null is None or "product_category_name_english" in sql_lower:
+            signals.append("PRODUCT_CATEGORY_NULL_POPULATION_MISMATCH")
 
     asks_scalar_maximum = any(
         phrase in normalized_question

@@ -46,7 +46,13 @@ metrics:
     column: product_revenue_cents
     source_grain: one row per order_id
   freight:
-    aliases: [freight, shipping fee, freight amount, phí vận chuyển]
+    aliases:
+      - freight
+      - shipping fee
+      - freight amount
+      - freight amount per order
+      - average freight amount per order
+      - phí vận chuyển
     operator: SUM
     allowed_operators: [SUM, AVG, MIN, MAX]
     table: order_item_totals
@@ -72,8 +78,12 @@ metrics:
       - average items per order
       - average item count per order
       - avg items per order
+      - items per order
+      - item count per order
       - số sản phẩm trung bình mỗi đơn hàng
       - trung bình số mặt hàng mỗi đơn
+      - số item mỗi đơn
+      - mỗi đơn có bao nhiêu item
     operator: AVG
     allowed_operators: [AVG]
     table: order_item_totals
@@ -175,3 +185,34 @@ derived:
         operator: EQ
         value: 1
         evidence_id: semantic.derived.late_delivery.is_late_delivered
+  customer_order_max:
+    aliases:
+      - maximum order count customer_unique_id
+      - max orders customer_unique_id
+      - số đơn hàng lớn nhất customer_unique_id
+    aggregate:
+      operator: MAX
+      table: customer_order_facts
+      column: order_count
+      evidence_id: semantic.derived.customer_order_max
+      source_grain: one row per customer_unique_id
+
+frequency_rankings:
+  payment_type_frequency:
+    aliases:
+      - payment type has the most payment records
+      - payment type with the most payment records
+      - most common payment type by payment records
+      - loại thanh toán có nhiều bản ghi nhất
+    table: olist_order_payments_dataset
+    dimension_column: payment_type
+    source_grain: one row per payment record
+  review_score_frequency:
+    aliases:
+      - most common review score
+      - review score appears most often
+      - điểm review nào xuất hiện nhiều nhất
+      - điểm đánh giá xuất hiện nhiều nhất
+    table: olist_order_reviews_dataset
+    dimension_column: review_score
+    source_grain: one row per review record

@@ -318,7 +318,44 @@ def _plan_from_proven_binding(
     schema_context: SchemaContext,
     binding: SemanticBinding,
 ) -> DINSQLPlan:
-    """Translate a proven semantic binding into a typed scalar clause plan."""
+    """Translate a proven semantic binding into a deterministic typed clause plan."""
+    ranking = binding.frequency_ranking
+    if ranking is not None:
+        owner = ranking.table
+        if owner not in schema_context.selected_tables:
+            raise ValueError("proven frequency-ranking owner is absent from schema context")
+        dimension = f"{owner}.{ranking.dimension_column}"
+        draft = DINSQLDraft(
+            question_language=decomposition.question_language,
+            task_type="ranking",
+            metrics=[f"COUNT rows of {owner}"],
+            dimensions=[dimension],
+            filters=[],
+            sort=["row count descending", f"{dimension} ascending tie-break"],
+            limit=ranking.limit,
+            required_concepts=list(binding.rule_ids),
+            complexity=ComplexityDecision(
+                kind=ComplexityKind.AGGREGATE,
+                strategy=PlanningStrategy.EASY,
+                signals=("proven_frequency_ranking",),
+            ),
+            clauses=ClausePlan(
+                select=[dimension, f"COUNT rows of {owner}"],
+                from_tables=[owner],
+                group_by=[dimension],
+                order_by=["row count DESC", f"{dimension} ASC"],
+                limit=ranking.limit,
+                output_grain=f"one row per {dimension}",
+                frequency_ranking=ranking,
+            ),
+        )
+        return DINSQLPlan(
+            **draft.model_dump(exclude={"complexity", "clauses"}),
+            semantic_links=semantic_links,
+            complexity=draft.complexity,
+            clauses=draft.clauses,
+        )
+
     aggregate = binding.aggregate
     if aggregate is None:
         raise ValueError("a proven semantic binding must include an aggregate")

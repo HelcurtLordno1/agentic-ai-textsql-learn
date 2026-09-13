@@ -149,17 +149,20 @@ def validate_plan(
         signals.append("UNPROVEN_SEMANTIC_BINDING")
     else:
         typed_aggregate = plan.clauses.aggregate
+        typed_ranking = plan.clauses.frequency_ranking
         typed_predicates = tuple(plan.clauses.predicates)
         if (
             binding.db_id != catalog.db_id
             or binding.catalog_hash != catalog.catalog_hash
             or typed_aggregate != binding.aggregate
+            or typed_ranking != binding.frequency_ranking
             or typed_predicates != binding.predicates
         ):
             signals.append("SEMANTIC_BINDING_MISMATCH")
         typed_owners = {
             *(predicate.table for predicate in typed_predicates),
             *((typed_aggregate.table,) if typed_aggregate is not None else ()),
+            *((typed_ranking.table,) if typed_ranking is not None else ()),
         }
         typed_columns = {
             *(f"{predicate.table}.{predicate.column}" for predicate in typed_predicates),
@@ -171,6 +174,11 @@ def validate_plan(
             *(
                 (f"{typed_aggregate.table}.{typed_aggregate.weight_column}",)
                 if typed_aggregate is not None and typed_aggregate.weight_column is not None
+                else ()
+            ),
+            *(
+                (f"{typed_ranking.table}.{typed_ranking.dimension_column}",)
+                if typed_ranking is not None
                 else ()
             ),
         }

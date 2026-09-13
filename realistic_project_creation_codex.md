@@ -1714,8 +1714,24 @@ Mỗi bug quan trọng cần:
 | E-M6 | Correction ablation | Yes | L5 | VERIFIED | frozen Olist 14/18 off vs 17/18 on; `docs/evidence/p4_gate.md` |
 | E-M7 | BIRD Mini-Dev | No | core complete | NOT_STARTED | — |
 | R1-M1 | PRACTIQ question reliability | No | R0 baseline lock | IN_PROGRESS | Typed/glossary-grounded gate, early-exit và clarification đã có, nhưng source-locked Olist v3 bị dừng tại 35/60 theo accuracy kill criterion: prefix 30/35 so với paired baseline 33/35 và full-suite upper bound chỉ 55/60 < champion 57/60. Current integrated variant bị reject promotion; chưa có final macro-F1 và không `VERIFIED`; `comparison_new_to_baseline.md`, `docs/evidence/r1_question_reliability.md`, `docs/evidence/r1_olist_benchmark.md`, `docs/evidence/r1_resource_guard_incident.md` |
-| R2-M1 | DIN-SQL semantic links + adaptive clause planner | No | R0 baseline lock, rejected R1 promotion | IN_PROGRESS | Revision `f70d191` failed guarded Olist at 8/12 (upper bound 56/60); adaptive `e8fab80` was infrastructure-inconclusive. Optimized source `c40b75c` passed construction/runtime gates but stopped at 16/20, versus paired P6 19/20, because its full-suite upper bound was 56/60 < champion 57/60. It routed 19/20 through `BASELINE_PRESERVE`; all three new regressions were there, while the only `DIN_SQL_ENHANCE` case was correct. Replacing the frozen P6 planner with a deterministic skeleton and hybrid retrieval with BM25 confounded the DIN treatment, so the integrated candidate is rejected but a general DIN effect is not identified. P6 remains default; DIN is research opt-in. No OOM/resource breach; model unloaded and clock reset. Not `VERIFIED`; `docs/research_plan/r2_a4500_optimization.md`, `comparison_new2_to_baseline_vn.md`, `docs/evidence/r2_din_sql_implementation.md` |
+| R2-M1 | DIN-SQL semantic links + adaptive clause planner | No | R0 baseline lock, rejected R1 promotion | IN_PROGRESS | Revisions `f70d191` and `c40b75c` failed their 57/60 upper-bound gates. Baseline-equivalent revision B then removed the planner/retrieval confounds but stopped at 10/14 (upper bound 56/60), versus paired P6 13/14. Its sole `DIN_SQL_ENHANCE` case was correct; three new failures were preserve cases, so DIN effect is still unidentified and run variance must be measured separately. P6 remains default; DIN is research opt-in. Guarded run had no resource breach and model/server were unloaded. Not `VERIFIED`; `docs/research_plan/r2_a4500_optimization.md`, `comparison_new2_to_baseline_vn.md`, `docs/evidence/r2_din_sql_implementation.md` |
 | X-M1 | PostgreSQL adapter | No | core complete | NOT_STARTED | — |
+
+R2 revision B (2026-09-12) đã loại confound của candidate A4500: hybrid
+`BASELINE_PRESERVE` chạy planner v2, hybrid grounding, generator v4 và corrector v3 của P6; chỉ route
+complex gọi decomposed grounding/DIN. `make check` pass 240 test non-Ollama. Sau hard-cap 300--600
+MHz, pilot pass và cùng checkpoint dừng đúng accuracy gate tại 10/14, cận trên 56/60, so với P6
+13/14 trên cùng prefix. Case DIN duy nhất đúng nhưng ba paired regression đều ở preserve route;
+chưa đủ bằng chứng quy kết DIN và revision bị reject promotion. Không resource breach, Ollama đã
+unload; Spider không chạy. R2 vẫn `IN_PROGRESS`, không `VERIFIED`.
+
+R2 revision C (2026-09-13) bổ sung semantic proof question--entity--skeleton và hierarchical
+backtracking tối đa hai bước theo SQLens/DAC-style evidence. Diagnostic bốn failure cũ cứu 003/007,
+phát hiện safety `LIMIT 200` bị hiểu nhầm ở 014, và chứng minh schema expansion/retry không cứu 011
+khi baseline skeleton sai. Validation nay tách original semantic SQL khỏi normalized execution SQL;
+owner failure chỉ expand catalog nhỏ có token bound; returning-customer group-filter được chuyển
+sang DIN semantic route. Đây là development diagnostic, không phải promotion score. R2 vẫn
+`IN_PROGRESS`; cần clean Olist evaluation trước Spider.
 
 Overall project status tại thời điểm cập nhật master plan: `GATE_P6_VERIFIED`. P0
 environment, P1 data/safety, P2 direct baseline, P3.1 grounded retrieval và P4 bounded correction
@@ -1742,6 +1758,16 @@ Spider không chạy. Guard không breach, Ollama đã unload và Administrator 
 không `VERIFIED`. Evidence nằm tại
 `docs/research_plan/r2_a4500_optimization.md`,
 `comparison_new2_to_baseline_vn.md` và `docs/evidence/r2_din_sql_implementation.md`.
+
+Revision R2 D--G ngày 2026-09-13 bổ sung semantic proof theo population/grain/clause, scope-aware
+SQL validation, typed frequency ranking, deterministic proof compiler và hierarchical backtracking
+theo SQLens/DAC/Multi-grained/DART-SQL. Revision E dừng ở 28/31 vì cận trên chỉ còn 57/60; holdout
+46--60 chưa chạy. Revision F sửa ba failure class còn lại nhưng pilot case 1 timeout hai lần trong
+planner v2, không tạo accuracy evidence. Revision G hiện đưa exact schema-validated semantic proof
+lên trước retrieval/LLM: proof đầy đủ đi qua context tối thiểu và compiler; proof thiếu mới quay về
+explicit DIN hoặc frozen P6. Construction gate pass 271 test non-Ollama, nhưng R2 vẫn
+`IN_PROGRESS` cho đến khi evaluation ID sạch đạt ít nhất 58/60 dưới guarded profile. Chi tiết và
+protocol khóa holdout nằm tại `docs/research_plan/r2_semantic_proof_backtracking.md`.
 
 Post-P6 usability hardening ngày 2026-08-16 đã sửa lỗi thực tế trong câu hỏi Olist “Top 5 danh mục
 theo doanh thu sản phẩm, tách phí vận chuyển, giải thích”. Nguyên nhân không phải từ “giải thích” mà

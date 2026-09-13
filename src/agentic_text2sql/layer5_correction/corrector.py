@@ -13,6 +13,7 @@ from agentic_text2sql.contracts.correction import AttemptSummary, CorrectionPlan
 from agentic_text2sql.contracts.planning import LogicalPlan
 from agentic_text2sql.contracts.retrieval import SchemaContext
 from agentic_text2sql.contracts.sql import CandidateRecord, SqlCandidate
+from agentic_text2sql.contracts.validation import ErrorClass
 from agentic_text2sql.layer2_grounding.context_packer import estimate_tokens
 from agentic_text2sql.layer3_generation.normalizer import CandidateNormalizer
 from agentic_text2sql.layer3_generation.prompt_builder import (
@@ -20,8 +21,34 @@ from agentic_text2sql.layer3_generation.prompt_builder import (
     domain_rules,
 )
 
-BASELINE_CORRECTOR_PROMPT_VERSION = "corrector_v3_cross_domain"
-CORRECTOR_PROMPT_VERSION = "corrector_v4_din_sql"
+BASELINE_CORRECTOR_PROMPT_VERSION = "corrector_v3_semantic_proof"
+CORRECTOR_PROMPT_VERSION = "corrector_v5_din_semantic_proof"
+
+_SCHEMA_EXPANSION_SIGNALS = frozenset(
+    {
+        "CUSTOMER_IDENTITY_NOT_UNIQUE",
+        "EXPLICIT_CUSTOMER_UNIQUE_ID_MISSING",
+        "RETURNING_CUSTOMER_REQUIRES_OUTER_COUNT",
+        "REVIEW_FREQUENCY_GRAIN_MISMATCH",
+    }
+)
+
+
+def correction_schema_context(
+    catalog: CatalogSnapshot,
+    schema_context: SchemaContext | None,
+    correction_plan: CorrectionPlan,
+) -> str:
+    """Expand a small catalog when failure evidence says retrieval omitted an owner."""
+    full_context = catalog_as_sqlite_context(catalog)
+    ownership_failure = correction_plan.error_class in {
+        ErrorClass.UNKNOWN_TABLE,
+        ErrorClass.UNKNOWN_COLUMN,
+        ErrorClass.JOIN_ERROR,
+    } or bool(_SCHEMA_EXPANSION_SIGNALS.intersection(correction_plan.evidence_ids))
+    if ownership_failure and len(catalog.tables) <= 12 and estimate_tokens(full_context) <= 1600:
+        return full_context
+    return schema_context.rendered_context if schema_context is not None else full_context
 
 
 class CorrectorAgent:
@@ -58,11 +85,7 @@ class CorrectorAgent:
         prompt = template.render(
             question=question,
             logical_plan=plan.model_dump_json(indent=2),
-            schema_context=(
-                schema_context.rendered_context
-                if schema_context is not None
-                else catalog_as_sqlite_context(catalog)
-            ),
+            schema_context=correction_schema_context(catalog, schema_context, correction_plan),
             business_glossary=domain_rules(catalog, self.glossary_path),
             failed_sql=failed_candidate.normalized_sql,
             correction_plan=correction_plan.model_dump_json(indent=2),
