@@ -202,6 +202,7 @@ class DirectBaselineService:
             if adaptive_route is None:
                 raise RuntimeError("hybrid control planning did not produce an adaptive route")
             if adaptive_route.route is AdaptiveRoute.DIN_SQL_ENHANCE:
+                baseline_plan = plan
                 if self.grounding is None or schema_context is None or semantic_links is None:
                     raise RuntimeError("adaptive DIN-SQL requires grounding")
                 proven_binding = bool(
@@ -222,21 +223,23 @@ class DirectBaselineService:
                         schema_context,
                         use_model=not proven_binding,
                     )
-                except (StructuredOutputError, Text2SQLError, ValueError) as exc:
+                except (StructuredOutputError, Text2SQLError, ValueError):
                     timings["din_planning"] = (time.monotonic() - din_planning_started) * 1000
-                    finish_timings()
-                    return DirectRunResult(
-                        run_id=run_id,
-                        question=question,
-                        status=DirectStatus.MODEL_ERROR,
-                        route_reason=route.reason,
-                        prompt_versions=versions,
-                        adaptive_route=adaptive_route.model_dump(mode="json"),
-                        plan=plan.model_dump(mode="json"),
-                        schema_context=schema_context.model_dump(mode="json"),
-                        safe_message=str(exc),
-                        latency_ms=timings,
+                    # The P6 plan was already produced before specialist routing. A failed DIN
+                    # planning call therefore has one safe, bounded backtrack: discard specialist
+                    # context and replay the frozen baseline grounding/generation path. No retry
+                    # is made against the failed planner and no confidence guess is required.
+                    plan = baseline_plan
+                    schema_context = None
+                    semantic_links = None
+                    adaptive_route = AdaptiveRouteDecision(
+                        route=AdaptiveRoute.BASELINE_PRESERVE,
+                        signals=tuple(
+                            (*adaptive_route.signals, "DIN_PLANNING_FAILED_BASELINE_FALLBACK")[-8:]
+                        ),
                     )
+                    versions["planner"] = BASELINE_PLANNER_PROMPT_VERSION
+                    versions["adaptive_route"] = adaptive_route.route.value
                 timings["din_planning"] = (time.monotonic() - din_planning_started) * 1000
 
         adaptive_route_payload = (

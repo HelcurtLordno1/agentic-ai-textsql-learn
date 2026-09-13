@@ -3,7 +3,9 @@
 **Cập nhật: 2026-09-13**  
 **Trạng thái hiện tại:** đã phục hồi và đóng checkpoint code của **Revision E — 28/31** tại commit
 `80e94eced52049fd7019fe468c5e23122610edd4`. Revision G đạt 7/10 đã bị reject nhưng được lưu riêng
-tại `c4851eb` để điều tra, không còn là code đang được phát triển tiếp.
+tại `c4851eb` để điều tra, không còn là code đang được phát triển tiếp. Gate đầu tiên của Revision H
+đã được construct: DIN planner failure backtrack đúng một lần về frozen P6, với 261 test non-Ollama
+pass. Chưa có accuracy claim mới cho H trước guarded evaluation.
 
 ## 1. Đính chính mốc tốt nhất
 
@@ -130,6 +132,12 @@ Nếu DIN planner timeout hoặc structured output lỗi, backtrack một lần 
 không sửa prompt, không tăng vô hạn timeout, không best-of-N. Trace ghi
 `DIN_TIMEOUT -> BASELINE_FALLBACK`. Nếu fallback cũng lỗi thì dừng typed `MODEL_ERROR`. Cách này xử lý
 class lỗi case 30 mà không biết case 30 là gì.
+
+**Construction status:** đã implement và test. Runtime giữ P6 logical plan trước specialist call;
+nếu DIN planning fail thì bỏ specialist context, ground lại theo P6 và dùng baseline generator. Trace
+ghi `DIN_PLANNING_FAILED_BASELINE_FALLBACK`; không retry DIN. Integration test xác nhận tổng cộng ba
+model calls trong failure path (P6 planner, một DIN attempt, một baseline generation), thay vì vòng
+lặp không giới hạn.
 
 ### H4 — shadow routing trước promotion
 

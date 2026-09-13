@@ -417,6 +417,44 @@ def test_hybrid_complex_route_adds_bounded_din_planning_and_generation() -> None
     assert complex_grounding.ground_calls == 0
 
 
+def test_hybrid_din_planner_failure_backtracks_once_to_frozen_baseline() -> None:
+    catalog = SQLiteIntrospector().inspect(DATABASE, "synthetic")
+    baseline_plan = LogicalPlan(
+        question_language="en",
+        task_type="ranking",
+        metrics=["item revenue"],
+        dimensions=["product category"],
+        sort=["revenue descending"],
+        limit=5,
+    )
+    candidate = SqlCandidate(
+        sql="SELECT COUNT(*) FROM orders",
+        confidence=1,
+    )
+    provider = QueueProvider([baseline_plan, StructuredOutputError("invalid DIN plan"), candidate])
+    runtime = grounded_service(provider, catalog.catalog_hash, "hybrid")
+    complex_grounding = ComplexStubGrounding(catalog.catalog_hash)
+    runtime.grounding = cast(GroundingService, complex_grounding)
+
+    result = runtime.run(
+        "Top 5 product categories by item revenue",
+        DATABASE,
+        catalog,
+    )
+
+    assert result.status is DirectStatus.SUCCEEDED
+    assert result.result_rows == [[4]]
+    assert result.adaptive_route is not None
+    assert result.adaptive_route["route"] == AdaptiveRoute.BASELINE_PRESERVE
+    assert "DIN_PLANNING_FAILED_BASELINE_FALLBACK" in result.adaptive_route["signals"]
+    assert result.prompt_versions["planner"] == BASELINE_PLANNER_PROMPT_VERSION
+    assert result.candidate is not None
+    assert result.candidate.prompt_version == BASELINE_GENERATOR_PROMPT_VERSION
+    assert provider.calls == 3
+    assert complex_grounding.prepare_calls == 1
+    assert complex_grounding.ground_calls == 1
+
+
 def test_din_sql_mode_refuses_to_start_without_grounding() -> None:
     provider = QueueProvider([])
     baseline = service(provider)

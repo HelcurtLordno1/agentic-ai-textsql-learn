@@ -1768,6 +1768,10 @@ tại `80e94ec`, với Ruff/format/mypy pass và 260 test non-Ollama pass (1 des
 là champion; R2 vẫn `IN_PROGRESS`, không `VERIFIED`. Revision kế tiếp phải dùng typed role/grain
 proof, AST lineage và bounded fallback, không thêm benchmark phrase rules. Chi tiết và protocol
 khóa holdout nằm tại `codex_answer.md` và `docs/research_plan/r2_semantic_proof_backtracking.md`.
+Revision H3 sau đó đã construct bounded fallback: DIN planner failure chỉ backtrack một lần
+về P6 plan + baseline grounding/generation, với route signal có thể audit; không retry DIN,
+không best-of-N. Construction gate pass Ruff/format, mypy 111 source và 261 test non-Ollama
+(1 deselect). Chưa có accuracy evidence mới nên R2 vẫn `IN_PROGRESS`.
 
 Post-P6 usability hardening ngày 2026-08-16 đã sửa lỗi thực tế trong câu hỏi Olist “Top 5 danh mục
 theo doanh thu sản phẩm, tách phí vận chuyển, giải thích”. Nguyên nhân không phải từ “giải thích” mà
