@@ -84,6 +84,18 @@ def choose_adaptive_route(
     multiple_business_roles = (
         len({*entity_roots, *independent_metrics, *decomposition.dimension_hints}) >= 3
     )
+    typed_frequency_shape = bool(
+        len(entity_roots) == 1
+        and len(decomposition.dimension_hints) == 1
+        and not independent_metrics
+        and ranked
+        and decomposition.limit_hint is not None
+        and not decomposition.filter_hints
+        and not decomposition.time_hints
+        and decomposition.set_operation_hint is None
+    )
+    if typed_frequency_shape:
+        signals.append("TYPED_FREQUENCY_RANKING_SHAPE")
     if grouped and ranked and multiple_business_roles:
         signals.append("MULTI_ROLE_GROUPED_RANKING")
     if grouped and per_group and multiple_business_roles:

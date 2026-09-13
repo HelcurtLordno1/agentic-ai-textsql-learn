@@ -202,6 +202,49 @@ def test_filler_words_do_not_change_the_resolved_contract() -> None:
     assert len({binding.rule_ids for binding in bindings}) == 1
 
 
+def test_per_entity_qualifier_is_proven_only_by_matching_source_grain() -> None:
+    catalog, semantics = _fixtures()
+    matching = "Report average shipping fee per order."
+    mismatched = "Report average shipping fee per customer."
+
+    order_binding = resolve_semantic_binding(
+        matching,
+        Decomposer().decompose(matching),
+        catalog,
+        semantics,
+    )
+    customer_binding = resolve_semantic_binding(
+        mismatched,
+        Decomposer().decompose(mismatched),
+        catalog,
+        semantics,
+    )
+
+    assert order_binding.status is BindingStatus.PROVEN
+    assert order_binding.aggregate is not None
+    assert order_binding.aggregate.table == "order_item_totals"
+    assert order_binding.aggregate.operator is AggregateOperator.AVG
+    assert customer_binding.status is BindingStatus.INCOMPLETE
+    assert "NON_SCALAR_SHAPE" in customer_binding.reasons
+
+
+def test_frequency_ranking_is_inferred_from_unique_entity_dimension_shape() -> None:
+    catalog, semantics = _fixtures()
+    question = "Return top 1 payment method by record frequency."
+    binding = resolve_semantic_binding(
+        question,
+        Decomposer().decompose(question),
+        catalog,
+        semantics,
+    )
+
+    assert binding.status is BindingStatus.PROVEN
+    assert binding.frequency_ranking is not None
+    assert binding.frequency_ranking.table == "olist_order_payments_dataset"
+    assert binding.frequency_ranking.dimension_column == "payment_type"
+    assert binding.frequency_ranking.limit == 1
+
+
 def test_review_frequency_resolves_raw_row_grain_contract() -> None:
     catalog, semantics = _fixtures()
     question = "Điểm review nào xuất hiện nhiều nhất? Trả về điểm và số review."

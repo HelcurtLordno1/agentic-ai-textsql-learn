@@ -29,10 +29,15 @@ def validate_semantics(
     sql_lower = sql.casefold()
     olist_rules = db_id in {None, "olist"}
     proven_rule_ids: frozenset[str] = frozenset()
+    proven_source_grain = ""
     if isinstance(plan, DINSQLPlan):
         binding = plan.semantic_links.binding
         if binding is not None and binding.status is BindingStatus.PROVEN:
             proven_rule_ids = frozenset(binding.rule_ids)
+            if binding.aggregate is not None:
+                proven_source_grain = binding.aggregate.source_grain or ""
+            elif binding.frequency_ranking is not None:
+                proven_source_grain = binding.frequency_ranking.source_grain
 
     ranking_language = bool(re.search(r"\bnhiều\b.{0,40}\bnhất\b", normalized_question)) or any(
         phrase in normalized_question
@@ -131,7 +136,13 @@ def validate_semantics(
         signals.append("RETURNING_CUSTOMER_REQUIRES_OUTER_COUNT")
 
     explicit_customer_identity = "customer_unique_id" in normalized_question
-    if olist_rules and explicit_customer_identity and "customer_unique_id" not in sql_lower:
+    identity_is_proven_by_lineage = "customer_unique_id" in proven_source_grain.casefold()
+    if (
+        olist_rules
+        and explicit_customer_identity
+        and not identity_is_proven_by_lineage
+        and "customer_unique_id" not in sql_lower
+    ):
         signals.append("EXPLICIT_CUSTOMER_UNIQUE_ID_MISSING")
 
     asks_late_delivery = (

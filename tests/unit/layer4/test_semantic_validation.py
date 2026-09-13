@@ -149,6 +149,53 @@ def test_semantic_validator_keeps_lexical_guard_without_proven_lineage() -> None
     assert "CUSTOMER_IDENTITY_NOT_UNIQUE" in report.signals
 
 
+def test_explicit_identity_accepts_catalog_proven_source_grain_lineage() -> None:
+    aggregate = AggregateSpec(
+        operator=AggregateOperator.MAX,
+        table="customer_order_facts",
+        column="order_count",
+        evidence_id="semantic.derived.customer_order_max",
+        source_grain="one row per customer_unique_id",
+    )
+    binding = SemanticBinding(
+        db_id="olist",
+        catalog_hash="catalog",
+        status=BindingStatus.PROVEN,
+        aggregate=aggregate,
+        required_tables=("customer_order_facts",),
+        required_columns=("customer_order_facts.order_count",),
+        rule_ids=("derived.customer_order_max",),
+    )
+    plan = DINSQLPlan(
+        question_language="en",
+        task_type="aggregation",
+        metrics=["maximum purchase frequency"],
+        semantic_links=SemanticLinkPlan(
+            db_id="olist",
+            catalog_hash="catalog",
+            binding=binding,
+            required_tables=("customer_order_facts",),
+        ),
+        complexity=ComplexityDecision(
+            kind=ComplexityKind.AGGREGATE,
+            strategy=PlanningStrategy.EASY,
+        ),
+        clauses=ClausePlan(
+            select=["MAX customer_order_facts.order_count"],
+            from_tables=["customer_order_facts"],
+            output_grain="one scalar row",
+            aggregate=aggregate,
+        ),
+    )
+    report = validate_semantics(
+        "Return maximum purchase frequency per customer_unique_id.",
+        plan,
+        "SELECT MAX(order_count) FROM customer_order_facts",
+        db_id="olist",
+    )
+    assert report.accepted
+
+
 def test_valid_scalar_aggregate_has_no_semantic_suspicion() -> None:
     result_report = validate_result(
         ResultPreview(columns=["average_review_score"], rows=[[4.1]]),

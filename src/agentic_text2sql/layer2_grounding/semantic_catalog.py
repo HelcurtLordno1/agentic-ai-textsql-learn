@@ -16,7 +16,9 @@ from agentic_text2sql.contracts.semantics import (
     AggregateSpec,
     BindingStatus,
     ComparisonOperator,
+    EntityRule,
     FrequencyRankingSpec,
+    MetricRule,
     PredicateSpec,
     SemanticBinding,
     SemanticCatalog,
@@ -231,6 +233,9 @@ def _matched_rules[T: _HasAliases](question: str, rules: dict[str, T]) -> list[t
 def _unresolved_shape_marker(
     question: str,
     matched_rules: Sequence[tuple[str, _HasAliases]],
+    *,
+    metrics: Sequence[tuple[str, MetricRule]] = (),
+    entities: Sequence[tuple[str, EntityRule]] = (),
 ) -> bool:
     for marker in _UNSUPPORTED_SCALAR_MARKERS:
         if marker not in question:
@@ -239,9 +244,57 @@ def _unresolved_shape_marker(
             marker.strip() in _normalize(alias) and _contains_alias(question, alias)
             for _, rule in matched_rules
             for alias in rule.aliases
-        ):
+        ) and not _grain_qualifier_is_proven(marker, metrics, entities):
             return True
     return False
+
+
+def _grain_qualifier_is_proven(
+    marker: str,
+    metrics: Sequence[tuple[str, MetricRule]],
+    entities: Sequence[tuple[str, EntityRule]],
+) -> bool:
+    """Accept a per-entity scalar only when metric grain carries that entity identity."""
+    if marker.strip() not in {"per", "each", "mỗi"} or len(metrics) != 1 or len(entities) != 1:
+        return False
+    identity = entities[0][1].identity_column
+    if identity is None:
+        return False
+    return _normalize(identity) in _normalize(metrics[0][1].source_grain)
+
+
+def _infer_typed_frequency_ranking(
+    decomposition: DecomposedQuestion,
+    entities: Sequence[tuple[str, EntityRule]],
+    catalog: CatalogSnapshot,
+) -> FrequencyRankingSpec | None:
+    """Infer row frequency from an unambiguous entity/dimension/ranking shape."""
+    if (
+        len(entities) != 1
+        or len(decomposition.dimension_hints) != 1
+        or decomposition.metric_hints
+        or decomposition.limit_hint is None
+        or not decomposition.sort_hints
+        or decomposition.filter_hints
+        or decomposition.time_hints
+        or decomposition.set_operation_hint is not None
+    ):
+        return None
+    entity_name, entity = entities[0]
+    table = next((item for item in catalog.tables if item.name == entity.table), None)
+    if table is None:
+        return None
+    dimension = _normalize(decomposition.dimension_hints[0]).replace(" ", "_")
+    columns = [column.name for column in table.columns if _normalize(column.name) == dimension]
+    if len(columns) != 1:
+        return None
+    return FrequencyRankingSpec(
+        table=entity.table,
+        dimension_column=columns[0],
+        evidence_id=f"semantic.inferred_frequency.{entity_name}.{columns[0]}",
+        source_grain=entity.row_grain,
+        limit=decomposition.limit_hint,
+    )
 
 
 def _requested_metric_operators(question: str) -> tuple[AggregateOperator, ...]:
@@ -325,6 +378,19 @@ def resolve_semantic_binding(
             rule_ids=(f"frequency_ranking.{name}",),
             reasons=tuple(ranking_reasons),
         )
+    inferred_ranking = _infer_typed_frequency_ranking(decomposition, entities, catalog)
+    if inferred_ranking is not None:
+        return SemanticBinding(
+            db_id=catalog.db_id,
+            catalog_hash=catalog.catalog_hash,
+            status=BindingStatus.PROVEN,
+            frequency_ranking=inferred_ranking,
+            required_tables=(inferred_ranking.table,),
+            required_columns=(
+                _qualified(inferred_ranking.table, inferred_ranking.dimension_column),
+            ),
+            rule_ids=("inferred.frequency_ranking",),
+        )
     derived_operator_is_explicit = bool(
         len(derived) == 1
         and (derived[0][1].aggregate.operator is not AggregateOperator.COUNT_ROWS or asks_count)
@@ -350,7 +416,12 @@ def resolve_semantic_binding(
         or decomposition.limit_hint is not None
         or decomposition.time_hints
         or decomposition.set_operation_hint is not None
-        or _unresolved_shape_marker(normalized, [*derived, *metrics])
+        or _unresolved_shape_marker(
+            normalized,
+            [*derived, *metrics],
+            metrics=metrics,
+            entities=entities,
+        )
     )
     if len(derived) > 1:
         return SemanticBinding(
