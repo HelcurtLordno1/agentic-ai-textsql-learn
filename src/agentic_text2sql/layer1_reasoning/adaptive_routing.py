@@ -34,9 +34,7 @@ _GROUP_FILTER_AGGREGATE_PATTERNS = (
 )
 _FREQUENCY_RANKING_PATTERNS = (
     re.compile(r"\b(most common|most frequent|appears? most often)\b"),
-    re.compile(r"\bhas the most\b.{0,50}\brecords?\b"),
     re.compile(r"\b(xuất hiện nhiều nhất|phổ biến nhất)\b"),
-    re.compile(r"\bcó nhiều\b.{0,50}\bbản ghi\b.{0,20}\bnhất\b"),
 )
 _DERIVED_AVERAGE_PATTERNS = (
     re.compile(r"\b(average|avg)\b.{0,60}\b(per|for each)\b"),

@@ -149,53 +149,6 @@ def test_semantic_validator_keeps_lexical_guard_without_proven_lineage() -> None
     assert "CUSTOMER_IDENTITY_NOT_UNIQUE" in report.signals
 
 
-def test_explicit_customer_identity_trusts_proven_source_grain() -> None:
-    aggregate = AggregateSpec(
-        operator=AggregateOperator.MAX,
-        table="customer_order_facts",
-        column="order_count",
-        evidence_id="semantic.derived.customer_order_max",
-        source_grain="one row per customer_unique_id",
-    )
-    binding = SemanticBinding(
-        db_id="olist",
-        catalog_hash="catalog",
-        status=BindingStatus.PROVEN,
-        aggregate=aggregate,
-        required_tables=("customer_order_facts",),
-        required_columns=("customer_order_facts.order_count",),
-        rule_ids=("derived.customer_order_max",),
-    )
-    plan = DINSQLPlan(
-        question_language="vi",
-        task_type="aggregation",
-        metrics=["order count"],
-        semantic_links=SemanticLinkPlan(
-            db_id="olist",
-            catalog_hash="catalog",
-            binding=binding,
-            required_tables=("customer_order_facts",),
-        ),
-        complexity=ComplexityDecision(
-            kind=ComplexityKind.AGGREGATE,
-            strategy=PlanningStrategy.EASY,
-        ),
-        clauses=ClausePlan(
-            select=["MAX customer_order_facts.order_count"],
-            from_tables=["customer_order_facts"],
-            output_grain="one scalar row",
-            aggregate=aggregate,
-        ),
-    )
-    report = validate_semantics(
-        "Số đơn hàng lớn nhất từng được ghi nhận cho một customer_unique_id là bao nhiêu?",
-        plan,
-        "SELECT MAX(order_count) FROM customer_order_facts",
-        db_id="olist",
-    )
-    assert report.accepted
-
-
 def test_valid_scalar_aggregate_has_no_semantic_suspicion() -> None:
     result_report = validate_result(
         ResultPreview(columns=["average_review_score"], rows=[[4.1]]),
@@ -366,25 +319,6 @@ def test_safety_default_limit_is_not_mistaken_for_user_requested_limit(tmp_path)
     assert result is not None and len(result.rows) == 2
 
 
-def test_olist_role_proof_rejects_payment_and_category_population_substitution() -> None:
-    payment = validate_semantics(
-        "Which payment type has the most payment records? Return type and count.",
-        aggregate_plan("payment count"),
-        "SELECT distinct_payment_type_count, COUNT(*) FROM order_payment_totals "
-        "GROUP BY distinct_payment_type_count ORDER BY 2 DESC LIMIT 1",
-        db_id="olist",
-    )
-    category = validate_semantics(
-        "Có bao nhiêu sản phẩm thiếu danh mục?",
-        aggregate_plan("product count"),
-        "SELECT COUNT(*) FROM products_semantic WHERE product_category_name IS NULL "
-        "OR product_category_name_english IS NULL",
-        db_id="olist",
-    )
-    assert "PAYMENT_TYPE_RECORD_GRAIN_MISMATCH" in payment.signals
-    assert "PRODUCT_CATEGORY_NULL_POPULATION_MISMATCH" in category.signals
-
-
 def test_review_frequency_requires_raw_grain_and_deterministic_tie_break() -> None:
     question = "Điểm review nào xuất hiện nhiều nhất? Trả về điểm và số review."
     wrong = validate_semantics(
@@ -405,21 +339,3 @@ def test_review_frequency_requires_raw_grain_and_deterministic_tie_break() -> No
     assert "REVIEW_FREQUENCY_GRAIN_MISMATCH" in wrong.signals
     assert "FREQUENCY_TIE_BREAK_MISSING" in wrong.signals
     assert correct.accepted
-
-
-def test_olist_role_proof_accepts_exact_payment_and_category_populations() -> None:
-    payment = validate_semantics(
-        "Which payment type has the most payment records? Return type and count.",
-        aggregate_plan("payment count"),
-        "SELECT payment_type, COUNT(*) c FROM olist_order_payments_dataset "
-        "GROUP BY payment_type ORDER BY c DESC LIMIT 1",
-        db_id="olist",
-    )
-    category = validate_semantics(
-        "Có bao nhiêu sản phẩm thiếu danh mục?",
-        aggregate_plan("product count"),
-        "SELECT COUNT(*) FROM olist_products_dataset WHERE product_category_name IS NULL",
-        db_id="olist",
-    )
-    assert payment.accepted
-    assert category.accepted

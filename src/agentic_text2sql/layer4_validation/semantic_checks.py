@@ -29,15 +29,10 @@ def validate_semantics(
     sql_lower = sql.casefold()
     olist_rules = db_id in {None, "olist"}
     proven_rule_ids: frozenset[str] = frozenset()
-    proven_source_grain = ""
     if isinstance(plan, DINSQLPlan):
         binding = plan.semantic_links.binding
         if binding is not None and binding.status is BindingStatus.PROVEN:
             proven_rule_ids = frozenset(binding.rule_ids)
-            if binding.aggregate is not None:
-                proven_source_grain = binding.aggregate.source_grain or ""
-            elif binding.frequency_ranking is not None:
-                proven_source_grain = binding.frequency_ranking.source_grain
 
     ranking_language = bool(re.search(r"\bnhiều\b.{0,40}\bnhất\b", normalized_question)) or any(
         phrase in normalized_question
@@ -136,13 +131,7 @@ def validate_semantics(
         signals.append("RETURNING_CUSTOMER_REQUIRES_OUTER_COUNT")
 
     explicit_customer_identity = "customer_unique_id" in normalized_question
-    customer_unique_grain_is_proven = "customer_unique_id" in proven_source_grain.casefold()
-    if (
-        olist_rules
-        and explicit_customer_identity
-        and not customer_unique_grain_is_proven
-        and "customer_unique_id" not in sql_lower
-    ):
+    if olist_rules and explicit_customer_identity and "customer_unique_id" not in sql_lower:
         signals.append("EXPLICIT_CUSTOMER_UNIQUE_ID_MISSING")
 
     asks_late_delivery = (
@@ -181,19 +170,6 @@ def validate_semantics(
     ):
         signals.append("DELIVERY_POPULATION_NARROWED_BY_STATUS")
 
-    asks_payment_type_records = any(
-        phrase in normalized_question for phrase in ("payment type", "loại thanh toán")
-    ) and any(phrase in normalized_question for phrase in ("record", "bản ghi", "dòng"))
-    if (
-        olist_rules
-        and asks_payment_type_records
-        and (
-            "olist_order_payments_dataset" not in sql_lower
-            or not re.search(r"\bpayment_type\b", sql_lower)
-        )
-    ):
-        signals.append("PAYMENT_TYPE_RECORD_GRAIN_MISMATCH")
-
     asks_review_frequency = any(
         phrase in normalized_question
         for phrase in (
@@ -224,20 +200,6 @@ def validate_semantics(
             signals.append("REVIEW_FREQUENCY_GRAIN_MISMATCH")
         if len(ordered) < 2 or bool(ordered[1].args.get("desc")):
             signals.append("FREQUENCY_TIE_BREAK_MISSING")
-
-    asks_missing_product_category = any(
-        phrase in normalized_question
-        for phrase in (
-            "products missing category",
-            "products without category",
-            "sản phẩm thiếu danh mục",
-            "sản phẩm không có danh mục",
-        )
-    )
-    if olist_rules and asks_missing_product_category:
-        raw_category_null = re.search(r"\bproduct_category_name\b\s+is\s+null", sql_lower)
-        if raw_category_null is None or "product_category_name_english" in sql_lower:
-            signals.append("PRODUCT_CATEGORY_NULL_POPULATION_MISMATCH")
 
     asks_scalar_maximum = any(
         phrase in normalized_question

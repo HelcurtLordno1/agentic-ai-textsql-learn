@@ -26,7 +26,6 @@ from agentic_text2sql.contracts.retrieval import (
     SchemaContext,
 )
 from agentic_text2sql.contracts.semantics import BindingStatus, SemanticCatalog
-from agentic_text2sql.layer2_grounding.context_packer import estimate_tokens, render_schema_context
 from agentic_text2sql.layer2_grounding.document_builder import build_documents
 from agentic_text2sql.layer2_grounding.embedding_index import DenseIndex
 from agentic_text2sql.layer2_grounding.keyword_index import KeywordIndex, normalize_tokens
@@ -361,51 +360,6 @@ class GroundingService:
         )
         retrieval = self.retriever.retrieve(expanded_query, mode=self.mode, top_k=self.top_k)
         return link_schema(plan, retrieval, self.catalog, token_budget=self.token_budget)
-
-    def prepare_semantic_proof(
-        self, question: str, decomposition: DecomposedQuestion
-    ) -> tuple[SchemaContext, SemanticLinkPlan] | None:
-        """Build minimal evidence for a complete one-owner proof without retrieval or a model."""
-        binding = resolve_semantic_binding(
-            question,
-            decomposition,
-            self.catalog,
-            self.semantic_catalog,
-        )
-        if binding.status is not BindingStatus.PROVEN:
-            return None
-        owners = set(binding.required_tables)
-        if len(owners) != 1:
-            return None
-        owner = next(iter(owners))
-        selected_columns = set(binding.required_columns)
-        rendered = render_schema_context(
-            self.catalog,
-            {owner},
-            selected_columns,
-            [],
-        )
-        estimated_tokens = estimate_tokens(rendered)
-        if estimated_tokens > self.token_budget:
-            raise ValueError("proven semantic context exceeds the token budget")
-        context = SchemaContext(
-            db_id=self.catalog.db_id,
-            selected_tables=[owner],
-            selected_columns=sorted(selected_columns),
-            joins=[],
-            evidence=[],
-            catalog_hash=self.catalog.catalog_hash,
-            rendered_context=rendered,
-            estimated_tokens=estimated_tokens,
-        )
-        links = SemanticLinkPlan(
-            db_id=self.catalog.db_id,
-            catalog_hash=self.catalog.catalog_hash,
-            population_owner=owner,
-            required_tables=binding.required_tables,
-            binding=binding,
-        )
-        return context, links
 
     def prepare_for_planning(
         self, question: str, decomposition: DecomposedQuestion

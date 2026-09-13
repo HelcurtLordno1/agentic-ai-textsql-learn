@@ -219,38 +219,6 @@ def test_review_frequency_resolves_raw_row_grain_contract() -> None:
     assert binding.frequency_ranking.limit == 1
 
 
-def test_payment_frequency_resolves_a_typed_raw_row_ranking() -> None:
-    catalog, semantics = _fixtures()
-    question = "Which payment type has the most payment records? Return type and count."
-    binding = resolve_semantic_binding(
-        question, Decomposer().decompose(question), catalog, semantics
-    )
-
-    assert binding.status is BindingStatus.PROVEN
-    assert binding.aggregate is None
-    assert binding.frequency_ranking is not None
-    assert binding.frequency_ranking.table == "olist_order_payments_dataset"
-    assert binding.frequency_ranking.dimension_column == "payment_type"
-    assert binding.frequency_ranking.limit == 1
-    assert binding.required_columns == ("olist_order_payments_dataset.payment_type",)
-
-
-def test_freight_per_order_resolves_catalog_grain_and_rounding() -> None:
-    catalog, semantics = _fixtures()
-    question = "What is the average freight amount per order in cents rounded to 2 decimals?"
-    binding = resolve_semantic_binding(
-        question, Decomposer().decompose(question), catalog, semantics
-    )
-
-    assert binding.status is BindingStatus.PROVEN
-    assert binding.aggregate is not None
-    assert binding.aggregate.operator is AggregateOperator.AVG
-    assert binding.aggregate.table == "order_item_totals"
-    assert binding.aggregate.column == "freight_cents"
-    assert binding.aggregate.source_grain == "one row per order_id"
-    assert binding.aggregate.rounding_digits == 2
-
-
 @pytest.mark.parametrize(
     ("question", "status", "reason"),
     [
@@ -346,27 +314,3 @@ def test_grounding_service_carries_proven_binding_and_required_schema_evidence()
     assert links.binding is not None
     assert links.binding.status is BindingStatus.PROVEN
     assert links.binding.required_tables == ("olist_sellers_dataset",)
-
-
-def test_semantic_proof_fast_path_never_calls_retriever() -> None:
-    catalog, semantics = _fixtures()
-
-    class ForbiddenRetriever:
-        def retrieve(self, *_: object, **__: object) -> RetrievalResult:
-            raise AssertionError("semantic proof must not invoke retrieval")
-
-    service = GroundingService(  # type: ignore[arg-type]
-        ForbiddenRetriever(),
-        catalog,
-        mode="hybrid",
-        semantic_catalog=semantics,
-    )
-    question = "Count all marketplace sellers"
-    prepared = service.prepare_semantic_proof(question, Decomposer().decompose(question))
-
-    assert prepared is not None
-    context, links = prepared
-    assert context.selected_tables == ["olist_sellers_dataset"]
-    assert context.selected_columns == []
-    assert links.population_owner == "olist_sellers_dataset"
-    assert links.binding is not None and links.binding.status is BindingStatus.PROVEN

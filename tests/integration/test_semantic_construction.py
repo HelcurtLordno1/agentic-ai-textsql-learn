@@ -100,18 +100,6 @@ class FixedRetriever:
             "ORDER BY frequency_count DESC, review_score LIMIT 1",
             False,
         ),
-        (
-            "Which payment type has the most payment records? Return type and count.",
-            "SELECT payment_type, COUNT(*) AS frequency_count "
-            "FROM olist_order_payments_dataset GROUP BY payment_type "
-            "ORDER BY frequency_count DESC, payment_type LIMIT 1",
-            False,
-        ),
-        (
-            "What is the average freight amount per order in cents rounded to 2 decimals?",
-            "SELECT ROUND(AVG(freight_cents), 2) FROM order_item_totals",
-            False,
-        ),
     ],
 )
 def test_semantic_construction_runs_end_to_end_without_a_model_call(

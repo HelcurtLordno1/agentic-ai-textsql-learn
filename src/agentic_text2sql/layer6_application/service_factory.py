@@ -113,10 +113,9 @@ class RuntimeBundle(AbstractContextManager["RuntimeBundle"]):
             "planning_mode": settings.planning_mode,
             "adaptive_policy": (
                 {
-                    "version": "adaptive_semantic_proof_first_v4",
+                    "version": "adaptive_semantic_proof_v3",
                     "default_route": "BASELINE_PRESERVE",
-                    "din_activation": "proven_semantic_binding_or_explicit_complex_dependency",
-                    "fallback": "frozen_p6_planner_grounding_generation_correction",
+                    "din_activation": "explicit_complex_dependencies_only",
                 }
                 if hybrid
                 else None

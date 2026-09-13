@@ -55,21 +55,12 @@ SIGNAL_GUIDANCE = {
         "Do not filter order_status='delivered'; use non-null delivered timestamps "
         "and the requested date comparison."
     ),
-    "PAYMENT_TYPE_RECORD_GRAIN_MISMATCH": (
-        "The requested groups are raw payment_type records. Use "
-        "olist_order_payments_dataset.payment_type and count rows at payment-record grain; "
-        "do not substitute a per-order distinct-payment count."
-    ),
     "REVIEW_FREQUENCY_GRAIN_MISMATCH": (
         "Count raw review rows by olist_order_reviews_dataset.review_score; do not substitute "
         "per-order summary maxima or review_row_count."
     ),
     "FREQUENCY_TIE_BREAK_MISSING": (
         "After row count DESC, order the grouped value ASC for deterministic ties."
-    ),
-    "PRODUCT_CATEGORY_NULL_POPULATION_MISMATCH": (
-        "Missing product category means product_category_name IS NULL. Do not broaden the "
-        "population with translation-field nulls."
     ),
     "TOP_K_MISSING_ORDER": "Add deterministic ORDER BY matching the ranking intent.",
     "TOP_K_MISSING_LIMIT": "Add the requested LIMIT.",
@@ -134,10 +125,8 @@ SIGNAL_CLAUSES: dict[str, tuple[str, ...]] = {
     ),
     "EXPLICIT_CUSTOMER_UNIQUE_ID_MISSING": ("SELECT", "FROM", "JOIN"),
     "EXPLICIT_ORDER_STATUS_MISMATCH": ("FROM", "WHERE"),
-    "PAYMENT_TYPE_RECORD_GRAIN_MISMATCH": ("SELECT", "FROM", "GROUP_BY", "ORDER_BY"),
     "REVIEW_FREQUENCY_GRAIN_MISMATCH": ("SELECT", "FROM", "GROUP_BY", "ORDER_BY"),
     "FREQUENCY_TIE_BREAK_MISSING": ("ORDER_BY",),
-    "PRODUCT_CATEGORY_NULL_POPULATION_MISMATCH": ("FROM", "WHERE"),
     "DELIVERY_POPULATION_NARROWED_BY_STATUS": ("WHERE",),
     "TOP_K_MISSING_ORDER": ("ORDER_BY",),
     "TOP_K_MISSING_LIMIT": ("LIMIT",),

@@ -25,7 +25,6 @@ from agentic_text2sql.layer1_reasoning.decomposer import Decomposer
 from agentic_text2sql.layer1_reasoning.plan_validator import validate_plan
 from agentic_text2sql.layer1_reasoning.planner import (
     BASELINE_PLANNER_PROMPT_VERSION,
-    CONTROL_PLANNER_VERSION,
     PLANNER_PROMPT_VERSION,
     PlannerAgent,
 )
@@ -124,75 +123,32 @@ class DirectBaselineService:
         schema_context = None
         semantic_links = None
         plan: LogicalPlan
-        hybrid_planner_origin = BASELINE_PLANNER_PROMPT_VERSION
         if hybrid:
-            # Explicit structural signals can be detected without spending a model call. The
-            # deterministic plan is used only as a routing skeleton: when no DIN signal exists,
-            # the frozen P6 planner is still replayed unchanged for a valid paired control arm.
-            control_started = time.monotonic()
-            control_plan = self.planner.plan_control(question, decomposition)
-            timings["control_planning"] = (time.monotonic() - control_started) * 1000
-            if self.grounding is None:
-                raise RuntimeError("hybrid planning requires grounding")
-            proof_started = time.monotonic()
+            planning_started = time.monotonic()
             try:
-                proven_context = self.grounding.prepare_semantic_proof(question, decomposition)
-            except (ValueError, Text2SQLError) as exc:
-                timings["semantic_proof"] = (time.monotonic() - proof_started) * 1000
+                plan = self.planner.plan(question, decomposition)
+            except (StructuredOutputError, Text2SQLError, ValueError) as exc:
+                timings["planning"] = (time.monotonic() - planning_started) * 1000
                 finish_timings()
                 return DirectRunResult(
                     run_id=run_id,
                     question=question,
-                    status=DirectStatus.GROUNDING_ERROR,
+                    status=DirectStatus.MODEL_ERROR,
                     route_reason=route.reason,
                     prompt_versions=versions,
                     safe_message=str(exc),
                     latency_ms=timings,
                 )
-            timings["semantic_proof"] = (time.monotonic() - proof_started) * 1000
-            if proven_context is not None:
-                schema_context, semantic_links = proven_context
-                adaptive_route = AdaptiveRouteDecision(
-                    route=AdaptiveRoute.DIN_SQL_ENHANCE,
-                    signals=("PROVEN_SEMANTIC_BINDING",),
-                )
-                plan = control_plan
-                hybrid_planner_origin = CONTROL_PLANNER_VERSION
-            else:
-                adaptive_route = choose_adaptive_route(question, decomposition, control_plan)
-                if adaptive_route.route is AdaptiveRoute.DIN_SQL_ENHANCE:
-                    plan = control_plan
-                    hybrid_planner_origin = CONTROL_PLANNER_VERSION
-                else:
-                    planning_started = time.monotonic()
-                    try:
-                        plan = self.planner.plan(question, decomposition)
-                    except (StructuredOutputError, Text2SQLError, ValueError) as exc:
-                        timings["planning"] = (time.monotonic() - planning_started) * 1000
-                        finish_timings()
-                        return DirectRunResult(
-                            run_id=run_id,
-                            question=question,
-                            status=DirectStatus.MODEL_ERROR,
-                            route_reason=route.reason,
-                            prompt_versions=versions,
-                            safe_message=str(exc),
-                            latency_ms=timings,
-                        )
-                    timings["planning"] = (time.monotonic() - planning_started) * 1000
-                    adaptive_route = choose_adaptive_route(question, decomposition, plan)
+            timings["planning"] = (time.monotonic() - planning_started) * 1000
+            adaptive_route = choose_adaptive_route(question, decomposition, plan)
             versions["adaptive_route"] = adaptive_route.route.value
 
-        if (
-            self.grounding is not None
-            and schema_context is None
-            and (
-                din_sql
-                or (
-                    hybrid
-                    and adaptive_route is not None
-                    and adaptive_route.route is AdaptiveRoute.DIN_SQL_ENHANCE
-                )
+        if self.grounding is not None and (
+            din_sql
+            or (
+                hybrid
+                and adaptive_route is not None
+                and adaptive_route.route is AdaptiveRoute.DIN_SQL_ENHANCE
             )
         ):
             grounding_started = time.monotonic()
@@ -253,9 +209,9 @@ class DirectBaselineService:
                     and semantic_links.binding.status is BindingStatus.PROVEN
                 )
                 versions["planner"] = (
-                    f"adaptive({hybrid_planner_origin},typed_semantic_plan_v1)"
+                    f"adaptive({BASELINE_PLANNER_PROMPT_VERSION},typed_semantic_plan_v1)"
                     if proven_binding
-                    else f"adaptive({hybrid_planner_origin},{PLANNER_PROMPT_VERSION})"
+                    else f"adaptive({BASELINE_PLANNER_PROMPT_VERSION},{PLANNER_PROMPT_VERSION})"
                 )
                 din_planning_started = time.monotonic()
                 try:
