@@ -1,8 +1,9 @@
 # R2 semantic proof, failure-directed backtracking, and Olist protocol
 
-**Status (2026-09-13):** Revision G construction passes `make check`; its clean guarded Olist
-evaluation is pending. This document is architecture provenance, not a benchmark prompt or runtime
-input.
+**Status (2026-09-13):** Revision G clean prefix reached 7/10 and was rejected. Its code is archived
+at `c4851eb`; Revision E 28/31 was restored at `80e94ec` and passes `make check` with 260 non-Ollama
+tests. R2 remains `IN_PROGRESS`, not `VERIFIED`. This document is architecture provenance, not a
+benchmark prompt or runtime input.
 
 ## Research claim being tested
 
@@ -72,7 +73,7 @@ score was 57/60, so the upper-bound gate stopped it before holdout. Cases 25 and
 case 20 still used the wrong payment population, case 30 timed out in grounded planning, and case
 31 produced correct SQL but was rejected by an over-broad identity check.
 
-## Revisions F--G: typed completion and global proof-first control
+## Revisions F--G: rejected typed completion and global proof-first control
 
 Revision F added a payment-frequency rule at raw payment-record grain, a freight-per-order alias
 with typed rounding, and lineage-aware validation for a proven `customer_unique_id` source grain.
@@ -102,6 +103,12 @@ columns and clause contracts are still validated before read-only execution. Thi
 implementation of clause/grain proof suggested by SQLens and DAC, with fail-closed backtracking
 rather than model self-confidence. `make check` passes 271 non-Ollama tests (one Ollama test
 deselected), including a forbidden-retriever test and a zero-model-call integration test.
+
+The clean Revision G run falsified this integration: it reached only 7/10, with 8/10 questions
+routed through the proof path. Alias-level catalog matches were not sufficient proof of the whole
+question's population, grain and output contract. Revision G is therefore archived, not promoted;
+the live research checkpoint was restored to Revision E. Exact payment/freight phrases and
+post-failure product-category checks were removed rather than retained as benchmark-shaped rules.
 
 ## Locked evaluation protocol
 

@@ -1,19 +1,19 @@
 # So sánh kiến trúc Paper II / DIN-SQL với baseline Olist đã đóng băng
 
-## Revision G — global semantic proof-first (đang đánh giá)
+## Revision G — global semantic proof-first (REJECTED, đã phục hồi Revision E)
 
 Revision E đã nâng prefix sạch lên 28/31 nhưng không thể vượt champion 57/60. Revision F sửa ba
 failure class tổng quát: raw payment-record frequency, freight-per-order aggregate và
 `customer_unique_id` source-grain lineage. Pilot Revision F không kết luận accuracy vì planner v2
 timeout hai lần ở case đầu, dù guard không breach (đỉnh 2.125 MiB VRAM, 56 C, 45,18 W, swap 0).
 
-Revision G loại bottleneck đó cho mọi semantic contract được chứng minh đầy đủ: resolver chạy trước
-retrieval/model, dựng context tối thiểu từ catalog hash + owner + required columns, rồi typed planner
-và `generator_v8_proof_compiler` sinh SQL. Binding thiếu hoặc ambiguous vẫn backtrack sang explicit
-DIN hoặc frozen P6, nên không ép rule đoán. Fast path dùng 0 LLM call và 0 embedding call; baseline
-mode độc lập vẫn tồn tại làm ablation. Construction gate pass Ruff/format, mypy 111 source và 271
-pytest non-Ollama (1 test Ollama deselect). Kết quả benchmark chỉ được điền sau evaluation ID sạch;
-checkpoint timeout Revision F không được resume hay gộp.
+Revision G đã thử resolver trước retrieval/model và deterministic compiler trên mọi binding
+`PROVEN`, nhưng clean run chỉ đạt **7/10**. Hai case `005`, `007` kết thúc `MODEL_ERROR`; case
+`010` sinh weighted-average SQL nhưng validator/corrector không hoàn tất. 8/10 case bị route vào
+proof path, cho thấy catalog coverage đã bị dùng như ontology hoàn chỉnh. Candidate được lưu
+để điều tra tại `c4851eb` nhưng bị reject. Revision E 28/31 đã được phục hồi tại
+`80e94ec`; gate phục hồi pass 260 test non-Ollama. Không giữ exact payment/freight aliases,
+product-category special checks hay global zero-model route. P6 57/60 vẫn là champion.
 
 Nguồn thiết kế: [SQLens, NeurIPS 2025](https://proceedings.neurips.cc/paper_files/paper/2025/hash/c57812dee8acade8c5e385260b2cde28-Abstract-Conference.html),
 [Multi-grained Error Identification, COLING 2025](https://aclanthology.org/2025.coling-main.289/),

@@ -1762,12 +1762,12 @@ không `VERIFIED`. Evidence nằm tại
 Revision R2 D--G ngày 2026-09-13 bổ sung semantic proof theo population/grain/clause, scope-aware
 SQL validation, typed frequency ranking, deterministic proof compiler và hierarchical backtracking
 theo SQLens/DAC/Multi-grained/DART-SQL. Revision E dừng ở 28/31 vì cận trên chỉ còn 57/60; holdout
-46--60 chưa chạy. Revision F sửa ba failure class còn lại nhưng pilot case 1 timeout hai lần trong
-planner v2, không tạo accuracy evidence. Revision G hiện đưa exact schema-validated semantic proof
-lên trước retrieval/LLM: proof đầy đủ đi qua context tối thiểu và compiler; proof thiếu mới quay về
-explicit DIN hoặc frozen P6. Construction gate pass 271 test non-Ollama, nhưng R2 vẫn
-`IN_PROGRESS` cho đến khi evaluation ID sạch đạt ít nhất 58/60 dưới guarded profile. Chi tiết và
-protocol khóa holdout nằm tại `docs/research_plan/r2_semantic_proof_backtracking.md`.
+46--60 chưa chạy. Revision G global proof-first bị reject sau 7/10: catalog hẹp đã route 8/10
+case và gây regression. Trạng thái rejected được lưu ở `c4851eb`; code đã phục hồi Revision E
+tại `80e94ec`, với Ruff/format/mypy pass và 260 test non-Ollama pass (1 deselect). P6 57/60 vẫn
+là champion; R2 vẫn `IN_PROGRESS`, không `VERIFIED`. Revision kế tiếp phải dùng typed role/grain
+proof, AST lineage và bounded fallback, không thêm benchmark phrase rules. Chi tiết và protocol
+khóa holdout nằm tại `codex_answer.md` và `docs/research_plan/r2_semantic_proof_backtracking.md`.
 
 Post-P6 usability hardening ngày 2026-08-16 đã sửa lỗi thực tế trong câu hỏi Olist “Top 5 danh mục
 theo doanh thu sản phẩm, tách phí vận chuyển, giải thích”. Nguyên nhân không phải từ “giải thích” mà
