@@ -1,5 +1,19 @@
 # So sánh kiến trúc Paper II / DIN-SQL với baseline Olist đã đóng băng
 
+## Revision H — typed role/grain proof (construction + diagnostic)
+
+Revision H phục hồi E làm base và chỉ thêm abstraction có counterexample. DIN planner failure
+backtrack một lần về frozen P6. Qualifier `per entity` chỉ proven nếu identity của entity đó
+nằm trong metric source grain. Frequency ranking chỉ infer khi có đúng một entity, một
+dimension column tồn tại, ranking/limit rõ, không filter/time/set và không independent metric.
+Validator chấp nhận identity qua proven source-grain lineage, không qua hard-coded SQL.
+
+Commit `d309ed4` pass Ruff/format, mypy 111 source và 264 test non-Ollama. Guarded diagnostics giữ
+cả pilot H3 fail 0/1, sau đó ba pilot trên case 030/020/031 đều 1/1 first-pass, latency
+41,20--47,47 giây; peak 2.366 MiB VRAM, 58 C, 50,47 W, swap 0. Vì đây là failures đã biết,
+không claim 31/31 hay gain. Bước kế tiếp là source-locked development/regression run mới;
+full/holdout chỉ mở nếu upper bound còn >=58/60.
+
 ## Revision G — global semantic proof-first (REJECTED, đã phục hồi Revision E)
 
 Revision E đã nâng prefix sạch lên 28/31 nhưng không thể vượt champion 57/60. Revision F sửa ba

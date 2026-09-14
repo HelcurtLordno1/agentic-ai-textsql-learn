@@ -1771,7 +1771,12 @@ khóa holdout nằm tại `codex_answer.md` và `docs/research_plan/r2_semantic_
 Revision H3 sau đó đã construct bounded fallback: DIN planner failure chỉ backtrack một lần
 về P6 plan + baseline grounding/generation, với route signal có thể audit; không retry DIN,
 không best-of-N. Construction gate pass Ruff/format, mypy 111 source và 261 test non-Ollama
-(1 deselect). Chưa có accuracy evidence mới nên R2 vẫn `IN_PROGRESS`.
+(1 deselect). H1/H2 tại `d309ed4` suy ra frequency ranking từ unique entity/dimension shape,
+chứng minh `per entity` bằng source-grain identity, và cho validator tin lineage đã proven thay
+vì lexical column occurrence. Full construction gate pass 264 test non-Ollama. Guarded diagnostics
+giữ cả v1 fail 0/1; sau fix, v2 case 030, v3 case 020 và v4 case 031 đều 1/1 first-pass.
+Peak <=2.366 MiB VRAM, 58 C, 50,47 W, swap 0. Đây không phải full accuracy evidence; R2 vẫn
+`IN_PROGRESS` và holdout 46--60 vẫn khóa.
 
 Post-P6 usability hardening ngày 2026-08-16 đã sửa lỗi thực tế trong câu hỏi Olist “Top 5 danh mục
 theo doanh thu sản phẩm, tách phí vận chuyển, giải thích”. Nguyên nhân không phải từ “giải thích” mà

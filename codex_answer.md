@@ -5,7 +5,9 @@
 `80e94eced52049fd7019fe468c5e23122610edd4`. Revision G đạt 7/10 đã bị reject nhưng được lưu riêng
 tại `c4851eb` để điều tra, không còn là code đang được phát triển tiếp. Gate đầu tiên của Revision H
 đã được construct: DIN planner failure backtrack đúng một lần về frozen P6, với 261 test non-Ollama
-pass. Chưa có accuracy claim mới cho H trước guarded evaluation.
+pass. Typed role/grain extension được lưu tại `d309ed4b0ed74413751b7897402777fefa55e873`;
+full construction gate pass 264 non-Ollama tests. Guarded diagnostics đã pass ba failure class của
+Revision E, nhưng chưa có source-locked accuracy claim mới.
 
 ## 1. Đính chính mốc tốt nhất
 
@@ -144,6 +146,23 @@ lặp không giới hạn.
 Chạy proof route ở shadow mode trên development: vẫn trả kết quả P6 nhưng ghi quyết định/SQL của
 specialist. Chỉ mở execution route khi precision `PROVEN` đủ cao trên synthetic + development khóa
 trước. Recall thấp có thể fallback; false-positive proof mới là lỗi nguy hiểm.
+
+### H5 — evidence Revision H hiện có
+
+Mọi run dùng profile `olist-paper1-ultrasafe`, explicit GPU layer 1, batch 1, hard clock 300–600 MHz,
+unload và monitor 0,5 giây. Đây là reused-development diagnostics, không phải full score:
+
+| Pilot | Result | First pass | Latency | Kết luận |
+|---|---:|---:|---:|---|
+| H3 fallback v1, case 030 | 0/1 | 0/1 | 308,55 s | fallback chạy nhưng P6 sinh AVG ở item grain; deadline chặn correction |
+| H1 grain proof v2, case 030 | **1/1** | **1/1** | 47,47 s | `order_id` source grain chứng minh per-order metric |
+| H1 frequency v3, case 020 | **1/1** | **1/1** | 47,41 s | entity + unique dimension + ranking shape chứng minh raw-row frequency |
+| H2 lineage v4, case 031 | **1/1** | **1/1** | 41,20 s | proven source grain thỏa identity obligation |
+
+Peak không vượt 2.366 MiB VRAM, 58 °C, 50,47 W; swap luôn 0. Sau run không còn Ollama/benchmark
+process; idle 1.320 MiB VRAM, 50 °C, 300 MHz. Pilot v1 thất bại được giữ lại, không xóa để cherry-pick.
+Ba diagnostic pass không được cộng vào 28/31 vì khác run/model state và dùng failures đã biết; chúng
+chỉ cho phép mở evaluation ID development/regression sạch, trong khi holdout vẫn khóa.
 
 ## 6. Papers và phần được sử dụng
 
