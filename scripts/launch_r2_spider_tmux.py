@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import re
 import shlex
 import socket
@@ -15,6 +16,11 @@ from scripts.migrate_spider_clock_guard import migration_is_current, reviewed_cl
 from scripts.migrate_spider_deadline_guard import (
     deadline_migration_is_current,
     reviewed_deadline_stop,
+)
+from scripts.migrate_spider_power_guard import (
+    power_migration_is_current,
+    reviewed_power_stop,
+    verified_power_cap,
 )
 
 _SAFE_NAME = re.compile(r"^[a-z0-9][a-z0-9._-]{2,79}$")
@@ -133,6 +139,11 @@ def main() -> None:
         action="store_true",
         help="Resume a reviewed batch-deadline stop after a guard-only provenance migration.",
     )
+    parser.add_argument(
+        "--acknowledge-power-stop",
+        action="store_true",
+        help="Resume a reviewed power stop only with a verified <=75 W hard cap and new pilot.",
+    )
     args = parser.parse_args()
     if _SAFE_NAME.fullmatch(args.evaluation_id) is None:
         raise SystemExit("evaluation-id must be 3-80 lowercase safe characters")
@@ -146,21 +157,36 @@ def main() -> None:
             "HARD_CAP_CONFIRMATION_REQUIRED: verify Administrator nvidia-smi -lgc 900,1200; "
             "the guarded one-case pilot will also check the clock under load"
         )
+    verified_power_cap()
     root = Path(__file__).resolve().parents[1]
     prior_stop = root / "evals/reports" / f"{args.evaluation_id}.resource-stop.json"
     later_stops = sorted(
         (root / "evals/reports").glob(f"{args.evaluation_id}.*.resource-stop.json")
     )
+    deadline_stops = []
+    power_stops = []
+    for path in later_stops:
+        record = json.loads(path.read_text(encoding="utf-8"))
+        if record.get("stop_kind") == "batch_deadline":
+            deadline_stops.append(path)
+        elif str(record.get("reason", "")).startswith("GPU power "):
+            power_stops.append(path)
+        else:
+            raise SystemExit(f"RESOURCE_STOP_LOCKED: unreviewed incident {path}")
     if later_stops:
-        if len(later_stops) != 1 or not args.acknowledge_deadline_stop:
-            raise SystemExit(
-                f"RESOURCE_STOP_LOCKED: most recent session incident {later_stops[-1]}"
-            )
-        reviewed_deadline_stop(later_stops[0], PROFILES[ProfileName.SPIDER_PAPER2].limits)
+        if len(deadline_stops) != 1 or not args.acknowledge_deadline_stop:
+            raise SystemExit(f"RESOURCE_STOP_LOCKED: unreviewed deadline incident {later_stops}")
+        reviewed_deadline_stop(deadline_stops[0], PROFILES[ProfileName.SPIDER_PAPER2].limits)
         if args.batch_timeout_seconds <= 360:
             raise SystemExit("SPIDER_DEADLINE_REVIEW_REFUSED: require a larger bounded timeout")
     elif args.acknowledge_deadline_stop:
         raise SystemExit("SPIDER_DEADLINE_REVIEW_REFUSED: no deadline incident record")
+    if power_stops:
+        if len(power_stops) != 1 or not args.acknowledge_power_stop:
+            raise SystemExit(f"RESOURCE_STOP_LOCKED: unreviewed power incident {power_stops}")
+        reviewed_power_stop(power_stops[0], PROFILES[ProfileName.SPIDER_PAPER2].limits)
+    elif args.acknowledge_power_stop:
+        raise SystemExit("SPIDER_POWER_REVIEW_REFUSED: no power incident record")
     if prior_stop.is_file() and not args.acknowledge_clock_stop:
         raise SystemExit(f"RESOURCE_STOP_LOCKED: {prior_stop}")
     if args.acknowledge_clock_stop:
@@ -168,10 +194,14 @@ def main() -> None:
         provenance = root / "evals/predictions" / f"{args.evaluation_id}.provenance.json"
         if not migration_is_current(provenance, root, prior_stop):
             raise SystemExit("SPIDER_GUARD_MIGRATION_REQUIRED: run migrate_spider_clock_guard.py")
-        if later_stops and not deadline_migration_is_current(provenance, root, later_stops[0]):
+        if deadline_stops and not deadline_migration_is_current(
+            provenance, root, deadline_stops[0]
+        ):
             raise SystemExit(
                 "SPIDER_DEADLINE_MIGRATION_REQUIRED: run migrate_spider_deadline_guard.py"
             )
+        if power_stops and not power_migration_is_current(provenance, root, power_stops[0]):
+            raise SystemExit("SPIDER_POWER_MIGRATION_REQUIRED: run migrate_spider_power_guard.py")
         stop_record = root / "evals/reports" / f"{args.evaluation_id}.{session}.resource-stop.json"
     else:
         stop_record = prior_stop

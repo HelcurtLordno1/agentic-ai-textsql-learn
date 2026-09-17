@@ -1923,6 +1923,19 @@ breakers; migration phải chứng minh diff chỉ ở harness/docs/tests, khóa
 ghi transition trong provenance trước một one-case guarded pilot mới. R2 giữ `IN_PROGRESS`.
 Construction gate revision deadline-only pass `make check`: Ruff/format, mypy 114 source files,
 349 test non-Ollama (1 deselect).
+
+Spider R2 power incident ngày 2026-09-18: continuation đạt checkpoint 174/200 rồi guard dừng
+ở 87,82 W khi graphics clock 1200 MHz; nhiệt 57 C, VRAM 1.789 MiB, swap 0 và RAM khả dụng
+22,43 GiB. NVIDIA báo current power limit 85 W, cao hơn default 80 W. Đây là power breach thật,
+không được skip case hoặc auto-retry. User muốn nhanh hơn cap 65 W nên construction revision mới
+chỉ cho phép resume sau khi Administrator đặt hard power cap <=75 W (dưới default 80 W) và
+guard Spider-only stop tại 78 W; vẫn batch 1, sample 0,5 giây, cooldown 60 giây, GPU layer 1,
+temp stop 65 C/VRAM 4 GiB/RAM 14 GiB/swap 0,25 GiB. Một one-case guarded pilot là bắt buộc trước
+continuation. Guard-only migration audit source diff, manifest/index/config/prefix và SHA 174
+predictions; inference code/prompt không thay đổi. Chưa có Spider final report/accuracy claim.
+Construction gate của revision power-cap pass `make check`: Ruff/format, mypy 114 source files,
+353 test non-Ollama (1 deselect). Chưa chạy pilot ở cap 75 W vì operator chưa xác nhận giới hạn
+phần cứng qua NVIDIA Administrator.
 Đây là **adaptive recovery**, không phải fresh blind source-locked benchmark độc lập; ngưỡng
 accuracy development đã đạt nhưng R2 vẫn `IN_PROGRESS`, không `VERIFIED`/không promote default.
 Fresh guarded blind run sau source freeze và evaluation methodology review vẫn là gate tiếp theo.

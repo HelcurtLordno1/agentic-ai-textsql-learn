@@ -34,7 +34,7 @@ def test_reviewed_deadline_requires_exact_timeout_and_safe_resources(tmp_path: P
     with pytest.raises(SystemExit, match="not the 360s batch deadline"):
         reviewed_deadline_stop(path, limits)
     incident["reason"] = "child deadline 360s"
-    incident["observed_peak"]["gpu_power_w"] = 70.0  # type: ignore[index]
+    incident["observed_peak"]["gpu_power_w"] = limits.maximum_gpu_power_w  # type: ignore[index]
     path.write_text(json.dumps(incident), encoding="utf-8")
     with pytest.raises(SystemExit, match="resource threshold breached"):
         reviewed_deadline_stop(path, limits)

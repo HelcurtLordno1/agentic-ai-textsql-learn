@@ -36,7 +36,7 @@ def test_clock_stop_requires_clock_only_and_safe_other_peaks(tmp_path: Path) -> 
     with pytest.raises(SystemExit, match="not clock-only"):
         reviewed_clock_stop(path, limits)
     record["reason"] = "GPU graphics clock 900 MHz"
-    record["observed_peak"]["gpu_power_w"] = 72.0  # type: ignore[index]
+    record["observed_peak"]["gpu_power_w"] = limits.maximum_gpu_power_w  # type: ignore[index]
     path.write_text(json.dumps(record), encoding="utf-8")
     with pytest.raises(SystemExit, match="another threshold breached"):
         reviewed_clock_stop(path, limits)

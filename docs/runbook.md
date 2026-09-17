@@ -196,6 +196,45 @@ uv run python scripts/launch_r2_spider_tmux.py \
 tmux attach -t spider-r2-hybrid-200-v1-resume900-1
 ```
 
+At 174/200, that continuation hit a real GPU power threshold: 87.82 W, while `nvidia-smi`
+reported an 85 W current and 80 W default hardware limit. Never skip the case or continue after
+this breach. The user authorized a faster-than-65 W compromise: Administrator hardware power cap
+at **75 W**, below the device default, and a new Spider-only **78 W software stop**. Keep the
+900--1200 MHz requested clock range, but allow hardware power throttling; the one-case guarded
+pilot must pass before any continuation. The launcher fails closed if the hard cap is absent,
+if any other resource limit is breached, or if a new incident record appears. The 900-second
+number is only a maximum per case, not a fixed wait or a way to accelerate generation.
+
+Run in Administrator PowerShell, one command per line:
+
+```powershell
+nvidia-smi -i 0 -pl 75
+nvidia-smi -i 0 -lgc 900,1200
+nvidia-smi -i 0 -q -d POWER,CLOCK
+nvidia-smi -i 0 --query-gpu=clocks.current.graphics,memory.used,temperature.gpu,power.draw,utilization.gpu --format=csv,noheader,nounits
+```
+
+Only after `Current Power Limit` reads at most 75 W and idle resources are safe, run in WSL:
+
+```bash
+cd "/mnt/d/desktop_informations/vnpt ai/agentic_text_to_sql"
+uv run python scripts/migrate_spider_power_guard.py \
+  --evaluation-id spider-r2-hybrid-200-v1 \
+  --stop-session spider-r2-hybrid-200-v1-resume900-1
+uv run python scripts/launch_r2_spider_tmux.py \
+  --evaluation-id spider-r2-hybrid-200-v1 \
+  --session spider-r2-hybrid-200-v1-resume75-1 \
+  --models-dir /mnt/c/Users/ADMIN/.ollama/models \
+  --hard-cap-confirmed --acknowledge-clock-stop --acknowledge-deadline-stop \
+  --acknowledge-power-stop --batch-timeout-seconds 900
+tmux attach -t spider-r2-hybrid-200-v1-resume75-1
+```
+
+The power migration is one-time and records the unchanged 174-case prediction SHA, both Git
+revisions, the verified hard cap and transition index. Existing tmux sessions remain as dead logs;
+use the new session name to monitor live work. A fresh power/thermal/RAM/swap/VRAM/clock breach
+ends the run and must not be automatically retried.
+
 Full Spider-1034 remains optional P6.1 on stronger hardware and has no matched full baseline here;
 never present the 200-case score as full dev. Never commit predictions, detailed reports, indexes,
 model blobs, raw Spider data, or databases. When complete, export only the gold-free summary:
