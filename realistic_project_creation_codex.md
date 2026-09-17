@@ -1911,6 +1911,18 @@ ghi transition tại case 34 và chỉ sau đó chạy lại one-case guarded pi
 claim; vì cap thay đổi giữa run, report phải ghi hardware segments và không so latency trực tiếp.
 Construction gate của revision clock-only pass `make check`: Ruff/format, mypy 114 source files,
 347 test non-Ollama (1 deselect).
+
+Spider R2 deadline incident ngày 2026-09-17: sau các resume có operator kiểm tra, inference đạt
+checkpoint 170/200 nhưng case kế tiếp không hoàn tất trước child wall-time 360 giây; watchdog
+SIGINT trong lúc generator chờ Ollama HTTP nên log có `KeyboardInterrupt`. Stop record ghi
+`batch_deadline`, không phải resource threshold: peak 58 C, 66,34 W, 1.790 MiB VRAM, swap 0,
+RAM khả dụng thấp nhất 22,39 GiB. Không có full report hay Spider accuracy claim. Revision
+deadline-only tiếp theo mở launcher cho per-case limit 900 giây (vẫn bounded), giữ nguyên toàn bộ
+LLM/inference/prompt settings, sampling 0,5 giây, batch 1, unload/cooldown 60 giây và hardware
+breakers; migration phải chứng minh diff chỉ ở harness/docs/tests, khóa SHA 170 predictions và
+ghi transition trong provenance trước một one-case guarded pilot mới. R2 giữ `IN_PROGRESS`.
+Construction gate revision deadline-only pass `make check`: Ruff/format, mypy 114 source files,
+349 test non-Ollama (1 deselect).
 Đây là **adaptive recovery**, không phải fresh blind source-locked benchmark độc lập; ngưỡng
 accuracy development đã đạt nhưng R2 vẫn `IN_PROGRESS`, không `VERIFIED`/không promote default.
 Fresh guarded blind run sau source freeze và evaluation methodology review vẫn là gate tiếp theo.

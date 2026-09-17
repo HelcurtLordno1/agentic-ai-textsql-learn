@@ -87,7 +87,10 @@ def test_tmux_resume_uses_new_stop_lock_without_erasing_prior_incident(tmp_path:
         session="spider-resume1",
         models_dir=tmp_path / "models",
         stop_record=stop,
+        batch_timeout_seconds=900,
     )
     assert str(stop) in server
     assert str(stop) in benchmark
     assert "spider-r2-test.resource-stop.json" not in server
+    assert "--batch-timeout-seconds 900" in benchmark
+    assert "--batch-timeout-seconds" not in server

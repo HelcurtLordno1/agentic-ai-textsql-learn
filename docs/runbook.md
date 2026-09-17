@@ -173,6 +173,29 @@ If the new session is interrupted without a threshold breach, use a fresh sessio
 same evaluation ID and `--acknowledge-clock-stop`; do not run the migration again. A new session
 resource-stop file blocks further restarts pending a separate incident review. A failed
 provenance check likewise requires investigation; never merge or overwrite incompatible checkpoints.
+At 170/200, the continuation stopped because the one-case child hit the *wrapper's* 360-second
+deadline during an in-flight Ollama HTTP request. This is a bounded wall-time stop, not evidence
+of a GPU/thermal/memory breach or a completed Spider score. Its separate incident record reports
+58 C, 66.34 W, 1,790 MiB VRAM, zero swap, and 22.39 GiB available RAM. The inference code and
+saved 170 predictions are unchanged. After reviewing that record and confirming idle safety,
+commit the deadline-only launcher/migration revision, run the one-time audited migration, and
+repeat a guarded one-case pilot with a 900-second *per-case* maximum. Continuous 0.5-second
+resource monitoring, batch size 1, model unload, 60-second cooldown, and all hardware breakers
+remain unchanged. Do not automatically retry if this larger deadline or a resource breaker trips.
+
+```bash
+uv run python scripts/migrate_spider_deadline_guard.py \
+  --evaluation-id spider-r2-hybrid-200-v1 \
+  --stop-session spider-r2-hybrid-200-v1-resume1200-2
+uv run python scripts/launch_r2_spider_tmux.py \
+  --evaluation-id spider-r2-hybrid-200-v1 \
+  --session spider-r2-hybrid-200-v1-resume900-1 \
+  --models-dir /mnt/c/Users/ADMIN/.ollama/models \
+  --hard-cap-confirmed --acknowledge-clock-stop --acknowledge-deadline-stop \
+  --batch-timeout-seconds 900
+tmux attach -t spider-r2-hybrid-200-v1-resume900-1
+```
+
 Full Spider-1034 remains optional P6.1 on stronger hardware and has no matched full baseline here;
 never present the 200-case score as full dev. Never commit predictions, detailed reports, indexes,
 model blobs, raw Spider data, or databases. When complete, export only the gold-free summary:

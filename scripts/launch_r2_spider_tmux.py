@@ -11,6 +11,11 @@ from pathlib import Path
 
 from agentic_text2sql.hardware import PROFILES, ProfileName, sample_resources, unsafe_reason
 from agentic_text2sql_eval.spider_release import load_release_cases
+from scripts.migrate_spider_clock_guard import migration_is_current, reviewed_clock_stop
+from scripts.migrate_spider_deadline_guard import (
+    deadline_migration_is_current,
+    reviewed_deadline_stop,
+)
 
 _SAFE_NAME = re.compile(r"^[a-z0-9][a-z0-9._-]{2,79}$")
 
@@ -28,6 +33,7 @@ def build_window_shells(
     session: str,
     models_dir: Path,
     stop_record: Path | None = None,
+    batch_timeout_seconds: int = 360,
 ) -> tuple[str, str]:
     reports = root / "evals/reports"
     predictions = root / "evals/predictions" / f"{evaluation_id}.jsonl"
@@ -64,6 +70,8 @@ def build_window_shells(
         "60",
         "--sample-seconds",
         "0.5",
+        "--batch-timeout-seconds",
+        str(batch_timeout_seconds),
         "--evaluation-id",
         evaluation_id,
         "--predictions",
@@ -114,10 +122,16 @@ def main() -> None:
     parser.add_argument("--session")
     parser.add_argument("--models-dir", type=Path, required=True)
     parser.add_argument("--hard-cap-confirmed", action="store_true")
+    parser.add_argument("--batch-timeout-seconds", type=int, default=360)
     parser.add_argument(
         "--acknowledge-clock-stop",
         action="store_true",
         help="Resume a reviewed clock-only stop with a new session-scoped stop record.",
+    )
+    parser.add_argument(
+        "--acknowledge-deadline-stop",
+        action="store_true",
+        help="Resume a reviewed batch-deadline stop after a guard-only provenance migration.",
     )
     args = parser.parse_args()
     if _SAFE_NAME.fullmatch(args.evaluation_id) is None:
@@ -125,6 +139,8 @@ def main() -> None:
     session = args.session or f"spider-r2-{args.evaluation_id}"
     if _SAFE_NAME.fullmatch(session) is None:
         raise SystemExit("session must be 3-80 lowercase safe characters")
+    if not 360 <= args.batch_timeout_seconds <= 900:
+        raise SystemExit("Spider batch timeout must be 360-900 seconds")
     if not args.hard_cap_confirmed:
         raise SystemExit(
             "HARD_CAP_CONFIRMATION_REQUIRED: verify Administrator nvidia-smi -lgc 900,1200; "
@@ -136,18 +152,26 @@ def main() -> None:
         (root / "evals/reports").glob(f"{args.evaluation_id}.*.resource-stop.json")
     )
     if later_stops:
-        raise SystemExit(f"RESOURCE_STOP_LOCKED: most recent session incident {later_stops[-1]}")
+        if len(later_stops) != 1 or not args.acknowledge_deadline_stop:
+            raise SystemExit(
+                f"RESOURCE_STOP_LOCKED: most recent session incident {later_stops[-1]}"
+            )
+        reviewed_deadline_stop(later_stops[0], PROFILES[ProfileName.SPIDER_PAPER2].limits)
+        if args.batch_timeout_seconds <= 360:
+            raise SystemExit("SPIDER_DEADLINE_REVIEW_REFUSED: require a larger bounded timeout")
+    elif args.acknowledge_deadline_stop:
+        raise SystemExit("SPIDER_DEADLINE_REVIEW_REFUSED: no deadline incident record")
     if prior_stop.is_file() and not args.acknowledge_clock_stop:
         raise SystemExit(f"RESOURCE_STOP_LOCKED: {prior_stop}")
     if args.acknowledge_clock_stop:
-        from scripts.migrate_spider_clock_guard import reviewed_clock_stop
-
         reviewed_clock_stop(prior_stop, PROFILES[ProfileName.SPIDER_PAPER2].limits)
         provenance = root / "evals/predictions" / f"{args.evaluation_id}.provenance.json"
-        from scripts.migrate_spider_clock_guard import migration_is_current
-
         if not migration_is_current(provenance, root, prior_stop):
             raise SystemExit("SPIDER_GUARD_MIGRATION_REQUIRED: run migrate_spider_clock_guard.py")
+        if later_stops and not deadline_migration_is_current(provenance, root, later_stops[0]):
+            raise SystemExit(
+                "SPIDER_DEADLINE_MIGRATION_REQUIRED: run migrate_spider_deadline_guard.py"
+            )
         stop_record = root / "evals/reports" / f"{args.evaluation_id}.{session}.resource-stop.json"
     else:
         stop_record = prior_stop
@@ -185,6 +209,7 @@ def main() -> None:
         session=session,
         models_dir=models_dir,
         stop_record=stop_record,
+        batch_timeout_seconds=args.batch_timeout_seconds,
     )
     subprocess.run(
         [

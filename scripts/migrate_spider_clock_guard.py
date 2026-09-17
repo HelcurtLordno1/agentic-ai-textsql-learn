@@ -69,10 +69,11 @@ def migration_is_current(provenance_path: Path, root: Path, prior_stop: Path) ->
         commit = git_output(root, "rev-parse", "HEAD")
     except (OSError, subprocess.SubprocessError):
         return False
-    return (
-        payload.get("git_commit") == commit
-        and history[-1].get("to_git_commit") == commit
-        and history[-1].get("prior_stop_sha256") == sha256_file(prior_stop)
+    return payload.get("git_commit") == commit and any(
+        isinstance(item, dict)
+        and item.get("kind") == "clock_guard_only_revision"
+        and item.get("prior_stop_sha256") == sha256_file(prior_stop)
+        for item in history
     )
 
 
