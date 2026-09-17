@@ -22,13 +22,18 @@ def port_is_open(host: str = "127.0.0.1", port: int = 11434) -> bool:
 
 
 def build_window_shells(
-    root: Path, *, evaluation_id: str, session: str, models_dir: Path
+    root: Path,
+    *,
+    evaluation_id: str,
+    session: str,
+    models_dir: Path,
+    stop_record: Path | None = None,
 ) -> tuple[str, str]:
     reports = root / "evals/reports"
     predictions = root / "evals/predictions" / f"{evaluation_id}.jsonl"
     report = reports / f"{evaluation_id}.json"
     progress = reports / f"{evaluation_id}.progress.json"
-    stop_record = reports / f"{evaluation_id}.resource-stop.json"
+    stop_record = stop_record or reports / f"{evaluation_id}.resource-stop.json"
     manifest = root / "evals/configs/spider-laptop-200.json"
     server_log = reports / f"{evaluation_id}.server.log"
     benchmark_log = reports / f"{evaluation_id}.benchmark.log"
@@ -109,6 +114,11 @@ def main() -> None:
     parser.add_argument("--session")
     parser.add_argument("--models-dir", type=Path, required=True)
     parser.add_argument("--hard-cap-confirmed", action="store_true")
+    parser.add_argument(
+        "--acknowledge-clock-stop",
+        action="store_true",
+        help="Resume a reviewed clock-only stop with a new session-scoped stop record.",
+    )
     args = parser.parse_args()
     if _SAFE_NAME.fullmatch(args.evaluation_id) is None:
         raise SystemExit("evaluation-id must be 3-80 lowercase safe characters")
@@ -117,11 +127,30 @@ def main() -> None:
         raise SystemExit("session must be 3-80 lowercase safe characters")
     if not args.hard_cap_confirmed:
         raise SystemExit(
-            "HARD_CAP_CONFIRMATION_REQUIRED: verify Administrator nvidia-smi -lgc 300,600; "
+            "HARD_CAP_CONFIRMATION_REQUIRED: verify Administrator nvidia-smi -lgc 900,1200; "
             "the guarded one-case pilot will also check the clock under load"
         )
     root = Path(__file__).resolve().parents[1]
-    stop_record = root / "evals/reports" / f"{args.evaluation_id}.resource-stop.json"
+    prior_stop = root / "evals/reports" / f"{args.evaluation_id}.resource-stop.json"
+    later_stops = sorted(
+        (root / "evals/reports").glob(f"{args.evaluation_id}.*.resource-stop.json")
+    )
+    if later_stops:
+        raise SystemExit(f"RESOURCE_STOP_LOCKED: most recent session incident {later_stops[-1]}")
+    if prior_stop.is_file() and not args.acknowledge_clock_stop:
+        raise SystemExit(f"RESOURCE_STOP_LOCKED: {prior_stop}")
+    if args.acknowledge_clock_stop:
+        from scripts.migrate_spider_clock_guard import reviewed_clock_stop
+
+        reviewed_clock_stop(prior_stop, PROFILES[ProfileName.SPIDER_PAPER2].limits)
+        provenance = root / "evals/predictions" / f"{args.evaluation_id}.provenance.json"
+        from scripts.migrate_spider_clock_guard import migration_is_current
+
+        if not migration_is_current(provenance, root, prior_stop):
+            raise SystemExit("SPIDER_GUARD_MIGRATION_REQUIRED: run migrate_spider_clock_guard.py")
+        stop_record = root / "evals/reports" / f"{args.evaluation_id}.{session}.resource-stop.json"
+    else:
+        stop_record = prior_stop
     if stop_record.is_file():
         raise SystemExit(f"RESOURCE_STOP_LOCKED: {stop_record}")
     if port_is_open():
@@ -151,7 +180,11 @@ def main() -> None:
         raise SystemExit(f"RESOURCE_GUARD_REFUSED_START: {reason}")
     (root / "evals/reports").mkdir(parents=True, exist_ok=True)
     server_shell, benchmark_shell = build_window_shells(
-        root, evaluation_id=args.evaluation_id, session=session, models_dir=models_dir
+        root,
+        evaluation_id=args.evaluation_id,
+        session=session,
+        models_dir=models_dir,
+        stop_record=stop_record,
     )
     subprocess.run(
         [

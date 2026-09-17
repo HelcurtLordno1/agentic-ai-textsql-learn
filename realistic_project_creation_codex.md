@@ -1899,6 +1899,18 @@ P6 sáu GPU layers. Score Spider R2 chỉ được ghi sau khi full 200-case rep
 `IN_PROGRESS` trong giai đoạn chạy. Construction gate: `make check` pass Ruff/format, strict mypy
 trên 114 source files và 344 test non-Ollama (1 deselect); `uv lock --check`, `uv pip check` và
 `git diff --check` pass. Đây chưa phải evidence accuracy Spider R2.
+
+Spider R2 operational incident cùng ngày: inference tới checkpoint 34/200 ở source revision
+`d926df5` thì guarded server dừng khi operator đổi OS clock cap từ 300--600 sang 900--1200 MHz;
+guard cũ bắt `GPU graphics clock 900 MHz` (trần 601). Incident record peak 2.347 MiB VRAM, 56 C,
+53,42 W, swap 0, 22,20 GiB RAM khả dụng; không phải nhiệt/power/memory breach. User yêu cầu resume
+ở cap mới. Construction revision tiếp theo chỉ nâng ceiling Spider guard lên 1201 MHz, vẫn giữ
+power stop 70 W, nhiệt 65 C, VRAM 4 GiB, RAM tối thiểu 14 GiB, batch 1/unload/cooldown 60 giây.
+Migration audit phải xác nhận toàn bộ inference/config/index/manifest bất biến, giữ incident cũ,
+ghi transition tại case 34 và chỉ sau đó chạy lại one-case guarded pilot. Score và latency chưa
+claim; vì cap thay đổi giữa run, report phải ghi hardware segments và không so latency trực tiếp.
+Construction gate của revision clock-only pass `make check`: Ruff/format, mypy 114 source files,
+347 test non-Ollama (1 deselect).
 Đây là **adaptive recovery**, không phải fresh blind source-locked benchmark độc lập; ngưỡng
 accuracy development đã đạt nhưng R2 vẫn `IN_PROGRESS`, không `VERIFIED`/không promote default.
 Fresh guarded blind run sau source freeze và evaluation methodology review vẫn là gate tiếp theo.

@@ -114,7 +114,7 @@ but the safer one-layer profile means latency is **not** an apples-to-apples com
 no Olist-certified semantic proof catalog, so this run explicitly uses `planning_mode=hybrid` and
 `candidate_mode=legacy`; do not describe it as an Olist champion--challenger generalization result.
 
-Before starting, verify the Administrator `nvidia-smi -i 0 -lgc 300,600` hard clock cap is still
+Before starting, verify the Administrator `nvidia-smi -i 0 -lgc 900,1200` hard clock cap is still
 active, no stale model job remains, and idle resource readings are safe. The launcher refuses an
 occupied Ollama port, unsafe preflight, or a resource-stop lock. It starts a guarded server and a
 one-case guarded pilot, then automatically continues from the same checkpoint only if the pilot
@@ -148,7 +148,30 @@ tmux attach -t spider-r2-hybrid-200-v1-resume1
 ```
 
 If `*.resource-stop.json` appears, do **not** delete it or retry automatically. Review its measured
-reason/peak, check hardware and seek operator direction before a fresh one-case pilot. A failed
+reason/peak, check hardware and seek operator direction before a fresh one-case pilot. The initial
+Spider R2 run stopped at 34/200 when the operator raised the OS clock minimum to 900 MHz while the
+old guard still enforced 600 MHz. Its incident file is retained. After reviewing its clock-only
+stop (peak 2,347 MiB VRAM, 56 C, 53.42 W, zero swap), the user approved a 900--1200 MHz hard cap.
+Only the guard clock ceiling changed; the inference source, model settings, index and manifest did
+not. A one-time provenance migration audits the exact Git diff, validates the 34-case prefix, and
+records both source revisions and the transition index. Run this **once after the new guard commit
+is pushed and the old jobs are absent**, then resume with a new tmux session and explicit reviewed
+clock-stop acknowledgement:
+
+```bash
+uv run python scripts/migrate_spider_clock_guard.py \
+  --evaluation-id spider-r2-hybrid-200-v1
+uv run python scripts/launch_r2_spider_tmux.py \
+  --evaluation-id spider-r2-hybrid-200-v1 \
+  --session spider-r2-hybrid-200-v1-resume1200-1 \
+  --models-dir /mnt/c/Users/ADMIN/.ollama/models \
+  --hard-cap-confirmed --acknowledge-clock-stop
+tmux attach -t spider-r2-hybrid-200-v1-resume1200-1
+```
+
+If the new session is interrupted without a threshold breach, use a fresh session name with the
+same evaluation ID and `--acknowledge-clock-stop`; do not run the migration again. A new session
+resource-stop file blocks further restarts pending a separate incident review. A failed
 provenance check likewise requires investigation; never merge or overwrite incompatible checkpoints.
 Full Spider-1034 remains optional P6.1 on stronger hardware and has no matched full baseline here;
 never present the 200-case score as full dev. Never commit predictions, detailed reports, indexes,

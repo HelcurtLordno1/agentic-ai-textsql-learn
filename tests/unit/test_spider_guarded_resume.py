@@ -19,8 +19,8 @@ def test_spider_profile_keeps_conservative_breakers() -> None:
     assert profile.max_loaded_models == 1
     assert profile.limits.maximum_gpu_power_w <= 70
     assert profile.limits.maximum_gpu_memory_mib < 6144
-    assert profile.limits.maximum_gpu_graphics_clock_mhz <= 601
-    hot = ResourceSample(15, 0, 1000, 50, 20, 20, 750)
+    assert profile.limits.maximum_gpu_graphics_clock_mhz == 1201
+    hot = ResourceSample(15, 0, 1000, 50, 20, 20, 1215)
     assert unsafe_reason(hot, profile.limits) is not None
 
 
@@ -77,3 +77,17 @@ def test_tmux_launcher_runs_one_case_pilot_then_resume_with_two_guards(tmp_path:
     assert "--phase inference" in benchmark
     assert "trap cleanup EXIT" in benchmark
     assert "--batch-size 1 --cooldown-seconds 60 --sample-seconds 0.5" in benchmark
+
+
+def test_tmux_resume_uses_new_stop_lock_without_erasing_prior_incident(tmp_path: Path) -> None:
+    stop = tmp_path / "evals/reports/spider-r2-test.spider-resume1.resource-stop.json"
+    server, benchmark = build_window_shells(
+        tmp_path,
+        evaluation_id="spider-r2-test",
+        session="spider-resume1",
+        models_dir=tmp_path / "models",
+        stop_record=stop,
+    )
+    assert str(stop) in server
+    assert str(stop) in benchmark
+    assert "spider-r2-test.resource-stop.json" not in server
