@@ -78,6 +78,41 @@ class DirectBaselineService:
             raise ValueError("hybrid planning requires both baseline and DIN generation paths")
 
     def run(self, question: str, database: Path, catalog: CatalogSnapshot) -> DirectRunResult:
+        return self._run(
+            question,
+            database,
+            catalog,
+            baseline_plan_override=None,
+            semantic_intervention_only=False,
+        )
+
+    def run_from_baseline_plan(
+        self,
+        question: str,
+        database: Path,
+        catalog: CatalogSnapshot,
+        baseline_plan: LogicalPlan,
+    ) -> DirectRunResult:
+        """Run the specialist intervention from the incumbent's frozen P6 control plan."""
+        if self.planning_mode != "hybrid":
+            raise ValueError("baseline-plan reuse is available only in hybrid mode")
+        return self._run(
+            question,
+            database,
+            catalog,
+            baseline_plan_override=baseline_plan,
+            semantic_intervention_only=True,
+        )
+
+    def _run(
+        self,
+        question: str,
+        database: Path,
+        catalog: CatalogSnapshot,
+        *,
+        baseline_plan_override: LogicalPlan | None,
+        semantic_intervention_only: bool,
+    ) -> DirectRunResult:
         run_id = str(uuid.uuid4())
         din_sql = self.planning_mode == "din_sql"
         hybrid = self.planning_mode == "hybrid"
@@ -123,24 +158,53 @@ class DirectBaselineService:
         schema_context = None
         semantic_links = None
         plan: LogicalPlan
+        baseline_plan: LogicalPlan | None = None
+
+        def fall_back_to_baseline(signal: str) -> None:
+            """Discard specialist state and restore the single frozen P6 path."""
+            nonlocal adaptive_route, plan, schema_context, semantic_links
+            if baseline_plan is None or adaptive_route is None:
+                raise RuntimeError("specialist fallback requires a preserved baseline plan")
+            plan = baseline_plan
+            schema_context = None
+            semantic_links = None
+            adaptive_route = AdaptiveRouteDecision(
+                route=AdaptiveRoute.BASELINE_PRESERVE,
+                signals=tuple((*adaptive_route.signals, signal)[-8:]),
+            )
+            versions["planner"] = BASELINE_PLANNER_PROMPT_VERSION
+            versions["adaptive_route"] = adaptive_route.route.value
+
         if hybrid:
             planning_started = time.monotonic()
-            try:
-                plan = self.planner.plan(question, decomposition)
-            except (StructuredOutputError, Text2SQLError, ValueError) as exc:
-                timings["planning"] = (time.monotonic() - planning_started) * 1000
-                finish_timings()
-                return DirectRunResult(
-                    run_id=run_id,
-                    question=question,
-                    status=DirectStatus.MODEL_ERROR,
-                    route_reason=route.reason,
-                    prompt_versions=versions,
-                    safe_message=str(exc),
-                    latency_ms=timings,
-                )
+            if baseline_plan_override is not None:
+                plan = baseline_plan_override
+                versions["control_plan_source"] = "incumbent_p6"
+            else:
+                try:
+                    plan = self.planner.plan(question, decomposition)
+                except (StructuredOutputError, Text2SQLError, ValueError) as exc:
+                    timings["planning"] = (time.monotonic() - planning_started) * 1000
+                    finish_timings()
+                    return DirectRunResult(
+                        run_id=run_id,
+                        question=question,
+                        status=DirectStatus.MODEL_ERROR,
+                        route_reason=route.reason,
+                        prompt_versions=versions,
+                        safe_message=str(exc),
+                        latency_ms=timings,
+                    )
             timings["planning"] = (time.monotonic() - planning_started) * 1000
+            baseline_plan = plan
             adaptive_route = choose_adaptive_route(question, decomposition, plan)
+            if semantic_intervention_only:
+                adaptive_route = AdaptiveRouteDecision(
+                    route=AdaptiveRoute.DIN_SQL_ENHANCE,
+                    signals=tuple(
+                        dict.fromkeys((*adaptive_route.signals, "PROVEN_SEMANTIC_INTERVENTION"))
+                    ),
+                )
             versions["adaptive_route"] = adaptive_route.route.value
 
         if self.grounding is not None and (
@@ -157,18 +221,23 @@ class DirectBaselineService:
                     question, decomposition
                 )
             except (ValueError, Text2SQLError) as exc:
+                if hybrid and baseline_plan is not None:
+                    timings["din_grounding"] = (time.monotonic() - grounding_started) * 1000
+                    fall_back_to_baseline("DIN_GROUNDING_FAILED_BASELINE_FALLBACK")
+                else:
+                    timings["grounding"] = (time.monotonic() - grounding_started) * 1000
+                    finish_timings()
+                    return DirectRunResult(
+                        run_id=run_id,
+                        question=question,
+                        status=DirectStatus.GROUNDING_ERROR,
+                        route_reason=route.reason,
+                        prompt_versions=versions,
+                        safe_message=str(exc),
+                        latency_ms=timings,
+                    )
+            else:
                 timings["grounding"] = (time.monotonic() - grounding_started) * 1000
-                finish_timings()
-                return DirectRunResult(
-                    run_id=run_id,
-                    question=question,
-                    status=DirectStatus.GROUNDING_ERROR,
-                    route_reason=route.reason,
-                    prompt_versions=versions,
-                    safe_message=str(exc),
-                    latency_ms=timings,
-                )
-            timings["grounding"] = (time.monotonic() - grounding_started) * 1000
 
         if not hybrid:
             planning_started = time.monotonic()
@@ -229,17 +298,7 @@ class DirectBaselineService:
                     # planning call therefore has one safe, bounded backtrack: discard specialist
                     # context and replay the frozen baseline grounding/generation path. No retry
                     # is made against the failed planner and no confidence guess is required.
-                    plan = baseline_plan
-                    schema_context = None
-                    semantic_links = None
-                    adaptive_route = AdaptiveRouteDecision(
-                        route=AdaptiveRoute.BASELINE_PRESERVE,
-                        signals=tuple(
-                            (*adaptive_route.signals, "DIN_PLANNING_FAILED_BASELINE_FALLBACK")[-8:]
-                        ),
-                    )
-                    versions["planner"] = BASELINE_PLANNER_PROMPT_VERSION
-                    versions["adaptive_route"] = adaptive_route.route.value
+                    fall_back_to_baseline("DIN_PLANNING_FAILED_BASELINE_FALLBACK")
                 timings["din_planning"] = (time.monotonic() - din_planning_started) * 1000
 
         adaptive_route_payload = (
@@ -270,20 +329,54 @@ class DirectBaselineService:
         if schema_context is not None and isinstance(plan, DINSQLPlan):
             plan_validation = validate_plan(plan, catalog, schema_context)
             if not plan_validation.accepted:
-                finish_timings()
-                return DirectRunResult(
-                    run_id=run_id,
-                    question=question,
-                    status=DirectStatus.GROUNDING_ERROR,
-                    route_reason=route.reason,
-                    prompt_versions=versions,
-                    adaptive_route=adaptive_route_payload,
-                    plan=plan.model_dump(mode="json"),
-                    plan_validation=plan_validation.model_dump(mode="json"),
-                    schema_context=schema_context.model_dump(mode="json"),
-                    safe_message=plan_validation.safe_message,
-                    latency_ms=timings,
-                )
+                if (
+                    hybrid
+                    and baseline_plan is not None
+                    and adaptive_route is not None
+                    and adaptive_route.route is AdaptiveRoute.DIN_SQL_ENHANCE
+                ):
+                    fall_back_to_baseline("DIN_PLAN_REJECTED_BASELINE_FALLBACK")
+                    adaptive_route_payload = adaptive_route.model_dump(mode="json")
+                    if self.grounding is None:  # Constructor invariant; narrows the typed boundary.
+                        raise RuntimeError("hybrid fallback requires grounding")
+                    fallback_grounding_started = time.monotonic()
+                    try:
+                        schema_context = self.grounding.ground(question, plan)
+                    except (ValueError, Text2SQLError) as exc:
+                        timings["fallback_grounding"] = (
+                            time.monotonic() - fallback_grounding_started
+                        ) * 1000
+                        finish_timings()
+                        return DirectRunResult(
+                            run_id=run_id,
+                            question=question,
+                            status=DirectStatus.GROUNDING_ERROR,
+                            route_reason=route.reason,
+                            prompt_versions=versions,
+                            adaptive_route=adaptive_route_payload,
+                            plan=plan.model_dump(mode="json"),
+                            safe_message=str(exc),
+                            latency_ms=timings,
+                        )
+                    timings["fallback_grounding"] = (
+                        time.monotonic() - fallback_grounding_started
+                    ) * 1000
+                    plan_validation = None
+                else:
+                    finish_timings()
+                    return DirectRunResult(
+                        run_id=run_id,
+                        question=question,
+                        status=DirectStatus.GROUNDING_ERROR,
+                        route_reason=route.reason,
+                        prompt_versions=versions,
+                        adaptive_route=adaptive_route_payload,
+                        plan=plan.model_dump(mode="json"),
+                        plan_validation=plan_validation.model_dump(mode="json"),
+                        schema_context=schema_context.model_dump(mode="json"),
+                        safe_message=plan_validation.safe_message,
+                        latency_ms=timings,
+                    )
         plan_validation_payload = (
             plan_validation.model_dump(mode="json") if plan_validation is not None else None
         )
@@ -323,8 +416,14 @@ class DirectBaselineService:
             else self.generation
         )
         use_semantic_path = use_din_generation or compiled_candidate is not None
+        # A deterministic proof compiler is the terminal semantic implementation of its typed
+        # binding. Sending that SQL through a model corrector can silently replace a proven AVG,
+        # predicate, or grain with a plausible but different query. It still passes the SQL safety
+        # policy and bounded read-only execution below; only model rewriting is disabled.
         active_correction = (
-            self.din_correction
+            None
+            if compiled_candidate is not None
+            else self.din_correction
             if use_semantic_path and self.din_correction is not None
             else self.correction
         )

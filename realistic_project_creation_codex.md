@@ -1778,6 +1778,118 @@ giữ cả v1 fail 0/1; sau fix, v2 case 030, v3 case 020 và v4 case 031 đều
 Peak <=2.366 MiB VRAM, 58 C, 50,47 W, swap 0. Đây không phải full accuracy evidence; R2 vẫn
 `IN_PROGRESS` và holdout 46--60 vẫn khóa.
 
+Revision H3.1 ngày 2026-09-14 mở rộng cùng invariant fail-closed sang lỗi grounding của specialist
+và DIN plan bị consistency gate từ chối: cả hai đều bỏ specialist state, quay đúng một lần về P6
+plan + baseline grounding/generation, và ghi stage-specific route signal. `make check` pass Ruff,
+format, strict mypy trên 111 source files và 266 test non-Ollama (1 deselect). Đây chỉ là construction
+evidence; generation/validation fallback, shadow candidate arbitration và accuracy mới chưa được
+claim. Kế hoạch monotonic champion--challenger nằm tại
+`docs/research_plan/r2_monotonic_champion_challenger.md`; R2 tiếp tục `IN_PROGRESS`.
+
+Revision H4--H7 construction ngày 2026-09-15 bổ sung champion--challenger shadow ledger, typed
+AST-vs-binding contradictions, offline proof-class certification và one-command guarded research
+runner. Shadow luôn trả P6 incumbent; enforce chỉ promote challenger đã full-validation khi operator
+class được chứng nhận trên dev/regression với support >=5, accuracy 100%, ít nhất một improvement và
+zero regression. Runtime không import evaluator và settings chỉ nhận closed operator vocabulary,
+không nhận case ID. Runner khóa source digest, dùng duy nhất `olist-paper1-ultrasafe`, batch 1, GPU
+layer 1, sample 0,5 giây, cooldown 60 giây và accuracy target 58/60. `make check` pass Ruff/format,
+strict mypy trên 114 source files và 281 test non-Ollama (1 deselect). Không có local-model benchmark
+được chạy nên R2 vẫn `IN_PROGRESS`, chưa `VERIFIED` và chưa có accuracy/Spider claim mới. Báo cáo
+nghiên cứu tại `docs/research_plan/r2_architecture_deep_research.md`.
+
+Revision H8 construction ngày 2026-09-15 sửa intervention-isolation và vận hành dài hạn. Shadow
+không còn gọi lại P6 planner hay chạy challenger trên `BASELINE_PRESERVE`: nó admission bằng đúng
+typed adaptive policy, tái sử dụng immutable `LogicalPlan` của incumbent, rồi chỉ chạy phần DIN/proof
+intervention. Runner mới luôn chạy one-case pilot trước mỗi phase, thực hiện đủ cooldown 60 giây
+trước continuation, đọc resource-stop lock trước `make check`, và đổi child exit thành checkpoint
+diagnostic thay vì Python traceback. Tmux launcher tạo hai window độc lập cho guarded Ollama và
+guarded benchmark, persist log, cleanup server khi benchmark kết thúc. Incident
+`r2-monotonic-v1-shadow-dev-regression` dừng đúng tại checkpoint 0 vì clock 1215 MHz; peak chỉ 489
+MiB VRAM, 49 C, 21,29 W và swap 0. Lock được giữ nguyên, không retry. `make check` pass Ruff/format,
+strict mypy trên 114 source files và 287 test non-Ollama (1 deselect). Benchmark mới chưa được phép
+start cho tới khi Administrator hard lock 300--600 MHz được áp và one-case guarded pilot pass; R2
+vẫn `IN_PROGRESS`, không `VERIFIED`.
+
+Revision H9 construction ngày 2026-09-15 phân tích run
+`r2-monotonic-v2-shadow-dev-regression`: checkpoint 34/45 dừng bởi batch deadline 360 giây khi
+challenger không-certifiable của grouped three-table case kế tiếp vẫn được chạy; đây không phải
+resource breach (peak 1.826 MiB VRAM, 57 C, 67,6 W, clock hard-capped <=600 MHz, swap 0). Prefix
+incumbent đạt exact-result hash 28/34. Sáu failure là 011/020/021/025/031/032; typed challenger cũ
+đã đúng 6/6 proof samples, tạo bốn improvement và zero regression, nhưng certification cũ chia nhỏ
+operator khiến không class nào đủ support 5. H9 admission nay yêu cầu catalog-proven terminal,
+tái sử dụng P6 plan, cưỡng chế wall-clock deadline và đổi mọi optional-branch timeout/exception
+thành typed skip. Typed catalog/compiler/AST validator được mở rộng cho bounded numeric equality và
+NULL predicates; model-free replay của hai lớp chưa admission trả đúng hash 021=610 và 032=11.424.
+Certification v2 yêu cầu family support >=5, ít nhất ba proof kinds, accuracy 100%, ít nhất một
+improvement và zero regression, rồi chỉ allowlist proof kinds thực sự quan sát đúng. Replay artifact
+cũ thỏa 6 samples/4 kinds/100%/4 gains/0 regressions; đây là diagnostic, không phải score mới.
+`make check` pass Ruff/format, strict mypy 114 source files và 299 test non-Ollama (1 deselect).
+Fresh source-locked benchmark vẫn bắt buộc trước promotion; R2 tiếp tục `IN_PROGRESS`.
+
+Revision H10 construction ngày 2026-09-15 sửa proof completeness sau shadow v3. Root cause được
+quy về ba lỗi hệ thống: count language lấn át AVG/MAX, count normalization làm mất distinct
+dimension, và model corrector có thể thay đổi deterministic proof SQL mà arbitration không kiểm tra
+candidate cuối. Resolver nay ưu tiên explicit scalar operator, giữ và resolve dimension duy nhất từ
+schema owner, compose metric với derived population cùng owner, hỗ trợ typed non-NULL delivery
+predicate, và fail-closed khi comparison/null qualifier chưa được biểu diễn. Derived late-delivery
+và multi-payment chỉ dùng concept aliases trong semantic catalog, không dùng case ID/gold result.
+Proof compiler output không còn đi qua model correction; arbitration yêu cầu đúng deterministic
+producer và zero SQL-vs-binding contradiction, còn evaluator chỉ đưa proof-accepted pairs vào
+certification. Tmux launcher cleanup bằng EXIT trap, ghi terminal exit vào log, giữ cả hai window,
+và runner ghi atomic pipeline-status đồng thời source-lock toàn bộ operational scripts. Dependency
+audit pass `uv lock --check` và `uv pip check`; không nâng major dependency ngoài gate. Model-free
+replay trên toàn dev/regression đạt 23/23 admitted proofs đúng, sáu proof kinds, bảy improvement,
+zero regression và zero proof contradiction. `make check` pass Ruff/format, strict mypy 114 source
+files và 324 test non-Ollama (1 deselect). Đây vẫn là construction evidence, không phải benchmark
+score mới; R2 giữ `IN_PROGRESS` cho tới fresh guarded shadow/certification/enforce run.
+
+Revision H11 construction ngày 2026-09-17 phân tích enforce run `r2-proof-complete-v4` tại
+checkpoint 40/60: score prefix là 37/40, dev 30/30 và regression 7/10; ba failure thực là
+035/039/040. Root cause chung là proof IR chỉ hỗ trợ aggregate một owner: 035 ghép category với
+`order_item_totals` vốn không có `product_id`, còn 039/040 tạo SQL chạy được nhưng validator không
+có contract để chứng minh join theo `order_id` và comparison cột--cột. H11 thêm typed relational
+proof gồm join cardinality `ONE_TO_ONE`/`MANY_TO_ONE`, alternate metric source theo grain, typed
+dimension/fallback, column comparison và grouped aggregate ranking. Compiler v9 chỉ biên dịch
+catalog-validated joins bảo toàn left grain; AST validator kiểm đủ owner/join/comparison/group/order/
+limit trước arbitration. Không có case ID, gold result hoặc full benchmark utterance trong runtime.
+Model-free replay trên toàn dev/regression xác nhận mọi proof được admission có exact result, bao
+gồm 035/039/040, và ba incumbent SQL quan sát đều tạo contradiction typed.
+
+H11 đồng thời thêm sparse adaptive-recovery runner. Runner bind progress report với status/SQL/rows
+của prediction source, khóa SHA-256 từng dòng của 37 success, chỉ queue ba failure cộng 20 case chưa
+chạy, luôn dùng guarded one-case pilot/batch 1/unload/cooldown, rồi merge theo case ID. Nó fail-closed
+nếu success seed đổi hoặc recovery đè lên seed, và gắn `adaptive_recovery_not_blind` vào provenance
+cũng như final report. Dry-run xác nhận đúng 37 preserved + 23 inference cases. `make check` pass
+Ruff/format, strict mypy trên 114 source files và 331 test non-Ollama (1 deselect); `uv lock --check`
+và `uv pip check` pass với 83 packages compatible. Chưa chạy local-model recovery trong construction
+turn này; R2 vẫn `IN_PROGRESS`. Report merge là evidence sửa lỗi/adaptive recovery, không được gọi là
+fresh blind benchmark; claim cuối vẫn cần một run blind mới sau khi freeze revision.
+
+H12 adaptive recovery ngày 2026-09-17 hoàn tất hai lượt guarded dưới Administrator hard GPU clock
+cap 300--600 MHz. Lượt `r2-relational-recovery-v1` bảo toàn byte-for-byte 37 prediction đúng của
+`r2-proof-complete-v4`, suy luận nốt 23 case, và đạt 54/60; các relational failure 035/039/040
+đều được sửa đúng bằng certified typed proof. Phân tích sáu lỗi mới dẫn đến typed anti-join trên
+one-to-one child totals, raw-row-grain `payment_installments` AVG và payment-type frequency
+ranking. Đây là semantic catalog/contract tổng quát, không dùng benchmark ID/gold trong runtime.
+Model-free proof replay xác nhận 045/046/054/059 khớp gold result, và paraphrase tests pass.
+
+Lượt `r2-relational-recovery-v2` chỉ suy luận lại sáu failure 043/045/046/048/054/059 từ full
+source report v1, khóa SHA-256 và giữ nguyên 54 success. Final 60-case evaluator trên SQLite
+staged sang WSL-native filesystem xác nhận **58/60 = 96,67%**: dev 30/30, regression 14/15,
+holdout 14/15; English 29/30, Vietnamese 29/30. Các case 045/046/054/059 được certified
+challenger sửa đúng; 043 `EXECUTION_ERROR` và 048 `VALIDATION_FAILED` vẫn sai/fail-closed.
+One-case pilot và toàn bộ continuation dùng `olist-paper1-ultrasafe`, GPU layer 1, batch 1,
+sampling 0,5 giây, model unload, cooldown 60 giây. Peak guard quan sát qua hai phase v2: VRAM
+2.178 MiB, 56 C, 63,98 W, RAM used 1,219 GiB, swap 0; không có resource-stop lock.
+Harness stage và xác minh SHA-256 của database một lần mỗi guarded invocation, cache catalog
+snapshot cho từng child và giảm final evaluator I/O trên ổ D:. `make check` trước run pass Ruff,
+format, strict mypy 114 source files, 340 non-Ollama tests (1 deselect). Reports:
+`evals/reports/r2-relational-recovery-v1-combined-olist60.json` và
+`evals/reports/r2-relational-recovery-v2-combined-olist60.json` (local/ignored artifacts).
+Đây là **adaptive recovery**, không phải fresh blind source-locked benchmark độc lập; ngưỡng
+accuracy development đã đạt nhưng R2 vẫn `IN_PROGRESS`, không `VERIFIED`/không promote default.
+Fresh guarded blind run sau source freeze và evaluation methodology review vẫn là gate tiếp theo.
+
 Post-P6 usability hardening ngày 2026-08-16 đã sửa lỗi thực tế trong câu hỏi Olist “Top 5 danh mục
 theo doanh thu sản phẩm, tách phí vận chuyển, giải thích”. Nguyên nhân không phải từ “giải thích” mà
 do retrieval trộn raw tables với disconnected aggregate view, khiến model bịa

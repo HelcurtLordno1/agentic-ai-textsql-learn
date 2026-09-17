@@ -175,6 +175,25 @@ def test_compiles_typed_numeric_comparison_for_derived_semantics() -> None:
     )
 
 
+def test_compiles_typed_null_predicate() -> None:
+    aggregate = AggregateSpec(
+        operator=AggregateOperator.COUNT_ROWS,
+        table="olist_products_dataset",
+        evidence_id="semantic.entity.products",
+    )
+    predicate = PredicateSpec(
+        table="olist_products_dataset",
+        column="product_category_name",
+        operator=ComparisonOperator.IS_NULL,
+        value=None,
+        evidence_id="semantic.predicate.product_category_null",
+    )
+
+    assert _compile(_plan(aggregate, (predicate,))) == (
+        "SELECT COUNT(*) FROM olist_products_dataset WHERE product_category_name IS NULL"
+    )
+
+
 def test_compiles_proven_frequency_ranking_with_deterministic_tie_break() -> None:
     catalog = SQLiteIntrospector().inspect(DATABASE, "olist")
     ranking = FrequencyRankingSpec(

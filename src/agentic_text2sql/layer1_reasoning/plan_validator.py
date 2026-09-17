@@ -145,42 +145,37 @@ def validate_plan(
         signals.append("SEMANTIC_OWNER_MISSING")
 
     binding = plan.semantic_links.binding
+    typed_join_pairs: set[frozenset[str]] = set()
     if binding is None or binding.status is not BindingStatus.PROVEN:
         signals.append("UNPROVEN_SEMANTIC_BINDING")
     else:
         typed_aggregate = plan.clauses.aggregate
         typed_ranking = plan.clauses.frequency_ranking
         typed_predicates = tuple(plan.clauses.predicates)
+        typed_semantic_joins = tuple(plan.clauses.semantic_joins)
+        typed_column_comparisons = tuple(plan.clauses.column_comparisons)
+        typed_grouping = plan.clauses.grouped_aggregate
         if (
             binding.db_id != catalog.db_id
             or binding.catalog_hash != catalog.catalog_hash
             or typed_aggregate != binding.aggregate
             or typed_ranking != binding.frequency_ranking
             or typed_predicates != binding.predicates
+            or typed_semantic_joins != binding.joins
+            or typed_column_comparisons != binding.column_comparisons
+            or typed_grouping != binding.grouped_aggregate
         ):
             signals.append("SEMANTIC_BINDING_MISMATCH")
-        typed_owners = {
-            *(predicate.table for predicate in typed_predicates),
-            *((typed_aggregate.table,) if typed_aggregate is not None else ()),
-            *((typed_ranking.table,) if typed_ranking is not None else ()),
-        }
-        typed_columns = {
-            *(f"{predicate.table}.{predicate.column}" for predicate in typed_predicates),
-            *(
-                (f"{typed_aggregate.table}.{typed_aggregate.column}",)
-                if typed_aggregate is not None and typed_aggregate.column is not None
-                else ()
-            ),
-            *(
-                (f"{typed_aggregate.table}.{typed_aggregate.weight_column}",)
-                if typed_aggregate is not None and typed_aggregate.weight_column is not None
-                else ()
-            ),
-            *(
-                (f"{typed_ranking.table}.{typed_ranking.dimension_column}",)
-                if typed_ranking is not None
-                else ()
-            ),
+        typed_owners = set(binding.required_tables)
+        typed_columns = set(binding.required_columns)
+        typed_join_pairs = {
+            frozenset(
+                (
+                    f"{join.left.table}.{join.left.column}",
+                    f"{join.right.table}.{join.right.column}",
+                )
+            )
+            for join in typed_semantic_joins
         }
         if typed_owners != set(binding.required_tables) or typed_columns != set(
             binding.required_columns
@@ -193,7 +188,7 @@ def validate_plan(
         if typed_owners - all_planned_tables:
             signals.append("TYPED_OWNER_NOT_IN_FROM")
 
-    allowed_pairs = _allowed_fk_pairs(catalog)
+    allowed_pairs = _allowed_fk_pairs(catalog) | typed_join_pairs
     all_joins = [
         *plan.clauses.joins,
         *(join for step in plan.clauses.subqueries for join in step.joins),

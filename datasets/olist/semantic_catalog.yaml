@@ -36,15 +36,35 @@ entities:
     aliases: [review, reviews, đánh giá]
     table: olist_order_reviews_dataset
     row_grain: one row per review record
+  order_item_totals:
+    aliases: [item total, item totals, item total row, order item totals, tổng sản phẩm theo đơn]
+    table: order_item_totals
+    identity_column: order_id
+    row_grain: one row per order_id
+  order_payment_totals:
+    aliases: [payment total, payment totals, order payment totals, tổng thanh toán theo đơn]
+    table: order_payment_totals
+    identity_column: order_id
+    row_grain: one row per order_id
 
 metrics:
   product_revenue:
-    aliases: [product revenue, merchandise revenue, doanh thu sản phẩm, doanh thu hàng hóa]
+    aliases:
+      - product revenue
+      - merchandise revenue
+      - total product price
+      - doanh thu sản phẩm
+      - doanh thu hàng hóa
+      - tổng giá sản phẩm
     operator: SUM
     allowed_operators: [SUM, AVG, MIN, MAX]
     table: order_item_totals
     column: product_revenue_cents
     source_grain: one row per order_id
+    alternate_sources:
+      - table: olist_order_items_dataset
+        column: price_cents
+        source_grain: one row per order item
   freight:
     aliases: [freight, shipping fee, freight amount, phí vận chuyển]
     operator: SUM
@@ -53,7 +73,7 @@ metrics:
     column: freight_cents
     source_grain: one row per order_id
   paid_value:
-    aliases: [paid value, payment value, total payment, tổng thanh toán]
+    aliases: [paid value, paid amount, payment value, total payment, tổng thanh toán, tổng tiền đã trả]
     operator: SUM
     allowed_operators: [SUM, AVG, MIN, MAX]
     table: order_payment_totals
@@ -105,6 +125,57 @@ metrics:
     table: order_delivery_facts
     column: delay_days
     source_grain: one row per order_id
+  payment_installments:
+    aliases:
+      - payment installments
+      - number of payment installments
+      - installment count
+      - số kỳ thanh toán
+    operator: AVG
+    allowed_operators: [AVG, MIN, MAX]
+    table: olist_order_payments_dataset
+    column: payment_installments
+    source_grain: one row per payment record
+
+dimensions:
+  english_product_category:
+    aliases:
+      - english product category
+      - english product categories
+      - english category
+      - english categories
+      - danh mục tiếng anh
+    table: products_semantic
+    column: product_category_name_english
+    fallback_columns: [product_category_name]
+    null_fallback: unknown
+    source_grain: one row per product_id
+
+joins:
+  orders_item_totals:
+    left_table: olist_orders_dataset
+    left_column: order_id
+    right_table: order_item_totals
+    right_column: order_id
+    cardinality: ONE_TO_ONE
+  orders_payment_totals:
+    left_table: olist_orders_dataset
+    left_column: order_id
+    right_table: order_payment_totals
+    right_column: order_id
+    cardinality: ONE_TO_ONE
+  order_item_product:
+    left_table: olist_order_items_dataset
+    left_column: product_id
+    right_table: products_semantic
+    right_column: product_id
+    cardinality: MANY_TO_ONE
+  item_payment_totals:
+    left_table: order_item_totals
+    left_column: order_id
+    right_table: order_payment_totals
+    right_column: order_id
+    cardinality: ONE_TO_ONE
 
 filters:
   order_status:
@@ -120,6 +191,30 @@ filters:
       unavailable:
         aliases: [unavailable, không có sẵn]
         value: unavailable
+
+predicate_rules:
+  product_category_null:
+    aliases: [product category, category, danh mục]
+    table: olist_products_dataset
+    column: product_category_name
+    kind: "null"
+  review_score_equality:
+    aliases: [review score, rating, điểm review, điểm đánh giá]
+    table: olist_order_reviews_dataset
+    column: review_score
+    kind: numeric_equality
+    minimum: 1
+    maximum: 5
+  delivery_timestamp_null:
+    aliases:
+      - delivery timestamp
+      - delivered customer timestamp
+      - delivered customer date
+      - thời điểm giao hàng
+      - ngày giao hàng
+    table: olist_orders_dataset
+    column: order_delivered_customer_date
+    kind: "null"
 
 derived:
   repeat_customer:
@@ -146,8 +241,12 @@ derived:
     aliases:
       - orders with multiple payment methods
       - orders using multiple payment types
+      - orders with more than one payment method
+      - orders with more than one payment type
+      - more than one payment type
       - đơn hàng có nhiều phương thức thanh toán
       - đơn dùng nhiều loại thanh toán
+      - đơn dùng nhiều hơn một loại phương thức thanh toán
     aggregate:
       operator: COUNT_ROWS
       table: order_payment_totals
@@ -165,6 +264,7 @@ derived:
       - late deliveries
       - late delivered orders
       - orders delivered late
+      - delivered late
       - giao hàng trễ
       - đơn giao trễ
     aggregate:
@@ -192,6 +292,15 @@ derived:
       source_grain: one row per customer_unique_id
 
 frequency_rankings:
+  payment_type_frequency:
+    aliases:
+      - payment types by row count
+      - payment type and corresponding row count
+      - payment type và số dòng tương ứng
+      - loại thanh toán theo số dòng
+    table: olist_order_payments_dataset
+    dimension_column: payment_type
+    source_grain: one row per payment record
   review_score_frequency:
     aliases:
       - most common review score

@@ -3,11 +3,15 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
+import shutil
 import signal
 import subprocess
+import tempfile
 import time
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -20,9 +24,17 @@ from agentic_text2sql.hardware import (
     sample_resources,
     unsafe_reason,
 )
+from agentic_text2sql.layer2_grounding.introspector import SQLiteIntrospector
 from agentic_text2sql.settings import Settings
 from agentic_text2sql_eval.inference_runner import SmokePrediction
 from agentic_text2sql_eval.olist_acceptance import evaluate_olist_acceptance, load_olist_acceptance
+
+
+def write_stop_record(path: Path, payload: dict[str, object]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_suffix(f"{path.suffix}.tmp")
+    temporary.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    temporary.replace(path)
 
 
 def unload_models(base_url: str) -> None:
@@ -36,10 +48,46 @@ def unload_models(base_url: str) -> None:
                 pass
 
 
+def _sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def stage_runtime_inputs(source_database: Path, directory: Path) -> tuple[Path, Path, str]:
+    """Copy and verify immutable CPU-side inputs once for all one-case child batches."""
+    if not source_database.is_file():
+        raise FileNotFoundError(source_database)
+    directory.mkdir(parents=True, exist_ok=True)
+    staged_database = directory / "olist.sqlite"
+    catalog_path = directory / "olist.catalog.json"
+    source_digest = _sha256(source_database)
+    shutil.copyfile(source_database, staged_database)
+    if _sha256(staged_database) != source_digest:
+        raise OSError("staged Olist database digest mismatch")
+    catalog = SQLiteIntrospector().inspect(staged_database, "olist")
+    catalog_path.write_text(catalog.model_dump_json() + "\n", encoding="utf-8")
+    return staged_database, catalog_path, source_digest
+
+
 def count_predictions(path: Path) -> int:
     if not path.is_file():
         return 0
     return sum(bool(line.strip()) for line in path.read_text(encoding="utf-8").splitlines())
+
+
+def cool_down_if_incomplete(
+    checkpoint: int,
+    total_cases: int,
+    cooldown_seconds: int,
+    *,
+    sleep: Callable[[float], None] = time.sleep,
+) -> None:
+    """Honor inter-batch cooling even when a one-case pilot is about to return."""
+    if checkpoint < total_cases:
+        sleep(cooldown_seconds)
 
 
 def stop_process_group(process: subprocess.Popen[bytes]) -> None:
@@ -62,14 +110,23 @@ def main() -> None:
     parser.add_argument("--cooldown-seconds", type=int)
     parser.add_argument("--max-batches", type=int)
     parser.add_argument("--sample-seconds", type=float, default=0.5)
+    parser.add_argument("--batch-timeout-seconds", type=float, default=360)
     parser.add_argument("--cases", type=Path)
     parser.add_argument("--only-case-id", action="append", default=[])
+    parser.add_argument(
+        "--partition", action="append", choices=("dev", "regression", "holdout"), default=[]
+    )
     parser.add_argument("--predictions", type=Path)
     parser.add_argument("--report", type=Path)
     parser.add_argument("--evaluation-id", default="olist-acceptance-60-p5-v1")
     parser.add_argument("--minimum-correct", type=int)
     parser.add_argument("--progress-report", type=Path)
+    parser.add_argument("--stop-record", type=Path)
     args = parser.parse_args()
+    if args.stop_record is not None and args.stop_record.is_file():
+        raise SystemExit(
+            f"RESOURCE_STOP_LOCKED: {args.stop_record}; use a new evaluation ID after review"
+        )
     profile = PROFILES[ProfileName(args.profile)]
     batch_size = args.batch_size if args.batch_size is not None else profile.batch_size
     cooldown_seconds = (
@@ -83,6 +140,10 @@ def main() -> None:
         )
     if not 0.5 <= args.sample_seconds <= 5:
         raise SystemExit("sample-seconds must be between 0.5 and 5")
+    if not 60 <= args.batch_timeout_seconds <= 900:
+        raise SystemExit("batch-timeout-seconds must be between 60 and 900")
+    if args.max_batches is not None and args.max_batches < 1:
+        raise SystemExit("max-batches must be at least 1")
     limits = profile.limits
 
     root = Path(__file__).resolve().parents[1]
@@ -94,6 +155,9 @@ def main() -> None:
     selected_cases = (
         [case for case in all_cases if case.id in selected_ids] if selected_ids else all_cases
     )
+    if args.partition:
+        selected_partitions = set(args.partition)
+        selected_cases = [case for case in selected_cases if case.partition in selected_partitions]
     total_cases = len(selected_cases)
     if args.minimum_correct is not None and not 0 <= args.minimum_correct <= total_cases:
         raise SystemExit(f"minimum-correct must be between 0 and {total_cases}")
@@ -113,6 +177,27 @@ def main() -> None:
     preflight_reason = unsafe_reason(preflight, limits)
     if preflight_reason:
         raise SystemExit(f"RESOURCE_GUARD_REFUSED_START: {preflight_reason}")
+    staging_directory = tempfile.TemporaryDirectory(prefix="agentic-text2sql-guarded-")
+    try:
+        staged_database, staged_catalog, database_digest = stage_runtime_inputs(
+            Settings().resolved_data_dir / "processed/olist.sqlite",
+            Path(staging_directory.name),
+        )
+    except (OSError, ValueError) as exc:
+        staging_directory.cleanup()
+        raise SystemExit(f"RUNTIME_STAGING_FAILED: {type(exc).__name__}") from exc
+    print(
+        json.dumps(
+            {
+                "status": "runtime_inputs_staged",
+                "database_sha256": database_digest,
+                "database": str(staged_database),
+                "catalog": str(staged_catalog),
+            },
+            sort_keys=True,
+        ),
+        flush=True,
+    )
     retry_counts: dict[int, int] = {}
     expected_rows_cache: dict[str, list[list[Any]]] = {}
     peak: dict[str, float] = {
@@ -143,9 +228,15 @@ def main() -> None:
             args.evaluation_id,
             "--cases",
             str(cases_path),
+            "--database",
+            str(staged_database),
+            "--catalog-snapshot",
+            str(staged_catalog),
         ]
         for case_id in args.only_case_id:
             command.extend(("--only-case-id", case_id))
+        for partition in args.partition:
+            command.extend(("--partition", partition))
         retrying = False
         if predictions.is_file() and retry_counts.get(before, 0) < 1:
             last_payload = json.loads(
@@ -163,7 +254,9 @@ def main() -> None:
             if retrying:
                 command.append("--retry-last-infrastructure-error")
         process = subprocess.Popen(command, cwd=root, env=environment, start_new_session=True)
+        batch_started = time.monotonic()
         reason: str | None = None
+        stop_kind: str | None = None
         try:
             while process.poll() is None:
                 current = sample_resources()
@@ -178,6 +271,14 @@ def main() -> None:
                 )
                 peak["gpu_power_w"] = max(peak["gpu_power_w"], current.gpu_power_w)
                 reason = unsafe_reason(current, limits)
+                if reason is not None:
+                    stop_kind = "resource_threshold"
+                if (
+                    reason is None
+                    and time.monotonic() - batch_started >= args.batch_timeout_seconds
+                ):
+                    reason = f"batch deadline {args.batch_timeout_seconds:.0f}s"
+                    stop_kind = "batch_deadline"
                 if reason:
                     break
                 time.sleep(args.sample_seconds)
@@ -191,13 +292,25 @@ def main() -> None:
             raise
         except (OSError, subprocess.SubprocessError, ValueError) as exc:
             reason = f"monitor failure: {type(exc).__name__}"
+            stop_kind = "monitor_failure"
         if reason:
             stop_process_group(process)
             unload_models(base_url)
-            print(
-                f"RESOURCE_GUARD_STOP: {reason}; "
-                f"checkpoint={count_predictions(predictions)}/{total_cases}"
+            if args.stop_record is not None:
+                write_stop_record(
+                    args.stop_record,
+                    {
+                        "reason": reason,
+                        "stop_kind": stop_kind or "unknown",
+                        "checkpoint": count_predictions(predictions),
+                        "total_cases": total_cases,
+                        "observed_peak": peak,
+                    },
+                )
+            label = (
+                "BATCH_DEADLINE_STOP" if stop_kind == "batch_deadline" else "RESOURCE_GUARD_STOP"
             )
+            print(f"{label}: {reason}; checkpoint={count_predictions(predictions)}/{total_cases}")
             print(json.dumps({"observed_peak": peak}, indent=2))
             raise SystemExit(75)
         if process.returncode != 0:
@@ -221,7 +334,7 @@ def main() -> None:
             progress = evaluate_olist_acceptance(
                 cases=prefix_cases,
                 predictions=persisted,
-                database=Settings().resolved_data_dir / "processed/olist.sqlite",
+                database=staged_database,
                 report_path=progress_report,
                 evaluation_id=f"{args.evaluation_id}-prefix-{len(persisted)}",
                 expected_rows_cache=expected_rows_cache,
@@ -243,11 +356,10 @@ def main() -> None:
             f"guarded batch complete: {after}/{total_cases}; cooling {cooldown_seconds}s; "
             f"observed_peak={json.dumps(peak, sort_keys=True)}"
         )
+        cool_down_if_incomplete(after, total_cases, cooldown_seconds)
         if args.max_batches is not None and batches >= args.max_batches:
             print(json.dumps({"status": "pilot_complete", "checkpoint": after, "peak": peak}))
             return
-        if after < total_cases:
-            time.sleep(cooldown_seconds)
 
     print(json.dumps({"status": "complete", "cases": total_cases, "observed_peak": peak}, indent=2))
 

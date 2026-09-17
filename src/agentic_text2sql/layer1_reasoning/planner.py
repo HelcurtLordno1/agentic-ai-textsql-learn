@@ -27,7 +27,9 @@ from agentic_text2sql.contracts.retrieval import SchemaContext
 from agentic_text2sql.contracts.semantics import (
     AggregateOperator,
     BindingStatus,
+    ColumnComparisonSpec,
     ComparisonOperator,
+    GroupedAggregateSpec,
     PredicateSpec,
     SemanticBinding,
 )
@@ -359,6 +361,13 @@ def _plan_from_proven_binding(
     aggregate = binding.aggregate
     if aggregate is None:
         raise ValueError("a proven semantic binding must include an aggregate")
+    if binding.joins or binding.column_comparisons or binding.grouped_aggregate is not None:
+        return _plan_from_relational_binding(
+            decomposition,
+            semantic_links,
+            schema_context,
+            binding,
+        )
     owners = {aggregate.table, *(predicate.table for predicate in binding.predicates)}
     if len(owners) != 1:
         raise ValueError("the deterministic scalar subset requires exactly one table owner")
@@ -398,6 +407,108 @@ def _plan_from_proven_binding(
     )
 
 
+def _plan_from_relational_binding(
+    decomposition: DecomposedQuestion,
+    semantic_links: SemanticLinkPlan,
+    schema_context: SchemaContext,
+    binding: SemanticBinding,
+) -> DINSQLPlan:
+    aggregate = binding.aggregate
+    if aggregate is None:
+        raise ValueError("relational binding requires an aggregate")
+    if set(binding.required_tables) - set(schema_context.selected_tables):
+        raise ValueError("relational proof owner is absent from schema context")
+    join_steps = [
+        JoinStep(
+            left_table=join.left.table,
+            right_table=join.right.table,
+            condition=(
+                f"{join.left.table}.{join.left.column} = {join.right.table}.{join.right.column}"
+            ),
+            purpose=f"cardinality-safe {join.cardinality.value.casefold()} semantic join",
+        )
+        for join in binding.joins
+    ]
+    aggregate_text = _render_aggregate(aggregate.operator, aggregate.table, aggregate.column)
+    where = [
+        *(_render_predicate(predicate) for predicate in binding.predicates),
+        *(_render_column_comparison(comparison) for comparison in binding.column_comparisons),
+    ]
+    grouping = binding.grouped_aggregate
+    dimension_text = _render_group_dimension(grouping) if grouping is not None else None
+    task_type: Literal["aggregation", "ranking"] = (
+        "ranking" if grouping is not None else "aggregation"
+    )
+    dimensions = [dimension_text] if dimension_text is not None else []
+    sort = (
+        ["aggregate value descending", "dimension ascending tie-break"]
+        if grouping is not None
+        else []
+    )
+    draft = DINSQLDraft(
+        question_language=decomposition.question_language,
+        task_type=task_type,
+        metrics=[aggregate_text],
+        dimensions=dimensions,
+        filters=where,
+        sort=sort,
+        limit=grouping.limit if grouping is not None else None,
+        required_concepts=list(binding.rule_ids),
+        complexity=ComplexityDecision(
+            kind=ComplexityKind.MULTI_JOIN,
+            strategy=PlanningStrategy.NON_NESTED,
+            signals=("proven_cardinality_safe_relational_aggregate",),
+        ),
+        clauses=ClausePlan(
+            select=[*dimensions, aggregate_text],
+            from_tables=list(binding.required_tables),
+            joins=join_steps,
+            where=where,
+            group_by=dimensions,
+            order_by=sort,
+            limit=grouping.limit if grouping is not None else None,
+            output_grain=(
+                "one row per requested dimension" if grouping is not None else "one scalar row"
+            ),
+            aggregate=aggregate,
+            predicates=list(binding.predicates),
+            semantic_joins=list(binding.joins),
+            column_comparisons=list(binding.column_comparisons),
+            grouped_aggregate=grouping,
+        ),
+    )
+    return DINSQLPlan(
+        **draft.model_dump(exclude={"complexity", "clauses"}),
+        semantic_links=semantic_links,
+        complexity=draft.complexity,
+        clauses=draft.clauses,
+    )
+
+
+def _render_group_dimension(grouping: GroupedAggregateSpec) -> str:
+    columns = [grouping.dimension, *grouping.fallback_columns]
+    rendered = [f"{column.table}.{column.column}" for column in columns]
+    if grouping.null_fallback is not None:
+        rendered.append(repr(grouping.null_fallback))
+    return rendered[0] if len(rendered) == 1 else f"COALESCE({', '.join(rendered)})"
+
+
+def _render_column_comparison(comparison: ColumnComparisonSpec) -> str:
+    symbols = {
+        ComparisonOperator.EQ: "=",
+        ComparisonOperator.NE: "!=",
+        ComparisonOperator.GT: ">",
+        ComparisonOperator.GTE: ">=",
+        ComparisonOperator.LT: "<",
+        ComparisonOperator.LTE: "<=",
+    }
+    return (
+        f"{comparison.left.table}.{comparison.left.column} "
+        f"{symbols[comparison.operator]} "
+        f"{comparison.right.table}.{comparison.right.column}"
+    )
+
+
 def _render_aggregate(
     operator: AggregateOperator,
     table: str,
@@ -412,6 +523,10 @@ def _render_aggregate(
 
 
 def _render_predicate(predicate: PredicateSpec) -> str:
+    if predicate.operator is ComparisonOperator.IS_NULL:
+        return f"{predicate.table}.{predicate.column} IS NULL"
+    if predicate.operator is ComparisonOperator.IS_NOT_NULL:
+        return f"{predicate.table}.{predicate.column} IS NOT NULL"
     symbols = {
         ComparisonOperator.EQ: "=",
         ComparisonOperator.NE: "!=",

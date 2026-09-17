@@ -109,6 +109,7 @@ def evaluate_olist_acceptance(
     if set(by_id) != {case.id for case in cases}:
         raise ValueError("Predictions must match the complete acceptance manifest")
     details: list[dict[str, Any]] = []
+    shadow_details: list[dict[str, Any]] = []
     din_metrics: list[dict[str, Any]] = []
     latencies: list[float] = []
     catalog = SQLiteIntrospector().inspect(database, "olist")
@@ -128,6 +129,51 @@ def evaluate_olist_acceptance(
                 order_matters=case.result_order_matters,
                 tolerance=case.tolerance,
             )
+            arbitration = result.arbitration
+            if arbitration is not None:
+                incumbent_correct = (
+                    arbitration.incumbent_status is DirectStatus.SUCCEEDED
+                    and _rows_equal(
+                        arbitration.incumbent_result_rows,
+                        expected_rows,
+                        order_matters=case.result_order_matters,
+                        tolerance=case.tolerance,
+                    )
+                )
+                challenger_observed = arbitration.challenger_status is not None
+                challenger_available = arbitration.challenger_proof_accepted
+                challenger_correct = bool(
+                    arbitration.challenger_status is DirectStatus.SUCCEEDED
+                    and _rows_equal(
+                        arbitration.challenger_result_rows,
+                        expected_rows,
+                        order_matters=case.result_order_matters,
+                        tolerance=case.tolerance,
+                    )
+                )
+                shadow_details.append(
+                    {
+                        "id": case.id,
+                        "partition": case.partition,
+                        "selection": arbitration.selection.value,
+                        "reason": arbitration.reason,
+                        "incumbent_status": arbitration.incumbent_status.value,
+                        "challenger_status": (
+                            arbitration.challenger_status.value
+                            if arbitration.challenger_status is not None
+                            else None
+                        ),
+                        "challenger_observed": challenger_observed,
+                        "incumbent_correct": incumbent_correct,
+                        "challenger_available": challenger_available,
+                        "challenger_correct": challenger_correct,
+                        "proof_kind": arbitration.challenger_proof_kind,
+                        "rule_ids": arbitration.challenger_rule_ids,
+                        "incumbent_fingerprint": arbitration.incumbent_fingerprint,
+                        "challenger_fingerprint": arbitration.challenger_fingerprint,
+                        "challenger_contradictions": arbitration.challenger_contradictions,
+                    }
+                )
             total_latency = result.latency_ms.get("total", sum(result.latency_ms.values()))
             latencies.append(total_latency)
             generated_sql = (
@@ -178,6 +224,30 @@ def evaluate_olist_acceptance(
         bool(item["result_correct"]) and not bool((item.get("correction") or {}).get("attempted"))
         for item in details
     )
+    paired_shadow = [item for item in shadow_details if item["challenger_available"]]
+    proof_kinds = sorted(
+        {str(item["proof_kind"]) for item in paired_shadow if item["proof_kind"] is not None}
+    )
+
+    def proof_kind_metrics(proof_kind: str) -> dict[str, int | float]:
+        selected = [item for item in paired_shadow if item["proof_kind"] == proof_kind]
+        challenger_correct = sum(bool(item["challenger_correct"]) for item in selected)
+        regressions = sum(
+            bool(item["incumbent_correct"]) and not bool(item["challenger_correct"])
+            for item in selected
+        )
+        improvements = sum(
+            not bool(item["incumbent_correct"]) and bool(item["challenger_correct"])
+            for item in selected
+        )
+        return {
+            "count": len(selected),
+            "challenger_correct": challenger_correct,
+            "challenger_accuracy": challenger_correct / len(selected),
+            "improvements": improvements,
+            "regressions": regressions,
+            "net_change": improvements - regressions,
+        }
 
     def slice_metrics(field: str) -> dict[str, dict[str, float | int]]:
         values = sorted({str(item[field]) for item in details})
@@ -220,6 +290,31 @@ def evaluate_olist_acceptance(
         "by_language": slice_metrics("language"),
         "by_difficulty": slice_metrics("difficulty"),
         "din_sql_planning": aggregate_plan_metrics(din_metrics),
+        "candidate_shadow": {
+            "case_count": len(shadow_details),
+            "paired_count": len(paired_shadow),
+            "skipped_count": len(shadow_details) - len(paired_shadow),
+            "improvements": sum(
+                not bool(item["incumbent_correct"]) and bool(item["challenger_correct"])
+                for item in paired_shadow
+            ),
+            "regressions": sum(
+                bool(item["incumbent_correct"]) and not bool(item["challenger_correct"])
+                for item in paired_shadow
+            ),
+            "both_correct": sum(
+                bool(item["incumbent_correct"]) and bool(item["challenger_correct"])
+                for item in paired_shadow
+            ),
+            "both_wrong": sum(
+                not bool(item["incumbent_correct"]) and not bool(item["challenger_correct"])
+                for item in paired_shadow
+            ),
+            "by_proof_kind": {
+                proof_kind: proof_kind_metrics(proof_kind) for proof_kind in proof_kinds
+            },
+            "details": shadow_details,
+        },
         "details": details,
     }
     report_path.parent.mkdir(parents=True, exist_ok=True)

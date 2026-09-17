@@ -6,6 +6,7 @@ import hashlib
 import json
 from collections.abc import Callable
 from contextlib import AbstractContextManager
+from functools import partial
 from pathlib import Path
 from types import TracebackType
 
@@ -38,6 +39,12 @@ from agentic_text2sql.layer5_correction.corrector import (
     CorrectorAgent,
 )
 from agentic_text2sql.layer5_correction.service import CorrectionService
+from agentic_text2sql.layer6_application.champion_challenger import (
+    CandidateArbitrator,
+    ChampionChallengerService,
+    QueryRuntime,
+    admits_proven_semantic_intervention,
+)
 from agentic_text2sql.layer6_application.query_service import DirectBaselineService
 from agentic_text2sql.settings import Settings
 
@@ -54,6 +61,11 @@ class RuntimeBundle(AbstractContextManager["RuntimeBundle"]):
         din_sql = settings.planning_mode == "din_sql"
         hybrid = settings.planning_mode == "hybrid"
         grounded_planning = din_sql or hybrid
+        if settings.candidate_mode != "legacy" and not hybrid:
+            raise ValueError("candidate shadow/enforce mode requires hybrid planning")
+        certified_proof_kinds = settings.parsed_certified_proof_kinds
+        if settings.candidate_mode == "enforce" and not certified_proof_kinds:
+            raise ValueError("enforce mode requires at least one certified proof kind")
         semantic_catalog_path = root / "datasets" / catalog.db_id / "semantic_catalog.yaml"
         semantic_catalog = (
             load_semantic_catalog(semantic_catalog_path, catalog)
@@ -111,6 +123,12 @@ class RuntimeBundle(AbstractContextManager["RuntimeBundle"]):
             },
             "retrieval": {"mode": settings.retrieval_mode, "top_k": 20, "token_budget": 1200},
             "planning_mode": settings.planning_mode,
+            "candidate_selection": {
+                "mode": settings.candidate_mode,
+                "total_deadline_seconds": settings.candidate_total_deadline_seconds,
+                "minimum_challenger_seconds": settings.candidate_minimum_challenger_seconds,
+                "certified_proof_kinds": sorted(certified_proof_kinds),
+            },
             "adaptive_policy": (
                 {
                     "version": "adaptive_semantic_proof_v3",
@@ -135,9 +153,6 @@ class RuntimeBundle(AbstractContextManager["RuntimeBundle"]):
             },
         }
         self.embedding: OllamaEmbeddingClient | None = None
-        generator_template = (
-            "generator_v5_din_sql.j2" if din_sql else "generator_v4_cross_domain.j2"
-        )
         corrector_template = (
             "corrector_v4_din_sql.j2" if din_sql else "corrector_v3_cross_domain.j2"
         )
@@ -231,24 +246,40 @@ class RuntimeBundle(AbstractContextManager["RuntimeBundle"]):
                 settings.ollama_model,
                 GENERATOR_PROMPT_VERSION,
             )
-        self.service = DirectBaselineService(
-            router=QueryRouter(),
-            decomposer=Decomposer(),
-            planner=PlannerAgent(
-                self.provider,
-                root / "configs/prompts/planner_v2.j2",
-                root / "configs/prompts/planner_v3_din_sql.j2",
+        planner = PlannerAgent(
+            self.provider,
+            root / "configs/prompts/planner_v2.j2",
+            root / "configs/prompts/planner_v3_din_sql.j2",
+        )
+        baseline_generation = GenerationService(
+            PromptBuilder(
+                root / "configs/prompts/generator_v4_cross_domain.j2",
+                root / "datasets/olist/business_glossary.yaml",
             ),
-            generation=GenerationService(
+            GeneratorAgent(self.provider),
+            normalizer,
+            settings.ollama_model,
+            BASELINE_GENERATOR_PROMPT_VERSION,
+        )
+        selected_generation = (
+            GenerationService(
                 PromptBuilder(
-                    root / "configs/prompts" / generator_template,
+                    root / "configs/prompts/generator_v5_din_sql.j2",
                     root / "datasets/olist/business_glossary.yaml",
                 ),
                 GeneratorAgent(self.provider),
                 normalizer,
                 settings.ollama_model,
-                GENERATOR_PROMPT_VERSION if din_sql else BASELINE_GENERATOR_PROMPT_VERSION,
-            ),
+                GENERATOR_PROMPT_VERSION,
+            )
+            if din_sql
+            else baseline_generation
+        )
+        challenger = DirectBaselineService(
+            router=QueryRouter(),
+            decomposer=Decomposer(),
+            planner=planner,
+            generation=selected_generation,
             din_generation=din_generation,
             policy=policy,
             executor=executor,
@@ -259,6 +290,34 @@ class RuntimeBundle(AbstractContextManager["RuntimeBundle"]):
             run_deadline_seconds=settings.run_deadline_seconds,
             planning_mode=settings.planning_mode,
         )
+        self.service: QueryRuntime = challenger
+        if hybrid and settings.candidate_mode != "legacy":
+            if semantic_catalog is None:
+                raise RuntimeError("candidate selection requires a semantic catalog")
+            incumbent = DirectBaselineService(
+                router=QueryRouter(),
+                decomposer=Decomposer(),
+                planner=planner,
+                generation=baseline_generation,
+                policy=policy,
+                executor=executor,
+                grounding=grounding,
+                correction=correction,
+                run_deadline_seconds=settings.run_deadline_seconds,
+                planning_mode="baseline",
+            )
+            self.service = ChampionChallengerService(
+                incumbent=incumbent,
+                challenger=challenger,
+                mode=settings.candidate_mode,
+                total_deadline_seconds=settings.candidate_total_deadline_seconds,
+                minimum_challenger_seconds=settings.candidate_minimum_challenger_seconds,
+                arbitrator=CandidateArbitrator(certified_proof_kinds),
+                admission=partial(
+                    admits_proven_semantic_intervention,
+                    semantic_catalog=semantic_catalog,
+                ),
+            )
 
     def _embed_many(self, texts: list[str]) -> list[list[float]]:
         if self.embedding is None:

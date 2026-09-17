@@ -7,7 +7,10 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from agentic_text2sql.contracts.semantics import (
     AggregateSpec,
+    ColumnComparisonSpec,
     FrequencyRankingSpec,
+    GroupedAggregateSpec,
+    JoinSpec,
     PredicateSpec,
     SemanticBinding,
 )
@@ -168,6 +171,9 @@ class ClausePlan(BaseModel):
     aggregate: AggregateSpec | None = None
     frequency_ranking: FrequencyRankingSpec | None = None
     predicates: list[PredicateSpec] = Field(default_factory=list, max_length=12)
+    semantic_joins: list[JoinSpec] = Field(default_factory=list, max_length=8)
+    column_comparisons: list[ColumnComparisonSpec] = Field(default_factory=list, max_length=8)
+    grouped_aggregate: GroupedAggregateSpec | None = None
 
 
 class DINSQLPlan(LogicalPlan):

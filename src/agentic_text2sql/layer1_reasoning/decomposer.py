@@ -19,6 +19,7 @@ METRICS = {
 DIMENSIONS = {
     "category": ("category", "danh mục"),
     "state": ("state", "bang", "tiểu bang"),
+    "city": ("city", "cities", "thành phố"),
     "seller": ("seller", "người bán"),
     "customer": ("customer", "khách hàng"),
     "time": ("year", "month", "năm", "tháng"),
@@ -124,9 +125,16 @@ class Decomposer:
         asks_count = any(
             phrase in lowered for phrase in ("how many", "có bao nhiêu", "number of", "số lượng")
         ) or any(metric.casefold().endswith(" count") for metric in metrics)
+        asks_distinct = any(
+            phrase in lowered for phrase in ("distinct", "unique", "duy nhất", "khác nhau")
+        )
         if asks_count and len(entities) == 1:
             metrics = [f"{entities[0]} count"]
-            dimensions = []
+            # A scalar entity count has no output dimension, but COUNT DISTINCT over a named
+            # attribute still needs that attribute as its aggregate operand. Dropping it here
+            # silently changed questions such as distinct states into distinct entity IDs.
+            if not asks_distinct:
+                dimensions = []
         elif filters and "delivery" in metrics:
             metrics.remove("delivery")
         sort = ["metric descending"] if ("top" in lowered or asks_superlative) else []

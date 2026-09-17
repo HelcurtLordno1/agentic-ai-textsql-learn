@@ -28,9 +28,66 @@ class ComparisonOperator(StrEnum):
     GTE = "GTE"
     LT = "LT"
     LTE = "LTE"
+    IS_NULL = "IS_NULL"
+    IS_NOT_NULL = "IS_NOT_NULL"
 
 
-ScalarValue = str | int | float
+ScalarValue = str | int | float | None
+
+
+class JoinKind(StrEnum):
+    INNER = "INNER"
+    LEFT = "LEFT"
+
+
+class JoinCardinality(StrEnum):
+    ONE_TO_ONE = "ONE_TO_ONE"
+    MANY_TO_ONE = "MANY_TO_ONE"
+
+
+class ColumnRef(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+    table: str
+    column: str
+
+
+class JoinSpec(BaseModel):
+    """A catalog-declared join that cannot fan out the current left-hand grain."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+    left: ColumnRef
+    right: ColumnRef
+    kind: JoinKind = JoinKind.INNER
+    cardinality: JoinCardinality
+    evidence_id: str
+
+
+class ColumnComparisonSpec(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+    left: ColumnRef
+    operator: ComparisonOperator
+    right: ColumnRef
+    evidence_id: str
+
+    @model_validator(mode="after")
+    def validate_ordered_operator(self) -> Self:
+        if self.operator in {ComparisonOperator.IS_NULL, ComparisonOperator.IS_NOT_NULL}:
+            raise ValueError("column comparisons cannot use null operators")
+        return self
+
+
+class GroupedAggregateSpec(BaseModel):
+    """Bounded grouped ranking over one dimension and one aggregate."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+    dimension: ColumnRef
+    fallback_columns: tuple[ColumnRef, ...] = ()
+    null_fallback: ScalarValue = None
+    dimension_alias: str = Field(default="dimension_value", pattern=r"^[a-z][a-z0-9_]{0,39}$")
+    aggregate_alias: str = Field(default="aggregate_value", pattern=r"^[a-z][a-z0-9_]{0,39}$")
+    aggregate_descending: Literal[True] = True
+    dimension_ascending_tie_break: Literal[True] = True
+    limit: int = Field(ge=1, le=100)
 
 
 class AggregateSpec(BaseModel):
@@ -62,6 +119,16 @@ class PredicateSpec(BaseModel):
     value: ScalarValue
     evidence_id: str
 
+    @model_validator(mode="after")
+    def validate_null_operator(self) -> Self:
+        null_operator = self.operator in {
+            ComparisonOperator.IS_NULL,
+            ComparisonOperator.IS_NOT_NULL,
+        }
+        if null_operator != (self.value is None):
+            raise ValueError("null predicates require a null operator and null value")
+        return self
+
 
 class FrequencyRankingSpec(BaseModel):
     """Typed proof for a bounded most-frequent-value query on one physical relation."""
@@ -84,6 +151,9 @@ class SemanticBinding(BaseModel):
     aggregate: AggregateSpec | None = None
     frequency_ranking: FrequencyRankingSpec | None = None
     predicates: tuple[PredicateSpec, ...] = ()
+    joins: tuple[JoinSpec, ...] = ()
+    column_comparisons: tuple[ColumnComparisonSpec, ...] = ()
+    grouped_aggregate: GroupedAggregateSpec | None = None
     required_tables: tuple[str, ...] = ()
     required_columns: tuple[str, ...] = ()
     rule_ids: tuple[str, ...] = ()
@@ -96,6 +166,12 @@ class SemanticBinding(BaseModel):
             raise ValueError("a PROVEN binding requires exactly one typed proof")
         if self.frequency_ranking is not None and self.predicates:
             raise ValueError("frequency ranking does not support predicates")
+        if self.frequency_ranking is not None and (
+            self.joins or self.column_comparisons or self.grouped_aggregate is not None
+        ):
+            raise ValueError("frequency ranking does not support relational proof fields")
+        if self.grouped_aggregate is not None and self.aggregate is None:
+            raise ValueError("grouped aggregate metadata requires an aggregate proof")
         return self
 
 
@@ -116,6 +192,34 @@ class MetricRule(BaseModel):
     allowed_operators: tuple[AggregateOperator, ...] = ()
     source_grain: str = Field(min_length=1, max_length=120)
     weight_column: str | None = None
+    alternate_sources: tuple["MetricSourceRule", ...] = ()
+
+
+class MetricSourceRule(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+    table: str
+    column: str
+    source_grain: str = Field(min_length=1, max_length=120)
+    weight_column: str | None = None
+
+
+class DimensionRule(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+    aliases: tuple[str, ...] = Field(min_length=1)
+    table: str
+    column: str
+    fallback_columns: tuple[str, ...] = ()
+    null_fallback: ScalarValue = None
+    source_grain: str = Field(min_length=1, max_length=120)
+
+
+class JoinRule(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+    left_table: str
+    left_column: str
+    right_table: str
+    right_column: str
+    cardinality: JoinCardinality
 
 
 class EnumValueRule(BaseModel):
@@ -129,6 +233,29 @@ class FilterRule(BaseModel):
     table: str
     column: str
     values: dict[str, EnumValueRule]
+
+
+class PredicateRule(BaseModel):
+    """Catalog-backed scalar predicate parsed from generic operator/value language."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+    aliases: tuple[str, ...] = Field(min_length=1)
+    table: str
+    column: str
+    kind: Literal["null", "numeric_equality"]
+    minimum: float | None = None
+    maximum: float | None = None
+
+    @model_validator(mode="after")
+    def validate_bounds(self) -> Self:
+        if self.kind == "null" and (self.minimum is not None or self.maximum is not None):
+            raise ValueError("null predicate rules cannot declare numeric bounds")
+        if self.kind == "numeric_equality":
+            if self.minimum is None or self.maximum is None:
+                raise ValueError("numeric predicate rules require minimum and maximum")
+            if self.minimum > self.maximum:
+                raise ValueError("numeric predicate minimum exceeds maximum")
+        return self
 
 
 class DerivedRule(BaseModel):
@@ -152,6 +279,9 @@ class SemanticCatalog(BaseModel):
     db_id: str
     entities: dict[str, EntityRule] = Field(default_factory=dict)
     metrics: dict[str, MetricRule] = Field(default_factory=dict)
+    dimensions: dict[str, DimensionRule] = Field(default_factory=dict)
+    joins: dict[str, JoinRule] = Field(default_factory=dict)
     filters: dict[str, FilterRule] = Field(default_factory=dict)
+    predicate_rules: dict[str, PredicateRule] = Field(default_factory=dict)
     derived: dict[str, DerivedRule] = Field(default_factory=dict)
     frequency_rankings: dict[str, FrequencyRankingRule] = Field(default_factory=dict)

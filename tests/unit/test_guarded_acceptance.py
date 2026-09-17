@@ -1,3 +1,7 @@
+import sqlite3
+from pathlib import Path
+
+from agentic_text2sql.contracts.catalog import CatalogSnapshot
 from agentic_text2sql.hardware import (
     PROFILES,
     ProfileName,
@@ -5,6 +9,7 @@ from agentic_text2sql.hardware import (
     ResourceSample,
     unsafe_reason,
 )
+from scripts.run_guarded_acceptance import cool_down_if_incomplete, stage_runtime_inputs
 
 
 def test_resource_guard_fails_closed_for_each_threshold() -> None:
@@ -55,3 +60,26 @@ def test_profiles_bound_parallelism_and_long_run_unloads() -> None:
     assert environment["TEXT2SQL_OLLAMA_NUM_GPU"] == "6"
     assert environment["TEXT2SQL_RETRIEVAL_MODE"] == "bm25"
     assert environment["TEXT2SQL_REQUEST_TIMEOUT_SECONDS"] == "240"
+
+
+def test_pilot_cools_after_an_incomplete_checkpoint() -> None:
+    waits: list[float] = []
+
+    cool_down_if_incomplete(1, 45, 60, sleep=waits.append)
+    cool_down_if_incomplete(45, 45, 60, sleep=waits.append)
+
+    assert waits == [60]
+
+
+def test_runtime_inputs_are_staged_once_with_verified_catalog(tmp_path: Path) -> None:
+    source = tmp_path / "source.sqlite"
+    with sqlite3.connect(source) as connection:
+        connection.execute("CREATE TABLE orders(order_id TEXT PRIMARY KEY)")
+
+    database, catalog_path, digest = stage_runtime_inputs(source, tmp_path / "staged")
+
+    assert database.read_bytes() == source.read_bytes()
+    assert len(digest) == 64
+    catalog = CatalogSnapshot.model_validate_json(catalog_path.read_text(encoding="utf-8"))
+    assert catalog.db_id == "olist"
+    assert [table.name for table in catalog.tables] == ["orders"]

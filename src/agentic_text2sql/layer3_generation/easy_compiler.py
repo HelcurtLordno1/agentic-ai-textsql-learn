@@ -1,4 +1,4 @@
-"""Catalog-checked compilation for the provable scalar subset of grounded plans."""
+"""Catalog-checked compilation for the provable aggregate subset of grounded plans."""
 
 from __future__ import annotations
 
@@ -9,19 +9,22 @@ from agentic_text2sql.contracts.planning import DINSQLPlan, PlanningStrategy
 from agentic_text2sql.contracts.semantics import (
     AggregateOperator,
     BindingStatus,
+    ColumnComparisonSpec,
+    ColumnRef,
     ComparisonOperator,
+    GroupedAggregateSpec,
     PredicateSpec,
     ScalarValue,
 )
 from agentic_text2sql.contracts.sql import CandidateRecord, SqlCandidate
 from agentic_text2sql.layer3_generation.normalizer import CandidateNormalizer
 
-GROUNDED_EASY_COMPILER_VERSION = "generator_v8_proof_compiler"
+GROUNDED_EASY_COMPILER_VERSION = "generator_v9_relational_proof_compiler"
 GROUNDED_EASY_COMPILER_MODEL = "deterministic-grounded-compiler"
 
 
 class GroundedEasyCompiler:
-    """Compile only scalar SQL whose full meaning is represented by a proven binding.
+    """Compile SQL only when its full aggregate meaning is represented by a proven binding.
 
     Returning ``None`` deliberately hands control to model generation. Human-readable clause text
     is never parsed or trusted: the compiler consumes only typed aggregate and predicate contracts.
@@ -43,6 +46,8 @@ class GroundedEasyCompiler:
             return None
         if binding.frequency_ranking is not None:
             return self._compile_frequency_ranking(plan, catalog)
+        if binding.joins or binding.column_comparisons or binding.grouped_aggregate is not None:
+            return self._compile_relational_aggregate(plan, catalog)
         if (
             binding.aggregate is None
             or clauses.aggregate != binding.aggregate
@@ -129,6 +134,103 @@ class GroundedEasyCompiler:
             catalog_hash=catalog.catalog_hash,
         )
 
+    def _compile_relational_aggregate(
+        self, plan: DINSQLPlan, catalog: CatalogSnapshot
+    ) -> CandidateRecord | None:
+        clauses = plan.clauses
+        binding = plan.semantic_links.binding
+        if binding is None or binding.aggregate is None:
+            return None
+        if (
+            clauses.aggregate != binding.aggregate
+            or tuple(clauses.predicates) != binding.predicates
+            or tuple(clauses.semantic_joins) != binding.joins
+            or tuple(clauses.column_comparisons) != binding.column_comparisons
+            or clauses.grouped_aggregate != binding.grouped_aggregate
+            or plan.complexity.strategy is not PlanningStrategy.NON_NESTED
+            or set(clauses.from_tables) != set(binding.required_tables)
+            or clauses.subqueries
+            or clauses.set_operation is not None
+        ):
+            return None
+        catalog_columns = {
+            f"{table.name}.{column.name}" for table in catalog.tables for column in table.columns
+        }
+        if set(binding.required_columns) - catalog_columns:
+            return None
+
+        aggregate = binding.aggregate
+        selection = _aggregate_expression(
+            aggregate.operator,
+            aggregate.column,
+            aggregate.weight_column,
+            table=aggregate.table,
+        )
+        if selection is None:
+            return None
+        if aggregate.rounding_digits is not None:
+            selection = exp.Round(
+                this=selection,
+                decimals=exp.Literal.number(aggregate.rounding_digits),
+            )
+
+        grouping = binding.grouped_aggregate
+        dimension = _grouped_dimension_expression(grouping) if grouping is not None else None
+        selections = (
+            [
+                dimension.copy().as_(grouping.dimension_alias),
+                selection.as_(grouping.aggregate_alias),
+            ]
+            if grouping is not None and dimension is not None
+            else [selection]
+        )
+        query = exp.select(*selections).from_(aggregate.table)
+        joined = {aggregate.table}
+        for join in binding.joins:
+            if join.left.table not in joined or join.right.table in joined:
+                return None
+            join_condition = exp.EQ(
+                this=_column_expression(join.left),
+                expression=_column_expression(join.right),
+            )
+            query = query.join(join.right.table, on=join_condition, join_type=join.kind.value)
+            joined.add(join.right.table)
+        if joined != set(binding.required_tables):
+            return None
+
+        predicates = [
+            *(_predicate_expression(predicate, qualify=True) for predicate in binding.predicates),
+            *(_column_comparison_expression(item) for item in binding.column_comparisons),
+        ]
+        if predicates:
+            predicate_condition = predicates[0]
+            for predicate_expression in predicates[1:]:
+                predicate_condition = exp.and_(predicate_condition, predicate_expression)
+            query = query.where(predicate_condition)
+        if grouping is not None and dimension is not None:
+            query = (
+                query.group_by(dimension.copy())
+                .order_by(
+                    exp.column(grouping.aggregate_alias).desc(),
+                    exp.column(grouping.dimension_alias).asc(),
+                )
+                .limit(grouping.limit)
+            )
+
+        candidate = SqlCandidate(
+            sql=query.sql(dialect="sqlite"),
+            used_tables=list(binding.required_tables),
+            used_columns=[value.split(".", maxsplit=1)[1] for value in binding.required_columns],
+            assumptions=[],
+            confidence=1.0,
+        )
+        return self.normalizer.normalize(
+            candidate,
+            model_name=GROUNDED_EASY_COMPILER_MODEL,
+            prompt_version=self.prompt_version,
+            catalog_hash=catalog.catalog_hash,
+        )
+
     def _compile_frequency_ranking(
         self, plan: DINSQLPlan, catalog: CatalogSnapshot
     ) -> CandidateRecord | None:
@@ -190,14 +292,16 @@ def _aggregate_expression(
     operator: AggregateOperator,
     column: str | None,
     weight_column: str | None = None,
+    *,
+    table: str | None = None,
 ) -> exp.Expression | None:
     if operator is AggregateOperator.COUNT_ROWS:
         return exp.Count(this=exp.Star()) if column is None else None
     if column is None:
         return None
-    operand = exp.column(column)
+    operand = exp.column(column, table=table)
     if operator is AggregateOperator.AVG and weight_column is not None:
-        weight = exp.column(weight_column)
+        weight = exp.column(weight_column, table=table)
         numerator = exp.Sum(this=exp.Mul(this=operand, expression=weight))
         denominator = exp.Nullif(
             this=exp.Sum(this=weight.copy()),
@@ -217,13 +321,19 @@ def _aggregate_expression(
 
 
 def _literal(value: ScalarValue) -> exp.Expression:
+    if value is None:
+        return exp.Null()
     if isinstance(value, str):
         return exp.Literal.string(value)
     return exp.Literal.number(str(value))
 
 
-def _predicate_expression(predicate: PredicateSpec) -> exp.Expression:
-    left = exp.column(predicate.column)
+def _predicate_expression(predicate: PredicateSpec, *, qualify: bool = False) -> exp.Expression:
+    left = exp.column(predicate.column, table=predicate.table if qualify else None)
+    if predicate.operator is ComparisonOperator.IS_NULL:
+        return exp.Is(this=left, expression=exp.Null())
+    if predicate.operator is ComparisonOperator.IS_NOT_NULL:
+        return exp.Not(this=exp.Is(this=left, expression=exp.Null()))
     right = _literal(predicate.value)
     constructors: dict[ComparisonOperator, type[exp.Expression]] = {
         ComparisonOperator.EQ: exp.EQ,
@@ -234,3 +344,34 @@ def _predicate_expression(predicate: PredicateSpec) -> exp.Expression:
         ComparisonOperator.LTE: exp.LTE,
     }
     return constructors[predicate.operator](this=left, expression=right)
+
+
+def _column_expression(column: ColumnRef) -> exp.Column:
+    return exp.column(column.column, table=column.table)
+
+
+def _column_comparison_expression(comparison: ColumnComparisonSpec) -> exp.Expression:
+    constructors: dict[ComparisonOperator, type[exp.Expression]] = {
+        ComparisonOperator.EQ: exp.EQ,
+        ComparisonOperator.NE: exp.NEQ,
+        ComparisonOperator.GT: exp.GT,
+        ComparisonOperator.GTE: exp.GTE,
+        ComparisonOperator.LT: exp.LT,
+        ComparisonOperator.LTE: exp.LTE,
+    }
+    return constructors[comparison.operator](
+        this=_column_expression(comparison.left),
+        expression=_column_expression(comparison.right),
+    )
+
+
+def _grouped_dimension_expression(grouping: GroupedAggregateSpec) -> exp.Expression:
+    expressions: list[exp.Expression] = [
+        _column_expression(grouping.dimension),
+        *(_column_expression(column) for column in grouping.fallback_columns),
+    ]
+    if grouping.null_fallback is not None:
+        expressions.append(_literal(grouping.null_fallback))
+    if len(expressions) == 1:
+        return expressions[0]
+    return exp.Coalesce(this=expressions[0], expressions=expressions[1:])

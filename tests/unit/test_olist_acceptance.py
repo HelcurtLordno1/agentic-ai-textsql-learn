@@ -6,7 +6,12 @@ from pathlib import Path
 
 import pytest
 
-from agentic_text2sql.contracts.sql import DirectRunResult, DirectStatus
+from agentic_text2sql.contracts.sql import (
+    CandidateArbitration,
+    CandidateSelection,
+    DirectRunResult,
+    DirectStatus,
+)
 from agentic_text2sql_eval.inference_runner import SmokePrediction
 from agentic_text2sql_eval.olist_acceptance import (
     OlistAcceptanceCase,
@@ -106,3 +111,67 @@ def test_evaluator_reuses_explicit_gold_result_cache(tmp_path: Path) -> None:
     )
     assert report["result_correct_count"] == 1
     assert cache == {"cached": [[7]]}
+
+
+def test_evaluator_reports_gold_separated_shadow_transitions(tmp_path: Path) -> None:
+    database = tmp_path / "tiny.sqlite"
+    with sqlite3.connect(database) as connection:
+        connection.execute("CREATE TABLE values_table(value INTEGER)")
+        connection.execute("INSERT INTO values_table VALUES (7)")
+    case = OlistAcceptanceCase(
+        id="shadow",
+        partition="dev",
+        language="en",
+        question="value?",
+        difficulty="easy",
+        required_concepts=("value",),
+        gold_sql="SELECT value FROM values_table",
+        reviewed=True,
+    )
+    arbitration = CandidateArbitration(
+        mode="shadow",
+        selection=CandidateSelection.KEEP_INCUMBENT,
+        reason="SHADOW_MODE_NEVER_CHANGES_OUTPUT",
+        incumbent_status=DirectStatus.SUCCEEDED,
+        challenger_status=DirectStatus.SUCCEEDED,
+        incumbent_result_rows=[[8]],
+        challenger_result_rows=[[7]],
+        challenger_rule_ids=("entity.values",),
+        challenger_proof_kind="aggregate:count_rows",
+        challenger_proof_accepted=True,
+        elapsed_ms=2,
+    )
+    prediction = SmokePrediction(
+        case_id=case.id,
+        result=DirectRunResult(
+            run_id="shadow-run",
+            question=case.question,
+            status=DirectStatus.SUCCEEDED,
+            route_reason="query",
+            prompt_versions={},
+            result_rows=[[8]],
+            latency_ms={"total": 1},
+            arbitration=arbitration,
+        ),
+    )
+
+    report = evaluate_olist_acceptance(
+        cases=[case],
+        predictions=[prediction],
+        database=database,
+        report_path=tmp_path / "shadow-report.json",
+    )
+
+    assert report["result_correct_count"] == 0
+    assert report["candidate_shadow"]["improvements"] == 1
+    assert report["candidate_shadow"]["regressions"] == 0
+    assert report["candidate_shadow"]["details"][0]["challenger_observed"] is True
+    assert report["candidate_shadow"]["details"][0]["challenger_available"] is True
+    assert report["candidate_shadow"]["by_proof_kind"]["aggregate:count_rows"] == {
+        "count": 1,
+        "challenger_correct": 1,
+        "challenger_accuracy": 1.0,
+        "improvements": 1,
+        "regressions": 0,
+        "net_change": 1,
+    }

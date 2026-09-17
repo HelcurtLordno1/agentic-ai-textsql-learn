@@ -3,12 +3,21 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Protocol
 
 from pydantic import BaseModel, ConfigDict, Field
 
 from agentic_text2sql.contracts.catalog import CatalogSnapshot
 from agentic_text2sql.contracts.sql import DirectRunResult, DirectStatus
-from agentic_text2sql.layer6_application.query_service import DirectBaselineService
+
+
+class InferenceRuntime(Protocol):
+    def run(
+        self,
+        question: str,
+        database: Path,
+        catalog: CatalogSnapshot,
+    ) -> DirectRunResult: ...
 
 
 class SmokeCase(BaseModel):
@@ -38,7 +47,7 @@ def load_smoke_cases(path: Path) -> list[SmokeCase]:
 def run_inference(
     *,
     cases: list[SmokeCase],
-    service: DirectBaselineService,
+    service: InferenceRuntime,
     database: Path,
     catalog: CatalogSnapshot,
     prediction_path: Path,

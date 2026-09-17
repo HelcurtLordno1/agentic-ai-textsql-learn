@@ -42,6 +42,22 @@ class Settings(BaseSettings):
     planning_mode: Literal["baseline", "hybrid", "din_sql"] = Field(
         default="baseline", alias="TEXT2SQL_PLANNING_MODE"
     )
+    candidate_mode: Literal["legacy", "shadow", "enforce"] = Field(
+        default="legacy", alias="TEXT2SQL_CANDIDATE_MODE"
+    )
+    candidate_total_deadline_seconds: float = Field(
+        default=300.0,
+        alias="TEXT2SQL_CANDIDATE_TOTAL_DEADLINE_SECONDS",
+        ge=60,
+        le=600,
+    )
+    candidate_minimum_challenger_seconds: float = Field(
+        default=45.0,
+        alias="TEXT2SQL_CANDIDATE_MINIMUM_CHALLENGER_SECONDS",
+        ge=10,
+        le=300,
+    )
+    certified_proof_kinds: str = Field(default="", alias="TEXT2SQL_CERTIFIED_PROOF_KINDS")
     retrieval_mode: Literal["bm25", "dense", "hybrid"] = Field(
         default="hybrid", alias="TEXT2SQL_RETRIEVAL_MODE"
     )
@@ -53,6 +69,27 @@ class Settings(BaseSettings):
         if not normalized.startswith(("http://", "https://")):
             normalized = f"http://{normalized}"
         return normalized
+
+    @property
+    def parsed_certified_proof_kinds(self) -> frozenset[str]:
+        allowed = {
+            "frequency_ranking",
+            "aggregate:count_rows",
+            "aggregate:count_distinct",
+            "aggregate:sum",
+            "aggregate:avg",
+            "aggregate:min",
+            "aggregate:max",
+        }
+        values = frozenset(
+            item.strip().casefold()
+            for item in self.certified_proof_kinds.split(",")
+            if item.strip()
+        )
+        unknown = values - allowed
+        if unknown:
+            raise ValueError(f"unknown certified proof kinds: {', '.join(sorted(unknown))}")
+        return values
 
     @property
     def resolved_data_dir(self) -> Path:

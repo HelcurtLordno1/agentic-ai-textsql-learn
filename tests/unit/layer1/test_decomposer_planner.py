@@ -59,6 +59,16 @@ def test_decomposer_normalizes_regular_english_plural_morphology() -> None:
     assert singular.dimension_hints == plural.dimension_hints == ["category"]
 
 
+def test_decomposer_preserves_distinct_attribute_dimensions() -> None:
+    seller_states = Decomposer().decompose("How many distinct seller states exist?")
+    customer_cities = Decomposer().decompose("Có bao nhiêu city khách hàng khác nhau?")
+
+    assert seller_states.metric_hints == ["sellers count"]
+    assert seller_states.dimension_hints == ["state", "seller"]
+    assert customer_cities.metric_hints == ["customers count"]
+    assert customer_cities.dimension_hints == ["city", "customer"]
+
+
 def test_planner_uses_versioned_schema_agnostic_prompt() -> None:
     provider = RecordingProvider()
     planner = PlannerAgent(provider, ROOT / "configs/prompts/planner_v2.j2")
