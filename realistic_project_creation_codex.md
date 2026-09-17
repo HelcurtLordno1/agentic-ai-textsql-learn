@@ -1886,6 +1886,19 @@ snapshot cho từng child và giảm final evaluator I/O trên ổ D:. `make che
 format, strict mypy 114 source files, 340 non-Ollama tests (1 deselect). Reports:
 `evals/reports/r2-relational-recovery-v1-combined-olist60.json` và
 `evals/reports/r2-relational-recovery-v2-combined-olist60.json` (local/ignored artifacts).
+
+Spider R2 construction ngày 2026-09-17 chuẩn bị phép đo chéo miền trên đúng manifest Spider-200
+stratified đã dùng cho P6 baseline 130/200. Runner mới khóa Git commit, manifest hash, active-index
+pointer hashes, evaluation ID, runtime mode và cấu hình model trong provenance; mỗi case có atomic
+checkpoint, resume chỉ nhận prefix hợp lệ, final evaluator tách khỏi inference. Tmux launcher chạy
+guarded one-case pilot trước continuation, batch 1, explicit GPU layer 1, model unload/cooldown 60
+giây, hai watchdog lấy mẫu RAM/swap/VRAM/nhiệt/power/util/clock mỗi 0,5 giây, và giữ resource-stop
+lock nếu có breach. Đây là `planning_mode=hybrid`, `candidate_mode=legacy` vì Spider không có Olist
+certified proof catalog; không được claim monotonic champion--challenger hay so latency trực tiếp với
+P6 sáu GPU layers. Score Spider R2 chỉ được ghi sau khi full 200-case report hoàn tất; gate vẫn
+`IN_PROGRESS` trong giai đoạn chạy. Construction gate: `make check` pass Ruff/format, strict mypy
+trên 114 source files và 344 test non-Ollama (1 deselect); `uv lock --check`, `uv pip check` và
+`git diff --check` pass. Đây chưa phải evidence accuracy Spider R2.
 Đây là **adaptive recovery**, không phải fresh blind source-locked benchmark độc lập; ngưỡng
 accuracy development đã đạt nhưng R2 vẫn `IN_PROGRESS`, không `VERIFIED`/không promote default.
 Fresh guarded blind run sau source freeze và evaluation methodology review vẫn là gate tiếp theo.

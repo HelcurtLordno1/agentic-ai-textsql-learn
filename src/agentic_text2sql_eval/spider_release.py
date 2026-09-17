@@ -269,6 +269,7 @@ def evaluate_spider_release(
     predictions: list[SmokePrediction],
     report_path: Path,
     provenance: dict[str, Any],
+    evaluation_id: str | None = None,
     timeout_seconds: float = 10.0,
 ) -> dict[str, Any]:
     """Open gold only after inference and evaluate result equivalence on read-only databases."""
@@ -359,7 +360,8 @@ def evaluate_spider_release(
         str(item["failure_category"]) for item in details if item["failure_category"] is not None
     )
     report: dict[str, Any] = {
-        "evaluation_id": (
+        "evaluation_id": evaluation_id
+        or (
             "spider-dev-stratified-200-p6-v1"
             if manifest.benchmark_profile == "laptop-stratified"
             else "spider-dev-1034-p6-v1"

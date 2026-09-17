@@ -10,7 +10,13 @@ import subprocess
 import time
 from pathlib import Path
 
-from agentic_text2sql.hardware import PROFILES, ProfileName, sample_resources, unsafe_reason
+from agentic_text2sql.hardware import (
+    PROFILES,
+    ProfileName,
+    ResourceSample,
+    sample_resources,
+    unsafe_reason,
+)
 
 
 def stop_process_group(process: subprocess.Popen[bytes]) -> None:
@@ -35,12 +41,20 @@ def main() -> None:
     parser.add_argument("--models-dir", type=Path)
     parser.add_argument("--host", default="127.0.0.1:11434")
     parser.add_argument("--sample-seconds", type=float, default=0.5)
+    parser.add_argument("--stop-record", type=Path)
     args = parser.parse_args()
     if not 0.5 <= args.sample_seconds <= 10:
         raise SystemExit("sample-seconds must be between 0.5 and 10")
 
     profile = PROFILES[ProfileName(args.profile)]
-    preflight = sample_resources()
+    if args.stop_record is not None and args.stop_record.is_file():
+        raise SystemExit(f"RESOURCE_STOP_LOCKED: {args.stop_record}")
+    try:
+        preflight = sample_resources()
+    except (OSError, subprocess.SubprocessError, ValueError) as exc:
+        raise SystemExit(
+            f"RESOURCE_GUARD_REFUSED_START: monitor failure {type(exc).__name__}"
+        ) from None
     reason = unsafe_reason(preflight, profile.limits)
     if reason:
         raise SystemExit(f"RESOURCE_GUARD_REFUSED_START: {reason}")
@@ -83,6 +97,13 @@ def main() -> None:
                 current = sample_resources()
             except (OSError, subprocess.SubprocessError, ValueError) as exc:
                 stop_process_group(process)
+                if args.stop_record is not None:
+                    write_stop_record(
+                        args.stop_record,
+                        "monitor_failure",
+                        f"monitor failure: {type(exc).__name__}",
+                        peak,
+                    )
                 raise SystemExit(
                     f"RESOURCE_GUARD_STOP: monitor failure {type(exc).__name__}"
                 ) from exc
@@ -100,6 +121,8 @@ def main() -> None:
             reason = unsafe_reason(current, profile.limits)
             if reason:
                 stop_process_group(process)
+                if args.stop_record is not None:
+                    write_stop_record(args.stop_record, "resource_threshold", reason, peak)
                 print(
                     json.dumps(
                         {
@@ -116,6 +139,24 @@ def main() -> None:
         print(json.dumps({"status": "stopped", "peak": peak.__dict__}, indent=2))
         return
     raise SystemExit(process.returncode)
+
+
+def write_stop_record(
+    path: Path,
+    stop_kind: str,
+    reason: str,
+    peak: ResourceSample,
+) -> None:
+    """Persist a fail-closed lock before an operator can resume a stopped suite."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "stop_kind": stop_kind,
+        "reason": reason,
+        "observed_peak": peak.__dict__,
+    }
+    temporary = path.with_suffix(f"{path.suffix}.tmp")
+    temporary.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    temporary.replace(path)
 
 
 if __name__ == "__main__":

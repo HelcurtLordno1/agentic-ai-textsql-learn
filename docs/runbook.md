@@ -101,21 +101,6 @@ uv run python scripts/serve_ollama_guarded.py \
   --profile interactive-balanced \
   --models-dir data/artifacts/ollama-models
 
-uv run python scripts/create_spider_laptop_manifest.py
-OLLAMA_BASE_URL=http://127.0.0.1:11434 TEXT2SQL_OLLAMA_NUM_GPU=6 \
-  uv run python scripts/run_benchmark.py \
-  --manifest evals/configs/spider-laptop-200.json \
-  --predictions evals/predictions/spider-p6-200-gpu6.jsonl \
-  --report evals/reports/spider-p6-200.json \
-  --correction --resume --max-new-cases 1
-OLLAMA_BASE_URL=http://127.0.0.1:11434 TEXT2SQL_OLLAMA_NUM_GPU=6 \
-  uv run python scripts/run_guarded_spider.py \
-  --profile interactive-balanced \
-  --batch-size 10 --cooldown-seconds 20 \
-  --manifest evals/configs/spider-laptop-200.json \
-  --predictions evals/predictions/spider-p6-200-gpu6.jsonl \
-  --report evals/reports/spider-p6-200.json
-
 OLLAMA_BASE_URL=http://127.0.0.1:11434 uv run python scripts/run_guarded_acceptance.py \
   --profile acceptance-safe \
   --predictions evals/predictions/olist-p6-60.jsonl \
@@ -123,13 +108,51 @@ OLLAMA_BASE_URL=http://127.0.0.1:11434 uv run python scripts/run_guarded_accepta
   --evaluation-id olist-acceptance-60-p6-v1
 ```
 
-The pilot must produce one atomic prediction and the supervisor must remain alive before removing
-`--max-new-cases`. The laptop profile is 200 cases across 20 databases, so interruption/resume is
-the normal operating mode. The guarded runner unloads both models every ten cases and cools for 20
-seconds, bounding prompt-cache growth and accumulated load. Full Spider-1034 remains available via
-`spider-release-1034.json` as optional P6.1 on stronger hardware; never present the laptop score as
-full dev. Never commit predictions, detailed reports, indexes, model blobs, raw Spider data, or
-databases. When complete, export only the gold-free portfolio summary:
+The legacy P6 Spider report is 130/200 on the pinned stratified 200-case manifest. Do not rerun its
+old six-layer/batch-ten commands on this laptop. R2 uses the same manifest for matched accuracy,
+but the safer one-layer profile means latency is **not** an apples-to-apples comparison. Spider has
+no Olist-certified semantic proof catalog, so this run explicitly uses `planning_mode=hybrid` and
+`candidate_mode=legacy`; do not describe it as an Olist champion--challenger generalization result.
+
+Before starting, verify the Administrator `nvidia-smi -i 0 -lgc 300,600` hard clock cap is still
+active, no stale model job remains, and idle resource readings are safe. The launcher refuses an
+occupied Ollama port, unsafe preflight, or a resource-stop lock. It starts a guarded server and a
+one-case guarded pilot, then automatically continues from the same checkpoint only if the pilot
+passes. Both guards sample every 0.5 seconds. Each case is atomically checkpointed, models unload
+between cases, and a 60-second cooldown follows each non-final case. Do not alter code, index,
+manifest, model, runtime settings or committed revision during a run or resume.
+
+```bash
+cd "/mnt/d/desktop_informations/vnpt ai/agentic_text_to_sql"
+uv run python scripts/launch_r2_spider_tmux.py \
+  --evaluation-id spider-r2-hybrid-200-v1 \
+  --session spider-r2-hybrid-200-v1 \
+  --models-dir /mnt/c/Users/ADMIN/.ollama/models \
+  --hard-cap-confirmed
+tmux attach -t spider-r2-hybrid-200-v1
+# Detach without stopping: Ctrl-b, then d
+watch -n 2 'jq "{state,phase,checkpoint,total_cases,observed_peak,reason}" evals/reports/spider-r2-hybrid-200-v1.progress.json; tail -n 10 evals/reports/spider-r2-hybrid-200-v1.benchmark.log'
+```
+
+For an intentional interruption, press Ctrl-C in the benchmark window and wait for its `SPIDER_PAUSED`
+status and server cleanup. After safe idle checks, resume with the **same** evaluation ID and a new
+tmux session name; the launcher repeats the one-case pilot, then continues the remaining manifest:
+
+```bash
+uv run python scripts/launch_r2_spider_tmux.py \
+  --evaluation-id spider-r2-hybrid-200-v1 \
+  --session spider-r2-hybrid-200-v1-resume1 \
+  --models-dir /mnt/c/Users/ADMIN/.ollama/models \
+  --hard-cap-confirmed
+tmux attach -t spider-r2-hybrid-200-v1-resume1
+```
+
+If `*.resource-stop.json` appears, do **not** delete it or retry automatically. Review its measured
+reason/peak, check hardware and seek operator direction before a fresh one-case pilot. A failed
+provenance check likewise requires investigation; never merge or overwrite incompatible checkpoints.
+Full Spider-1034 remains optional P6.1 on stronger hardware and has no matched full baseline here;
+never present the 200-case score as full dev. Never commit predictions, detailed reports, indexes,
+model blobs, raw Spider data, or databases. When complete, export only the gold-free summary:
 
 ```bash
 uv run python scripts/export_demo_artifacts.py \

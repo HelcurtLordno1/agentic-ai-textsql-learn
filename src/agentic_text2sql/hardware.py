@@ -19,6 +19,7 @@ class ProfileName(StrEnum):
     CPU_FALLBACK = "cpu-fallback"
     OLIST_PAPER1 = "olist-paper1-ultrasafe"
     OLIST_PAPER2_A4500 = "olist-paper2-a4500-safe"
+    SPIDER_PAPER2 = "spider-paper2-ultrasafe"
 
 
 class ResourceLimits(BaseModel):
@@ -148,6 +149,28 @@ PROFILES = {
             maximum_gpu_temperature_c=65,
             maximum_gpu_power_w=70,
             maximum_gpu_graphics_clock_mhz=650,
+        ),
+    ),
+    ProfileName.SPIDER_PAPER2: HardwareProfile(
+        name=ProfileName.SPIDER_PAPER2,
+        description="One-case Spider R2 pilot and resume with conservative laptop breakers.",
+        ollama_num_gpu=1,
+        cpu_cores=6,
+        max_loaded_models=1,
+        keep_alive="0",
+        flash_attention=True,
+        kv_cache_type="q8_0",
+        batch_size=1,
+        cooldown_seconds=60,
+        request_timeout_seconds=240,
+        run_deadline_seconds=180,
+        limits=ResourceLimits(
+            minimum_available_ram_gib=14,
+            maximum_swap_used_gib=0.25,
+            maximum_gpu_memory_mib=4096,
+            maximum_gpu_temperature_c=65,
+            maximum_gpu_power_w=70,
+            maximum_gpu_graphics_clock_mhz=601,
         ),
     ),
 }
