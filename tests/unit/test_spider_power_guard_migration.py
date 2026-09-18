@@ -9,28 +9,17 @@ import pytest
 from agentic_text2sql.hardware import PROFILES, ProfileName
 from scripts.migrate_spider_power_guard import (
     audited_power_revision,
-    parse_power_limits,
     reviewed_power_stop,
-    verified_power_cap,
+    verified_clock_state,
 )
 
 
-def test_power_limit_parser_requires_both_hardware_limits() -> None:
-    output = "Current Power Limit : 75.00 W\nDefault Power Limit : 80.00 W"
-    assert parse_power_limits(output) == (75.0, 80.0)
-    with pytest.raises(SystemExit, match="POWER_CAP_UNVERIFIED"):
-        parse_power_limits("Current Power Limit : N/A")
-
-
-def test_power_cap_refuses_85_w_and_accepts_75_w(monkeypatch: pytest.MonkeyPatch) -> None:
-    def power_output(value: float) -> str:
-        return f"Current Power Limit : {value:.2f} W\nDefault Power Limit : 80.00 W"
-
-    monkeypatch.setattr(subprocess, "check_output", lambda *a, **k: power_output(85))
-    with pytest.raises(SystemExit, match="require an active Administrator hard cap"):
-        verified_power_cap()
-    monkeypatch.setattr(subprocess, "check_output", lambda *a, **k: power_output(75))
-    assert verified_power_cap() == 75.0
+def test_clock_state_refuses_over_900_mhz(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(subprocess, "check_output", lambda *a, **k: "1200\n")
+    with pytest.raises(SystemExit, match="CLOCK_STATE_UNVERIFIED"):
+        verified_clock_state()
+    monkeypatch.setattr(subprocess, "check_output", lambda *a, **k: "900\n")
+    assert verified_clock_state() == 900
 
 
 def test_power_stop_requires_power_only_and_safe_other_peaks(tmp_path: Path) -> None:
@@ -75,14 +64,15 @@ def test_power_revision_rejects_any_other_hardware_or_runtime_change(tmp_path: P
     hardware = tmp_path / "src/agentic_text2sql/hardware.py"
     hardware.parent.mkdir(parents=True)
     hardware.write_text(
-        "header\n    ProfileName.SPIDER_PAPER2: HardwareProfile(\n    maximum_gpu_power_w=70,\n",
+        "header\n    ProfileName.SPIDER_PAPER2: HardwareProfile(\n"
+        "    maximum_gpu_power_w=70,\n    maximum_gpu_graphics_clock_mhz=1201,\n",
         encoding="utf-8",
     )
     subprocess.run(["git", "add", "."], cwd=tmp_path, check=True)
     subprocess.run(["git", "commit", "-qm", "old"], cwd=tmp_path, check=True)
     previous = git("rev-parse", "HEAD")
     hardware.write_text(
-        hardware.read_text(encoding="utf-8").replace("=70,", "=78,"), encoding="utf-8"
+        hardware.read_text(encoding="utf-8").replace("=1201,", "=901,"), encoding="utf-8"
     )
     subprocess.run(["git", "add", "."], cwd=tmp_path, check=True)
     subprocess.run(["git", "commit", "-qm", "power guard"], cwd=tmp_path, check=True)

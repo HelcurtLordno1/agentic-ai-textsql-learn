@@ -1,4 +1,4 @@
-"""Audit a capped-power Spider guard revision before resuming saved predictions."""
+"""Audit a lower-clock Spider guard revision after a power incident."""
 
 from __future__ import annotations
 
@@ -38,28 +38,27 @@ _ALLOWED_PATHS = {
 }
 
 
-def parse_power_limits(output: str) -> tuple[float, float]:
-    def value(label: str) -> float:
-        match = re.search(rf"^\s*{label}\s*:\s*(\d+(?:\.\d+)?)\s*W\s*$", output, re.M)
-        if match is None:
-            raise SystemExit(f"POWER_CAP_UNVERIFIED: {label} unavailable")
-        return float(match.group(1))
-
-    return value("Current Power Limit"), value("Default Power Limit")
-
-
-def verified_power_cap() -> float:
+def verified_clock_state() -> int:
+    """Check the live clock; Administrator cap confirmation remains an explicit prerequisite."""
     try:
         output = subprocess.check_output(
-            ["nvidia-smi", "-i", "0", "-q", "-d", "POWER"], text=True, timeout=5
+            [
+                "nvidia-smi",
+                "-i",
+                "0",
+                "--query-gpu=clocks.current.graphics",
+                "--format=csv,noheader,nounits",
+            ],
+            text=True,
+            timeout=5,
         )
-    except (OSError, subprocess.SubprocessError) as exc:
-        raise SystemExit(f"POWER_CAP_UNVERIFIED: {type(exc).__name__}") from exc
-    current, default = parse_power_limits(output)
-    if default != 80.0 or current > 75.0 or current <= 0:
+        current = int(output.strip())
+    except (OSError, subprocess.SubprocessError, ValueError) as exc:
+        raise SystemExit(f"CLOCK_STATE_UNVERIFIED: {type(exc).__name__}") from exc
+    if not 0 < current <= 900:
         raise SystemExit(
-            f"POWER_CAP_UNVERIFIED: current {current:.1f} W, default {default:.1f} W; "
-            "require an active Administrator hard cap at or below 75 W on this GPU"
+            f"CLOCK_STATE_UNVERIFIED: current {current} MHz exceeds 900 MHz; "
+            "require Administrator nvidia-smi -i 0 -lgc 300,900"
         )
     return current
 
@@ -74,7 +73,10 @@ def reviewed_power_stop(path: Path, limits: ResourceLimits) -> dict[str, Any]:
     observed = ResourceSample(**record["observed_peak"])
     if observed.gpu_power_w < 70 or float(match.group(1)) < 70:
         raise SystemExit("POWER_STOP_REVIEW_REFUSED: inconsistent power peak")
-    other_limits = limits.model_copy(update={"maximum_gpu_power_w": 1000})
+    # This historical sample predates the lower clock cap; review all other limits.
+    other_limits = limits.model_copy(
+        update={"maximum_gpu_power_w": 1000, "maximum_gpu_graphics_clock_mhz": 10000}
+    )
     if reason := unsafe_reason(observed, other_limits):
         raise SystemExit(f"POWER_STOP_REVIEW_REFUSED: another threshold breached: {reason}")
     return record
@@ -93,7 +95,7 @@ def power_migration_is_current(provenance_path: Path, root: Path, stop_path: Pat
         return False
     return payload.get("git_commit") == commit and any(
         isinstance(item, dict)
-        and item.get("kind") == "power_guard_only_revision"
+        and item.get("kind") == "power_incident_clock_cap_revision"
         and item.get("prior_stop_sha256") == sha256_file(stop_path)
         for item in history
     )
@@ -120,29 +122,39 @@ def audited_power_revision(root: Path, previous_commit: str, current_commit: str
     if old_hardware.count(marker) != 1 or current_hardware.count(marker) != 1:
         raise SystemExit("SPIDER_POWER_MIGRATION_REFUSED: Spider profile missing")
     prefix, spider = old_hardware.split(marker, maxsplit=1)
-    old_power = "maximum_gpu_power_w=70,"
-    if spider.count(old_power) != 1 or current_hardware != (
-        prefix + marker + spider.replace(old_power, "maximum_gpu_power_w=78,", 1)
+    old_clock = "maximum_gpu_graphics_clock_mhz=1201,"
+    if spider.count(old_clock) != 1 or current_hardware != (
+        prefix + marker + spider.replace(old_clock, "maximum_gpu_graphics_clock_mhz=901,", 1)
     ):
         raise SystemExit(
-            "SPIDER_POWER_MIGRATION_REFUSED: hardware changed beyond Spider power stop"
+            "SPIDER_POWER_MIGRATION_REFUSED: hardware changed beyond Spider clock ceiling"
         )
     if git_output(root, "status", "--porcelain", "--untracked-files=no"):
         raise SystemExit("SPIDER_POWER_MIGRATION_REFUSED: tracked worktree is dirty")
     return changed
 
 
-def migrate(root: Path, evaluation_id: str, *, stop_session: str) -> dict[str, Any]:
+def migrate(
+    root: Path, evaluation_id: str, *, stop_session: str, hard_clock_cap_confirmed: bool
+) -> dict[str, Any]:
     if _SAFE_NAME.fullmatch(evaluation_id) is None or _SAFE_NAME.fullmatch(stop_session) is None:
         raise SystemExit("invalid evaluation ID or stop session")
     with socket.socket() as connection:
         connection.settimeout(0.25)
         if connection.connect_ex(("127.0.0.1", 11434)) == 0:
             raise SystemExit("SPIDER_POWER_MIGRATION_REFUSED: Ollama server still active")
-    cap = verified_power_cap()
+    if not hard_clock_cap_confirmed:
+        raise SystemExit(
+            "HARD_CLOCK_CAP_CONFIRMATION_REQUIRED: run Administrator "
+            "nvidia-smi -i 0 -lgc 300,900 before migration"
+        )
+    current_clock = verified_clock_state()
     profile = PROFILES[ProfileName.SPIDER_PAPER2]
-    if profile.limits.maximum_gpu_power_w != 78:
-        raise SystemExit("SPIDER_POWER_MIGRATION_REFUSED: unexpected Spider power stop")
+    if (
+        profile.limits.maximum_gpu_power_w != 70
+        or profile.limits.maximum_gpu_graphics_clock_mhz != 901
+    ):
+        raise SystemExit("SPIDER_POWER_MIGRATION_REFUSED: unexpected Spider guard limits")
     predictions_path = root / "evals/predictions" / f"{evaluation_id}.jsonl"
     provenance_path = predictions_path.with_suffix(".provenance.json")
     stop_path = root / "evals/reports" / f"{evaluation_id}.{stop_session}.resource-stop.json"
@@ -200,13 +212,15 @@ def migrate(root: Path, evaluation_id: str, *, stop_session: str) -> dict[str, A
     ]:
         raise SystemExit("SPIDER_POWER_MIGRATION_REFUSED: expected prior guard migrations")
     audit: dict[str, Any] = {
-        "kind": "power_guard_only_revision",
+        "kind": "power_incident_clock_cap_revision",
         "from_git_commit": previous_commit,
         "to_git_commit": current_commit,
         "start_case_index": len(predictions),
-        "old_gpu_power_stop_w": 70,
-        "new_gpu_power_stop_w": 78,
-        "verified_hard_power_cap_w": cap,
+        "old_maximum_graphics_clock_mhz": 1200,
+        "new_maximum_graphics_clock_mhz": 900,
+        "gpu_power_stop_w": 70,
+        "administrator_hard_clock_cap_confirmed": True,
+        "observed_clock_mhz_at_migration": current_clock,
         "prior_stop_sha256": sha256_file(stop_path),
         "predictions_sha256_at_migration": sha256_file(predictions_path),
         "changed_paths": changed,
@@ -224,6 +238,7 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--evaluation-id", required=True)
     parser.add_argument("--stop-session", required=True)
+    parser.add_argument("--hard-clock-cap-confirmed", action="store_true")
     args = parser.parse_args()
     print(
         json.dumps(
@@ -231,6 +246,7 @@ def main() -> None:
                 Path(__file__).resolve().parents[1],
                 args.evaluation_id,
                 stop_session=args.stop_session,
+                hard_clock_cap_confirmed=args.hard_clock_cap_confirmed,
             ),
             indent=2,
         )

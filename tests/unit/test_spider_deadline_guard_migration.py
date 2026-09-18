@@ -26,7 +26,9 @@ def test_reviewed_deadline_requires_exact_timeout_and_safe_resources(tmp_path: P
             "gpu_graphics_clock_mhz": 1200,
         },
     }
-    limits = PROFILES[ProfileName.SPIDER_PAPER2].limits
+    limits = PROFILES[ProfileName.SPIDER_PAPER2].limits.model_copy(
+        update={"maximum_gpu_graphics_clock_mhz": 1201, "maximum_gpu_power_w": 78}
+    )
     path.write_text(json.dumps(incident), encoding="utf-8")
     assert reviewed_deadline_stop(path, limits) == incident
     incident["reason"] = "GPU power 70.0 W"

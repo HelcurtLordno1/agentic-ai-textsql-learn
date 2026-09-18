@@ -114,7 +114,7 @@ but the safer one-layer profile means latency is **not** an apples-to-apples com
 no Olist-certified semantic proof catalog, so this run explicitly uses `planning_mode=hybrid` and
 `candidate_mode=legacy`; do not describe it as an Olist champion--challenger generalization result.
 
-Before starting, verify the Administrator `nvidia-smi -i 0 -lgc 900,1200` hard clock cap is still
+For a fresh Spider run, verify the Administrator `nvidia-smi -i 0 -lgc 300,900` hard clock cap is
 active, no stale model job remains, and idle resource readings are safe. The launcher refuses an
 occupied Ollama port, unsafe preflight, or a resource-stop lock. It starts a guarded server and a
 one-case guarded pilot, then automatically continues from the same checkpoint only if the pilot
@@ -196,44 +196,50 @@ uv run python scripts/launch_r2_spider_tmux.py \
 tmux attach -t spider-r2-hybrid-200-v1-resume900-1
 ```
 
-At 174/200, that continuation hit a real GPU power threshold: 87.82 W, while `nvidia-smi`
-reported an 85 W current and 80 W default hardware limit. Never skip the case or continue after
-this breach. The user authorized a faster-than-65 W compromise: Administrator hardware power cap
-at **75 W**, below the device default, and a new Spider-only **78 W software stop**. Keep the
-900--1200 MHz requested clock range, but allow hardware power throttling; the one-case guarded
-pilot must pass before any continuation. The launcher fails closed if the hard cap is absent,
-if any other resource limit is breached, or if a new incident record appears. The 900-second
-number is only a maximum per case, not a fixed wait or a way to accelerate generation.
+At 174/200, that continuation hit a real GPU power threshold: 87.82 W at 1200 MHz. Never skip
+the case or auto-retry this breach. The NVIDIA mobile driver rejected `-pl 75` as unsupported, so
+the previous 75 W power-cap path is unavailable. For this explicitly authorized recovery, set a
+lower Administrator hard **graphics-clock range 300--900 MHz**, and restore the conservative
+Spider **70 W software stop**. This clock cap is not a power cap: it reduces the reachable clock
+but cannot guarantee a wattage. The launcher checks the instantaneous clock and requires explicit
+confirmation of the Administrator setting; the one-case guarded pilot must demonstrate safe
+behavior under load before continuation. Both server and benchmark guards continue sampling every
+0.5 seconds, and any new threshold breach stops the run without auto-retry. The 900-second batch
+timeout is a maximum, not a fixed wait.
 
 Run in Administrator PowerShell, one command per line:
 
 ```powershell
-nvidia-smi -i 0 -pl 75
-nvidia-smi -i 0 -lgc 900,1200
+nvidia-smi -i 0 -lgc 300,900
 nvidia-smi -i 0 -q -d POWER,CLOCK
 nvidia-smi -i 0 --query-gpu=clocks.current.graphics,memory.used,temperature.gpu,power.draw,utilization.gpu --format=csv,noheader,nounits
 ```
 
-Only after `Current Power Limit` reads at most 75 W and idle resources are safe, run in WSL:
+Only after the `-lgc 300,900` command succeeds, stale jobs are absent, and idle resources are
+safe, run in WSL. The instantaneous `900 MHz` reading alone does **not** prove the maximum lock;
+the explicit Administrator command success is required.
 
 ```bash
 cd "/mnt/d/desktop_informations/vnpt ai/agentic_text_to_sql"
 uv run python scripts/migrate_spider_power_guard.py \
   --evaluation-id spider-r2-hybrid-200-v1 \
-  --stop-session spider-r2-hybrid-200-v1-resume900-1
+  --stop-session spider-r2-hybrid-200-v1-resume900-1 \
+  --hard-clock-cap-confirmed
 uv run python scripts/launch_r2_spider_tmux.py \
   --evaluation-id spider-r2-hybrid-200-v1 \
-  --session spider-r2-hybrid-200-v1-resume75-1 \
+  --session spider-r2-hybrid-200-v1-resume900clock-1 \
   --models-dir /mnt/c/Users/ADMIN/.ollama/models \
   --hard-cap-confirmed --acknowledge-clock-stop --acknowledge-deadline-stop \
   --acknowledge-power-stop --batch-timeout-seconds 900
-tmux attach -t spider-r2-hybrid-200-v1-resume75-1
+tmux attach -t spider-r2-hybrid-200-v1-resume900clock-1
+watch -n 2 'jq "{state,phase,checkpoint,total_cases,observed_peak,reason}" evals/reports/spider-r2-hybrid-200-v1.progress.json; tail -n 10 evals/reports/spider-r2-hybrid-200-v1.benchmark.log'
 ```
 
-The power migration is one-time and records the unchanged 174-case prediction SHA, both Git
-revisions, the verified hard cap and transition index. Existing tmux sessions remain as dead logs;
-use the new session name to monitor live work. A fresh power/thermal/RAM/swap/VRAM/clock breach
-ends the run and must not be automatically retried.
+The one-time migration records the unchanged 174-case prediction SHA, both Git revisions, the
+declared Administrator clock cap, observed current clock, and transition index. Do not infer an
+active hard cap from the idle clock alone. A fresh power/thermal/RAM/swap/VRAM/clock breach ends
+the run and must not be automatically retried. A tmux session exists only while the tmux server
+is alive; checkpoints and logs survive independently.
 
 Full Spider-1034 remains optional P6.1 on stronger hardware and has no matched full baseline here;
 never present the 200-case score as full dev. Never commit predictions, detailed reports, indexes,

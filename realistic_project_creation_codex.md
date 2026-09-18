@@ -1936,6 +1936,15 @@ predictions; inference code/prompt không thay đổi. Chưa có Spider final re
 Construction gate của revision power-cap pass `make check`: Ruff/format, mypy 114 source files,
 353 test non-Ollama (1 deselect). Chưa chạy pilot ở cap 75 W vì operator chưa xác nhận giới hạn
 phần cứng qua NVIDIA Administrator.
+Operator đã xác nhận `nvidia-smi -i 0 -pl 75` **không được mobile driver hỗ trợ**;
+therefore power-cap construction path bị hủy, chưa migrate hay chạy pilot. Guard-only recovery
+revision mới giảm Spider graphics-clock ceiling 1200 -> 900 MHz và power stop 78 -> 70 W,
+không đổi inference/model/prompt/index/manifest/174 saved predictions. Chỉ sau khi Administrator
+`nvidia-smi -i 0 -lgc 300,900` thành công và operator xác nhận mới được migrate audit provenance,
+chạy one-case guarded pilot rồi mới continuation batch 1/cooldown 60 s. Clock cap không đảm bảo
+power; guard vẫn dừng ngay nếu đạt 70 W. R2 tiếp tục `IN_PROGRESS`, chưa có final report.
+Construction gate clock-cap fallback pass `make check`: Ruff/format, mypy 114 source files,
+352 test non-Ollama (1 deselect). Chưa chạy pilot do chưa có xác nhận hard clock cap 300--900 MHz.
 Đây là **adaptive recovery**, không phải fresh blind source-locked benchmark độc lập; ngưỡng
 accuracy development đã đạt nhưng R2 vẫn `IN_PROGRESS`, không `VERIFIED`/không promote default.
 Fresh guarded blind run sau source freeze và evaluation methodology review vẫn là gate tiếp theo.
