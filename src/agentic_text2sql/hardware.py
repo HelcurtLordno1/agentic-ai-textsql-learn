@@ -170,7 +170,7 @@ PROFILES = {
             maximum_gpu_memory_mib=4096,
             maximum_gpu_temperature_c=65,
             maximum_gpu_power_w=70,
-            maximum_gpu_graphics_clock_mhz=901,
+            maximum_gpu_graphics_clock_mhz=701,
         ),
     ),
 }

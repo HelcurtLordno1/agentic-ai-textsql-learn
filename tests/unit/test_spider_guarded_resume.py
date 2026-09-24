@@ -19,7 +19,7 @@ def test_spider_profile_keeps_conservative_breakers() -> None:
     assert profile.max_loaded_models == 1
     assert profile.limits.maximum_gpu_power_w == 70
     assert profile.limits.maximum_gpu_memory_mib < 6144
-    assert profile.limits.maximum_gpu_graphics_clock_mhz == 901
+    assert profile.limits.maximum_gpu_graphics_clock_mhz == 701
     hot = ResourceSample(15, 0, 1000, 50, 20, 20, 915)
     assert unsafe_reason(hot, profile.limits) is not None
 

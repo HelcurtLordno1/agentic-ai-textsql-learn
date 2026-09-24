@@ -12,6 +12,15 @@ from pathlib import Path
 
 from agentic_text2sql.hardware import PROFILES, ProfileName, sample_resources, unsafe_reason
 from agentic_text2sql_eval.spider_release import load_release_cases
+from scripts.migrate_schema_spider_power_stop import (
+    EVALUATION_ID as SCHEMA_LEGACY_EVALUATION_ID,
+)
+from scripts.migrate_schema_spider_power_stop import (
+    current_clock_mhz,
+)
+from scripts.migrate_schema_spider_power_stop import (
+    migration_is_current as schema_power_migration_is_current,
+)
 from scripts.migrate_spider_clock_guard import migration_is_current, reviewed_clock_stop
 from scripts.migrate_spider_deadline_guard import (
     deadline_migration_is_current,
@@ -20,7 +29,6 @@ from scripts.migrate_spider_deadline_guard import (
 from scripts.migrate_spider_power_guard import (
     power_migration_is_current,
     reviewed_power_stop,
-    verified_clock_state,
 )
 
 _SAFE_NAME = re.compile(r"^[a-z0-9][a-z0-9._-]{2,79}$")
@@ -144,6 +152,11 @@ def main() -> None:
         action="store_true",
         help="Resume a reviewed power stop only after Administrator -lgc 300,900 and a new pilot.",
     )
+    parser.add_argument(
+        "--acknowledge-schema-power-stop",
+        action="store_true",
+        help="Resume the reviewed schema Spider power stop after the 700 MHz guard migration.",
+    )
     args = parser.parse_args()
     if _SAFE_NAME.fullmatch(args.evaluation_id) is None:
         raise SystemExit("evaluation-id must be 3-80 lowercase safe characters")
@@ -154,10 +167,10 @@ def main() -> None:
         raise SystemExit("Spider batch timeout must be 360-900 seconds")
     if not args.hard_cap_confirmed:
         raise SystemExit(
-            "HARD_CAP_CONFIRMATION_REQUIRED: verify Administrator nvidia-smi -i 0 -lgc 300,900; "
+            "HARD_CAP_CONFIRMATION_REQUIRED: verify Administrator nvidia-smi -i 0 -lgc 300,700; "
             "the guarded one-case pilot will also check the clock under load"
         )
-    verified_clock_state()
+    current_clock_mhz()
     root = Path(__file__).resolve().parents[1]
     prior_stop = root / "evals/reports" / f"{args.evaluation_id}.resource-stop.json"
     later_stops = sorted(
@@ -190,9 +203,23 @@ def main() -> None:
         reviewed_power_stop(power_stops[0], PROFILES[ProfileName.SPIDER_PAPER2].limits)
     elif args.acknowledge_power_stop:
         raise SystemExit("SPIDER_POWER_REVIEW_REFUSED: no power incident record")
-    if prior_stop.is_file() and not args.acknowledge_clock_stop:
+    if args.acknowledge_clock_stop and args.acknowledge_schema_power_stop:
+        raise SystemExit("SPIDER_STOP_REVIEW_REFUSED: choose one original stop type")
+    if prior_stop.is_file() and not (
+        args.acknowledge_clock_stop or args.acknowledge_schema_power_stop
+    ):
         raise SystemExit(f"RESOURCE_STOP_LOCKED: {prior_stop}")
-    if args.acknowledge_clock_stop:
+    if args.acknowledge_schema_power_stop:
+        if args.evaluation_id != SCHEMA_LEGACY_EVALUATION_ID:
+            raise SystemExit("SPIDER_POWER_REVIEW_REFUSED: unexpected evaluation ID")
+        reviewed_power_stop(prior_stop, PROFILES[ProfileName.SPIDER_PAPER2].limits)
+        provenance = root / "evals/predictions" / f"{args.evaluation_id}.provenance.json"
+        if not schema_power_migration_is_current(provenance, root, prior_stop):
+            raise SystemExit(
+                "SPIDER_POWER_MIGRATION_REQUIRED: run migrate_schema_spider_power_stop.py"
+            )
+        stop_record = root / "evals/reports" / f"{args.evaluation_id}.{session}.resource-stop.json"
+    elif args.acknowledge_clock_stop:
         historical_limits = PROFILES[ProfileName.SPIDER_PAPER2].limits.model_copy(
             update={"maximum_gpu_graphics_clock_mhz": 1201, "maximum_gpu_power_w": 78}
         )
