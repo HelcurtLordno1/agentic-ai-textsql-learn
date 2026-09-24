@@ -70,6 +70,7 @@ def run_configuration(
         "candidate_mode": settings.candidate_mode,
         "certified_proof_kinds": sorted(settings.parsed_certified_proof_kinds),
         "retrieval_mode": settings.retrieval_mode,
+        "schema_context_mode": settings.schema_context_mode,
         "max_output_tokens": settings.ollama_max_output_tokens,
         "request_timeout_seconds": settings.request_timeout_seconds,
         "run_deadline_seconds": settings.run_deadline_seconds,

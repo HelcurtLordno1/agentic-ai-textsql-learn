@@ -28,6 +28,7 @@ def test_resume_rejects_any_changed_identity() -> None:
     configuration = run_configuration(
         Settings(), correction_enabled=True, profile=ProfileName.SPIDER_PAPER2.value
     )
+    assert configuration["schema_context_mode"] == "legacy"
     expected = {
         "git_commit": "a" * 40,
         "experiment_id": "spider-r2-test",
@@ -44,6 +45,13 @@ def test_resume_rejects_any_changed_identity() -> None:
         "run_config": configuration,
     }
     verify_resume_provenance(expected, **kwargs)
+    coverage = run_configuration(
+        Settings(TEXT2SQL_SCHEMA_CONTEXT_MODE="coverage"),
+        correction_enabled=True,
+        profile=ProfileName.SPIDER_PAPER2.value,
+    )
+    with pytest.raises(SystemExit, match="SPIDER_RESUME_MISMATCH: run_config"):
+        verify_resume_provenance(expected, **{**kwargs, "run_config": coverage})
     for changed in (
         "git_commit",
         "experiment_id",

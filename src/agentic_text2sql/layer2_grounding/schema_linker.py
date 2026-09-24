@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+from typing import Literal
+
 from agentic_text2sql.contracts.catalog import CatalogSnapshot
 from agentic_text2sql.contracts.planning import LogicalPlan
 from agentic_text2sql.contracts.retrieval import EvidenceItem, RetrievalResult, SchemaContext
 from agentic_text2sql.layer2_grounding.context_packer import estimate_tokens, render_schema_context
+from agentic_text2sql.layer2_grounding.coverage_linker import link_schema_with_coverage
 from agentic_text2sql.layer2_grounding.fk_graph import catalog_join_edges, minimal_join_closure
 from agentic_text2sql.layer2_grounding.keyword_index import normalize_tokens
 
@@ -41,7 +44,21 @@ def link_schema(
     fk_hops: int = 2,
     preferred_tables: tuple[str, ...] = (),
     required_columns: tuple[str, ...] = (),
+    mode: Literal["legacy", "coverage"] = "legacy",
+    question: str = "",
 ) -> SchemaContext:
+    if mode == "coverage":
+        return link_schema_with_coverage(
+            plan,
+            retrieval,
+            catalog,
+            token_budget=token_budget,
+            max_tables=max_tables,
+            fk_hops=fk_hops,
+            preferred_tables=preferred_tables,
+            required_columns=required_columns,
+            question=question,
+        )
     if retrieval.db_id != catalog.db_id or retrieval.catalog_hash != catalog.catalog_hash:
         raise ValueError("retrieval result does not belong to the supplied catalog")
     if token_budget < 1 or max_tables < 1:

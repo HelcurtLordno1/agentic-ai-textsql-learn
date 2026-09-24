@@ -121,7 +121,12 @@ class RuntimeBundle(AbstractContextManager["RuntimeBundle"]):
                     else BASELINE_CORRECTOR_PROMPT_VERSION
                 ),
             },
-            "retrieval": {"mode": settings.retrieval_mode, "top_k": 20, "token_budget": 1200},
+            "retrieval": {
+                "mode": settings.retrieval_mode,
+                "top_k": 20,
+                "token_budget": 1200,
+                "schema_context_mode": settings.schema_context_mode,
+            },
             "planning_mode": settings.planning_mode,
             "candidate_selection": {
                 "mode": settings.candidate_mode,
@@ -199,6 +204,7 @@ class RuntimeBundle(AbstractContextManager["RuntimeBundle"]):
                 mode=settings.retrieval_mode,
                 top_k=20,
                 token_budget=1200,
+                schema_context_mode=settings.schema_context_mode,
                 semantic_catalog=semantic_catalog,
             )
         if grounded_planning and grounding is None:

@@ -339,6 +339,7 @@ class GroundingService:
         mode: str = "dense",
         top_k: int = 20,
         token_budget: int = 1200,
+        schema_context_mode: Literal["legacy", "coverage"] = "legacy",
         semantic_catalog: SemanticCatalog | None = None,
     ) -> None:
         self.retriever = retriever
@@ -346,6 +347,7 @@ class GroundingService:
         self.mode = mode
         self.top_k = top_k
         self.token_budget = token_budget
+        self.schema_context_mode = schema_context_mode
         self.semantic_catalog = semantic_catalog
 
     def ground(self, question: str, plan: LogicalPlan) -> SchemaContext:
@@ -359,7 +361,14 @@ class GroundingService:
             ]
         )
         retrieval = self.retriever.retrieve(expanded_query, mode=self.mode, top_k=self.top_k)
-        return link_schema(plan, retrieval, self.catalog, token_budget=self.token_budget)
+        return link_schema(
+            plan,
+            retrieval,
+            self.catalog,
+            token_budget=self.token_budget,
+            mode=self.schema_context_mode,
+            question=question,
+        )
 
     def prepare_for_planning(
         self, question: str, decomposition: DecomposedQuestion
@@ -422,6 +431,8 @@ class GroundingService:
             token_budget=self.token_budget,
             preferred_tables=preferred_tables,
             required_columns=binding.required_columns if binding_is_proven else (),
+            mode=self.schema_context_mode,
+            question=question,
         )
         links = build_semantic_link_plan(
             question,

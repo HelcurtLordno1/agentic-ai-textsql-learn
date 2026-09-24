@@ -22,6 +22,7 @@ def test_settings_paths_are_relocatable(tmp_path: Path) -> None:
     assert settings.candidate_mode == "legacy"
     assert settings.parsed_certified_proof_kinds == frozenset()
     assert settings.retrieval_mode == "hybrid"
+    assert settings.schema_context_mode == "legacy"
 
 
 def test_planning_mode_is_bounded_to_reproducible_ablation_variants() -> None:
@@ -35,6 +36,9 @@ def test_retrieval_mode_is_bounded() -> None:
     assert Settings(TEXT2SQL_RETRIEVAL_MODE="bm25").retrieval_mode == "bm25"
     with pytest.raises(ValidationError):
         Settings(TEXT2SQL_RETRIEVAL_MODE="case-specific")
+    assert Settings(TEXT2SQL_SCHEMA_CONTEXT_MODE="coverage").schema_context_mode == "coverage"
+    with pytest.raises(ValidationError):
+        Settings(TEXT2SQL_SCHEMA_CONTEXT_MODE="unbounded")
 
 
 def test_candidate_modes_and_proof_kinds_are_bounded() -> None:

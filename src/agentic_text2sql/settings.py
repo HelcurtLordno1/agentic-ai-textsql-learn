@@ -61,6 +61,9 @@ class Settings(BaseSettings):
     retrieval_mode: Literal["bm25", "dense", "hybrid"] = Field(
         default="hybrid", alias="TEXT2SQL_RETRIEVAL_MODE"
     )
+    schema_context_mode: Literal["legacy", "coverage"] = Field(
+        default="legacy", alias="TEXT2SQL_SCHEMA_CONTEXT_MODE"
+    )
 
     @field_validator("ollama_base_url")
     @classmethod
