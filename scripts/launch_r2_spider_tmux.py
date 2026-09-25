@@ -9,6 +9,7 @@ import shlex
 import socket
 import subprocess
 from pathlib import Path
+from typing import Literal
 
 from agentic_text2sql.hardware import PROFILES, ProfileName, sample_resources, unsafe_reason
 from agentic_text2sql_eval.spider_release import load_release_cases
@@ -32,6 +33,14 @@ from scripts.migrate_spider_power_guard import (
 )
 
 _SAFE_NAME = re.compile(r"^[a-z0-9][a-z0-9._-]{2,79}$")
+SchemaContextMode = Literal["legacy", "coverage"]
+
+
+def validate_schema_context_label(evaluation_id: str, mode: SchemaContextMode) -> None:
+    if evaluation_id.startswith("spider-schema-coverage-") and mode != "coverage":
+        raise SystemExit("SCHEMA_CONTEXT_MODE_MISMATCH: coverage ID requires coverage mode")
+    if evaluation_id.startswith("spider-schema-legacy-") and mode != "legacy":
+        raise SystemExit("SCHEMA_CONTEXT_MODE_MISMATCH: legacy ID requires legacy mode")
 
 
 def port_is_open(host: str = "127.0.0.1", port: int = 11434) -> bool:
@@ -46,6 +55,7 @@ def build_window_shells(
     evaluation_id: str,
     session: str,
     models_dir: Path,
+    schema_context_mode: SchemaContextMode,
     stop_record: Path | None = None,
     batch_timeout_seconds: int = 360,
 ) -> tuple[str, str]:
@@ -100,7 +110,7 @@ def build_window_shells(
         str(stop_record),
     ]
     server_shell = (
-        "set -o pipefail; "
+        "set -o pipefail; export TEXT2SQL_OLLAMA_NUM_GPU=1; "
         f"{shlex.join(server_command)} 2>&1 | tee -a {shlex.quote(str(server_log))}; "
         "status=${PIPESTATUS[0]}; "
         f'echo "GUARDED_SERVER_EXIT=$status" | tee -a {shlex.quote(str(server_log))}; '
@@ -111,6 +121,8 @@ def build_window_shells(
     continuation = shlex.join([*benchmark_command, "--phase", "inference"])
     benchmark_shell = (
         "set -o pipefail; "
+        f"export TEXT2SQL_SCHEMA_CONTEXT_MODE={shlex.quote(schema_context_mode)}; "
+        "export TEXT2SQL_OLLAMA_NUM_GPU=1; "
         f"cleanup() {{ tmux send-keys -t {server_target} C-c 2>/dev/null || true; }}; "
         "trap cleanup EXIT; ready=0; "
         "for attempt in $(seq 1 120); do "
@@ -135,6 +147,7 @@ def main() -> None:
     parser.add_argument("--evaluation-id", required=True)
     parser.add_argument("--session")
     parser.add_argument("--models-dir", type=Path, required=True)
+    parser.add_argument("--schema-context-mode", choices=("legacy", "coverage"), required=True)
     parser.add_argument("--hard-cap-confirmed", action="store_true")
     parser.add_argument("--batch-timeout-seconds", type=int, default=360)
     parser.add_argument(
@@ -160,6 +173,7 @@ def main() -> None:
     args = parser.parse_args()
     if _SAFE_NAME.fullmatch(args.evaluation_id) is None:
         raise SystemExit("evaluation-id must be 3-80 lowercase safe characters")
+    validate_schema_context_label(args.evaluation_id, args.schema_context_mode)
     session = args.session or f"spider-r2-{args.evaluation_id}"
     if _SAFE_NAME.fullmatch(session) is None:
         raise SystemExit("session must be 3-80 lowercase safe characters")
@@ -271,6 +285,7 @@ def main() -> None:
         evaluation_id=args.evaluation_id,
         session=session,
         models_dir=models_dir,
+        schema_context_mode=args.schema_context_mode,
         stop_record=stop_record,
         batch_timeout_seconds=args.batch_timeout_seconds,
     )

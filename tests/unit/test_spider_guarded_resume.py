@@ -1,13 +1,19 @@
 from __future__ import annotations
 
+import os
+import subprocess
 from pathlib import Path
 
 import pytest
 
 from agentic_text2sql.hardware import PROFILES, ProfileName, ResourceSample, unsafe_reason
 from agentic_text2sql.settings import Settings
-from scripts.launch_r2_spider_tmux import build_window_shells
-from scripts.run_benchmark import run_configuration, verify_resume_provenance
+from scripts.launch_r2_spider_tmux import build_window_shells, validate_schema_context_label
+from scripts.run_benchmark import (
+    require_schema_mode_for_evaluation,
+    run_configuration,
+    verify_resume_provenance,
+)
 from scripts.run_guarded_spider import maximum_observation
 
 
@@ -76,6 +82,7 @@ def test_tmux_launcher_runs_one_case_pilot_then_resume_with_two_guards(tmp_path:
         evaluation_id="spider-r2-test",
         session="spider-test",
         models_dir=tmp_path / "models with spaces",
+        schema_context_mode="legacy",
     )
     assert "serve_ollama_guarded.py" in server
     assert "--stop-record" in server and "spider-paper2-ultrasafe" in server
@@ -85,6 +92,43 @@ def test_tmux_launcher_runs_one_case_pilot_then_resume_with_two_guards(tmp_path:
     assert "--phase inference" in benchmark
     assert "trap cleanup EXIT" in benchmark
     assert "--batch-size 1 --cooldown-seconds 60 --sample-seconds 0.5" in benchmark
+    assert "export TEXT2SQL_SCHEMA_CONTEXT_MODE=legacy;" in benchmark
+    assert "export TEXT2SQL_OLLAMA_NUM_GPU=1;" in benchmark
+
+
+def test_coverage_mode_is_explicit_inside_tmux_and_matches_evaluation_id(tmp_path: Path) -> None:
+    _, benchmark = build_window_shells(
+        tmp_path,
+        evaluation_id="spider-schema-coverage-200-v2",
+        session="spider-coverage-test",
+        models_dir=tmp_path / "models",
+        schema_context_mode="coverage",
+    )
+    assert "export TEXT2SQL_SCHEMA_CONTEXT_MODE=coverage;" in benchmark
+    prefix = benchmark.split("cleanup()", maxsplit=1)[0]
+    inherited = {
+        **os.environ,
+        "TEXT2SQL_SCHEMA_CONTEXT_MODE": "legacy",
+        "TEXT2SQL_OLLAMA_NUM_GPU": "99",
+    }
+    actual = subprocess.check_output(
+        [
+            "bash",
+            "-lc",
+            prefix + 'printf "%s %s" "$TEXT2SQL_SCHEMA_CONTEXT_MODE" "$TEXT2SQL_OLLAMA_NUM_GPU"',
+        ],
+        env=inherited,
+        text=True,
+    )
+    assert actual == "coverage 1"
+    validate_schema_context_label("spider-schema-coverage-200-v2", "coverage")
+    with pytest.raises(SystemExit, match="coverage ID requires coverage mode"):
+        validate_schema_context_label("spider-schema-coverage-200-v2", "legacy")
+    with pytest.raises(SystemExit, match="legacy ID requires legacy mode"):
+        validate_schema_context_label("spider-schema-legacy-200-v1", "coverage")
+    with pytest.raises(SystemExit, match="coverage ID requires coverage mode"):
+        require_schema_mode_for_evaluation("spider-schema-coverage-200-v2", "legacy")
+    require_schema_mode_for_evaluation("spider-schema-coverage-200-v2", "coverage")
 
 
 def test_tmux_resume_uses_new_stop_lock_without_erasing_prior_incident(tmp_path: Path) -> None:
@@ -94,6 +138,7 @@ def test_tmux_resume_uses_new_stop_lock_without_erasing_prior_incident(tmp_path:
         evaluation_id="spider-r2-test",
         session="spider-resume1",
         models_dir=tmp_path / "models",
+        schema_context_mode="legacy",
         stop_record=stop,
         batch_timeout_seconds=900,
     )

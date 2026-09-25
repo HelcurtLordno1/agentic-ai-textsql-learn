@@ -25,6 +25,14 @@ from agentic_text2sql_eval.spider_release import (
 _EVALUATION_ID = re.compile(r"^[a-z0-9][a-z0-9._-]{2,79}$")
 
 
+def require_schema_mode_for_evaluation(evaluation_id: str, mode: str) -> None:
+    """Refuse a mislabeled schema ablation before loading a model or writing a checkpoint."""
+    if evaluation_id.startswith("spider-schema-coverage-") and mode != "coverage":
+        raise SystemExit("SPIDER_SCHEMA_MODE_MISMATCH: coverage ID requires coverage mode")
+    if evaluation_id.startswith("spider-schema-legacy-") and mode != "legacy":
+        raise SystemExit("SPIDER_SCHEMA_MODE_MISMATCH: legacy ID requires legacy mode")
+
+
 def checkpoint(path: Path, predictions: list[SmokePrediction]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = path.with_suffix(f"{path.suffix}.tmp")
@@ -153,6 +161,7 @@ def main() -> None:
     )
     if _EVALUATION_ID.fullmatch(evaluation_id) is None:
         raise SystemExit("evaluation-id must be 3-80 lowercase safe characters")
+    require_schema_mode_for_evaluation(evaluation_id, settings.schema_context_mode)
     if not args.resume and any(
         path.is_file() for path in (predictions_path, provenance_path, report_path)
     ):
