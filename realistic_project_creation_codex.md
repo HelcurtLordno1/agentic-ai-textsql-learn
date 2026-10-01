@@ -1945,6 +1945,15 @@ chạy one-case guarded pilot rồi mới continuation batch 1/cooldown 60 s. Cl
 power; guard vẫn dừng ngay nếu đạt 70 W. R2 tiếp tục `IN_PROGRESS`, chưa có final report.
 Construction gate clock-cap fallback pass `make check`: Ruff/format, mypy 114 source files,
 352 test non-Ollama (1 deselect). Chưa chạy pilot do chưa có xác nhận hard clock cap 300--900 MHz.
+Spider R2 final operator run tiếp theo đã hoàn tất checkpoint 200/200, `SPIDER_BENCHMARK_EXIT=0`,
+report `evals/reports/spider-r2-hybrid-200-v1.json`: execution-correct **120/200 (60%)** so với
+P6 **130/200 (65%)** trên đúng manifest/200 ID/expected-result hashes. Paired +10 case sửa được,
+−20 case P6 đúng bị regression, net −10; holdout 61/100 vs 67/100, regression 59/100 vs 63/100.
+Model/embedding digests và catalog/index versions đều match 20/20 database; hardware offload và
+correction budgets khác nhau, nên đây không phải ablation cô lập typed challenger. R2 Spider dùng
+hybrid planning + legacy candidate, không certified proof promotion. Report/predictions/provenance
+local được giữ và `comparison_new2_to_baseline_vn.md` đã cập nhật. R2 vẫn `IN_PROGRESS`, không
+promote; P6 tiếp tục default/champion. Không suy diễn score này thành full Spider-1.034.
 Đây là **adaptive recovery**, không phải fresh blind source-locked benchmark độc lập; ngưỡng
 accuracy development đã đạt nhưng R2 vẫn `IN_PROGRESS`, không `VERIFIED`/không promote default.
 Fresh guarded blind run sau source freeze và evaluation methodology review vẫn là gate tiếp theo.
@@ -2147,3 +2156,22 @@ Chỉ điền số liệu thật sau full report.
 - Safety do code + read-only database thực thi, không do prompt.
 - Score >80% là stretch goal; score thực và độ hiểu hệ thống quan trọng hơn việc làm đẹp số.
 - File này tiếp tục được cập nhật như master plan cho đến khi project đạt Core Complete.
+
+## 25. Schema Context coverage gate — 2026-09-24
+
+Trạng thái `IN_PROGRESS`, chưa `VERIFIED` và chưa đổi champion/default. Đã thêm mode
+`TEXT2SQL_SCHEMA_CONTEXT_MODE=coverage` opt-in, giữ nguyên Qwen3-14B và mode `legacy` mặc định.
+Model-free Spider mini-100 và holdout-100 cùng BM25 top-20 đạt micro table/column/FK recall
+1.0 vì toàn catalog vừa giới hạn 1.200 token/sáu bảng; đây **không phải** execution accuracy.
+`make check` pass 358 non-Ollama tests, mypy 115 source files, Ruff/format. Bằng chứng,
+phương pháp và giới hạn ở `docs/evidence/schema_context_coverage_2026_09_24.md`.
+Ghi chú phía trên mô tả trạng thái construction ngày 2026-09-24. Inference sau đó đã hoàn tất:
+`spider-schema-coverage-200-v2`, commit `389b815`, 200/200 case, **128/200 (64%)**; R2 legacy
+source-locked 120/200, P6 lịch sử 130/200. Coverage/P6 paired +4/−6, net −2; P50/P95
+69,89/156,86 giây, khác profile P6 nên không quy latency cho thuật toán. Guard run coverage dùng
+verified hard clock 300–700 MHz, một GPU layer, batch 1/unload/cooldown 60 giây.
+Evidence ở [`comparison_new3_to_baseline_vn.md`](comparison_new3_to_baseline_vn.md),
+[`research_3_128.md`](research_3_128.md) và [`aggregate summary`](docs/evidence/research_3_128_summary.json).
+Branch `research_3_128` lưu snapshot nghiên cứu; R2/coverage vẫn `IN_PROGRESS`, không `VERIFIED`,
+không promote default. Matched safe P6 control, fresh-schema transfer và latency/critic gates vẫn còn.
+Không có model run mới trong lượt lưu trữ ngày 2026-10-01.

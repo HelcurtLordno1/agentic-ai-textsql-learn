@@ -1,3 +1,5 @@
+> **Research archive `research_3_128`:** this branch preserves the source of the historical Spider-200 **128/200** coverage run. Start with [research_3_128.md](research_3_128.md) for the pinned source/configuration and limitations, and [codex_answer.md](codex_answer.md) for the next architecture plan. Coverage remains opt-in; this archive does not promote R3 or rerun the benchmark.
+
 # Agentic Text-to-SQL
 
 [![CI](https://github.com/HelcurtLordno1/agentic-ai-textsql-learn/actions/workflows/ci.yml/badge.svg)](https://github.com/HelcurtLordno1/agentic-ai-textsql-learn/actions/workflows/ci.yml)

@@ -1,3 +1,5 @@
+> Archive context: `research_3_128` preserves the coverage run source at `389b815`. The measured Spider path, opt-in configuration, source provenance and 128/200 limitations are documented in [research_3_128.md](../research_3_128.md) and [comparison_new3_to_baseline_vn.md](../comparison_new3_to_baseline_vn.md). The future critic/small-model design in `codex_answer.md` is not implemented in this snapshot.
+
 # Architecture
 
 The canonical six-layer design and completion ledger live in
