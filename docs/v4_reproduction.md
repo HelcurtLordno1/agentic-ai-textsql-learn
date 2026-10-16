@@ -99,3 +99,62 @@ reapplied; use `resume --recovery-pilot` before ordinary resume. A resource/sens
 is latched, preserves its evidence and does not permit an automatic retry or override.
 Ctrl+b then d detaches without stopping tmux. Full completion requires both reports,
 all manifest IDs and clean shutdown, not merely a live pane.
+
+## Rebuild the retrieval indexes on a fresh machine
+
+`text2sql ingest` registers a database; it does **not** build the FAISS/BM25 index.
+For a comparable run, prepare all21 semantic indexes before starting the benchmark.
+With data and both models installed, configure `OLLAMA_BASE_URL` for the existing idle
+local Ollama endpoint, one loaded model/parallel request, and apply the hardware cap
+above. No generation workload may run at the same time. The following command builds
+one database at a time under continuous Windows/WSL monitoring, explicit CPU embedding
+offload0, unload and cooldown60s. Index publication/cache checkpoints are atomic;
+any failed guarded child stops the loop. Existing stop latches are never removed.
+
+```bash
+TEXT2SQL_MONITOR_WINDOWS_HOST=true uv run --frozen --extra ui --group dev python - <<'PY'
+import json
+import subprocess
+import sys
+from pathlib import Path
+
+root = Path.cwd()
+manifest = json.loads((root / 'evals/configs/spider-laptop-200.json').read_text())
+databases = [('olist', root / 'data/processed/olist.sqlite')]
+databases += [(name, root / f'data/raw/spider/spider_data/database/{name}/{name}.sqlite')
+              for name in sorted(manifest['database_sha256'])]
+builder = '''
+import sys
+from pathlib import Path
+from agentic_text2sql.settings import Settings
+from agentic_text2sql.adapters.embeddings.ollama_embeddings import OllamaEmbeddingClient
+from agentic_text2sql.layer2_grounding.introspector import SQLiteIntrospector
+from agentic_text2sql.layer2_grounding.service import IndexService
+from scripts.build_indexes import MODEL, MODEL_DIGEST, semantic_aliases
+s = Settings()
+db_id = sys.argv[2]
+client = OllamaEmbeddingClient(s.ollama_base_url, MODEL, num_gpu=0)
+try:
+    if client.model_digest() != MODEL_DIGEST:
+        raise ValueError('Embedding model digest mismatch')
+    catalog = SQLiteIntrospector().inspect(Path(sys.argv[1]), db_id)
+    service = IndexService(s.resolved_data_dir / 'indexes/p3_1_semantic', MODEL,
+        MODEL_DIGEST, lambda texts: client.embed(texts, batch_size=32))
+    built = service.build(catalog, semantic_aliases() if db_id == 'olist' else None)
+    print(built.model_dump_json(indent=2), flush=True)
+finally:
+    client.close()
+'''
+for db_id, database in databases:
+    subprocess.run([sys.executable, '-m', 'scripts.run_guarded_local',
+        '--profile', 'qwen14b-16gb-clock-capped', '--stop-file',
+        str(root / f'data/artifacts/index-reproduction-{db_id}.resource-stop.json'),
+        '--', sys.executable, '-c', builder, str(database), db_id], check=True)
+PY
+```
+
+The actual Ollama endpoint/model versions must match the identities above. FAISS bytes
+and model outputs can still differ across backends; compare catalog/model/document
+identities and record rebuilt versions. Do not borrow cached predictions to claim a
+fresh result. The V4 Git archive was tested without local data:255 tests pass,5
+dataset-dependent integrations skip,1 Ollama test is deselected; no inference occurred.
