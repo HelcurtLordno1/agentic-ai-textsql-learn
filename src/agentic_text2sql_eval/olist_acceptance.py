@@ -6,12 +6,15 @@ import hashlib
 import json
 import math
 import sqlite3
+from functools import partial
 from pathlib import Path
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from agentic_text2sql.contracts.assessment import CandidateEvaluation
 from agentic_text2sql.contracts.sql import DirectStatus
+from agentic_text2sql_eval.candidate_quality import score_saved_candidates, summarize_candidates
 from agentic_text2sql_eval.inference_runner import SmokePrediction
 from agentic_text2sql_eval.report import _percentile
 
@@ -93,6 +96,25 @@ def _rows_equal(
     )
 
 
+def _score_preview(
+    evaluation: CandidateEvaluation,
+    *,
+    expected_rows: list[list[Any]],
+    order_matters: bool,
+    tolerance: float,
+) -> bool | None:
+    if not evaluation.validation.accepted or evaluation.result is None:
+        return False
+    if evaluation.result.truncated:
+        return None
+    return _rows_equal(
+        evaluation.result.rows,
+        expected_rows,
+        order_matters=order_matters,
+        tolerance=tolerance,
+    )
+
+
 def evaluate_olist_acceptance(
     *,
     cases: list[OlistAcceptanceCase],
@@ -121,6 +143,15 @@ def evaluate_olist_acceptance(
             )
             total_latency = result.latency_ms.get("total", sum(result.latency_ms.values()))
             latencies.append(total_latency)
+            candidates = score_saved_candidates(
+                result,
+                partial(
+                    _score_preview,
+                    expected_rows=expected_rows,
+                    order_matters=case.result_order_matters,
+                    tolerance=case.tolerance,
+                ),
+            )
             details.append(
                 {
                     "id": case.id,
@@ -140,6 +171,7 @@ def evaluate_olist_acceptance(
                     "required_concepts": case.required_concepts,
                     "error_class": result.error_class,
                     "correction": result.correction,
+                    "a1_candidates": candidates,
                 }
             )
     finally:
@@ -154,7 +186,14 @@ def evaluate_olist_acceptance(
     ]
     candidate_count = sum(item["generated_sql"] is not None for item in details)
     first_pass_correct = sum(
-        bool(item["result_correct"]) and not bool((item.get("correction") or {}).get("attempted"))
+        bool(item["a1_candidates"]["first_pass_correct"])
+        if item["a1_candidates"] is not None
+        else bool(item["result_correct"])
+        and not bool((item.get("correction") or {}).get("attempted"))
+        for item in details
+    )
+    first_pass_scored = sum(
+        item["a1_candidates"] is None or item["a1_candidates"]["first_pass_correct"] is not None
         for item in details
     )
 
@@ -173,6 +212,7 @@ def evaluate_olist_acceptance(
 
     report: dict[str, Any] = {
         "evaluation_id": evaluation_id,
+        "evaluator_version": "olist-preview-v2",
         "case_count": len(cases),
         "typed_terminal_count": sum(
             item["status"] in {status.value for status in DirectStatus} for item in details
@@ -183,7 +223,14 @@ def evaluate_olist_acceptance(
         "valid_candidate_count": candidate_count,
         "valid_candidate_rate": candidate_count / len(cases),
         "first_pass_correct_count": first_pass_correct,
-        "first_pass_correct_rate": first_pass_correct / len(cases),
+        "first_pass_scored_count": first_pass_scored,
+        "first_pass_correct_rate": (
+            first_pass_correct / first_pass_scored if first_pass_scored else None
+        ),
+        "first_pass_definition": (
+            "A1: saved draft preview vs gold; P6: legacy uncorrected-success proxy"
+        ),
+        "a1_candidate_quality": summarize_candidates(details),
         "correction": {
             "attempted_count": len(correction_attempts),
             "recovered_count": len(correction_recovered),

@@ -17,6 +17,12 @@ from agentic_text2sql_eval.olist_acceptance import (
     evaluate_olist_acceptance,
     load_olist_acceptance,
 )
+from agentic_text2sql_eval.runtime_checkpoint import (
+    freeze_backend,
+    freeze_checkpoint,
+    runtime_identity,
+)
+from agentic_text2sql_eval.suite_control import prediction_prefix
 
 
 def main() -> None:
@@ -36,6 +42,14 @@ def main() -> None:
     cases_path = args.cases or root / "evals/configs/olist-acceptance-60.jsonl"
     predictions_path = args.predictions or root / "evals/predictions/olist-p5-60.jsonl"
     report_path = args.report or root / "evals/reports/olist-p5-60.json"
+    if not settings.guarded_run or args.max_new_cases != 1:
+        raise SystemExit("Inference requires guarded wrapper and max-new-cases=1")
+    if args.retry_last_infrastructure_error:
+        raise SystemExit("Automatic retry is disabled; preserve the checkpoint")
+    if args.predictions is None or args.report is None:
+        raise SystemExit("Inference requires explicit new prediction/report paths")
+    if not args.resume and predictions_path.exists() and predictions_path.stat().st_size:
+        raise SystemExit("Refusing to overwrite existing predictions with --no-resume")
     acceptance = load_olist_acceptance(cases_path)
     if args.only_case_id:
         if args.predictions is None or args.report is None:
@@ -56,6 +70,19 @@ def main() -> None:
         for case in acceptance
     ]
     source_database = settings.resolved_data_dir / "processed/olist.sqlite"
+    freeze_checkpoint(
+        predictions_path,
+        runtime_identity(
+            settings,
+            args.correction,
+            cases_path,
+            databases=[source_database],
+            selection={
+                "case_ids": [case.id for case in acceptance],
+                "evaluation_id": args.evaluation_id,
+            },
+        ),
+    )
     existing = []
     if args.resume and predictions_path.is_file():
         existing = [
@@ -63,30 +90,25 @@ def main() -> None:
             for line in predictions_path.read_text(encoding="utf-8").splitlines()
             if line.strip()
         ]
-        if args.retry_last_infrastructure_error and existing:
-            last = existing[-1].result
-            retryable = last.status is DirectStatus.MODEL_ERROR and any(
-                marker in (last.safe_message or "")
-                for marker in ("ReadTimeout", "ProviderUnavailable", "request failed")
-            )
-            if retryable:
-                removed = existing.pop()
-                print(f"retrying infrastructure terminal for {removed.case_id}")
         print(f"resuming after {len(existing)}/{len(blind_cases)} persisted predictions")
+    prediction_prefix(predictions_path, [case.id for case in blind_cases])
     with tempfile.TemporaryDirectory(prefix="agentic-text2sql-p5-") as temporary:
         database = Path(temporary) / "olist.sqlite"
         shutil.copyfile(source_database, database)
-        catalog = SQLiteIntrospector().inspect(database, "olist")
-        with RuntimeBundle(settings, catalog, correction_enabled=args.correction) as runtime:
-            predictions = run_inference(
-                cases=blind_cases,
-                service=runtime,
-                database=database,
-                catalog=catalog,
-                prediction_path=predictions_path,
-                initial_predictions=existing,
-                max_new_cases=args.max_new_cases,
-            )
+        predictions = existing
+        if len(existing) < len(blind_cases):
+            catalog = SQLiteIntrospector().inspect(database, "olist")
+            with RuntimeBundle(settings, catalog, correction_enabled=args.correction) as runtime:
+                freeze_backend(predictions_path, "olist", runtime.provenance)
+                predictions = run_inference(
+                    cases=blind_cases,
+                    service=runtime,
+                    database=database,
+                    catalog=catalog,
+                    prediction_path=predictions_path,
+                    initial_predictions=existing,
+                    max_new_cases=args.max_new_cases,
+                )
         if len(predictions) != len(acceptance):
             print(
                 f"checkpointed {len(predictions)}/{len(acceptance)} predictions; "

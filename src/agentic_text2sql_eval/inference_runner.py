@@ -3,12 +3,17 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Protocol
 
 from pydantic import BaseModel, ConfigDict, Field
 
 from agentic_text2sql.contracts.catalog import CatalogSnapshot
 from agentic_text2sql.contracts.sql import DirectRunResult, DirectStatus
-from agentic_text2sql.layer6_application.query_service import DirectBaselineService
+from agentic_text2sql_eval.runtime_checkpoint import atomic_text
+
+
+class InferenceRuntime(Protocol):
+    def run(self, question: str, database: Path, catalog: CatalogSnapshot) -> DirectRunResult: ...
 
 
 class SmokeCase(BaseModel):
@@ -38,7 +43,7 @@ def load_smoke_cases(path: Path) -> list[SmokeCase]:
 def run_inference(
     *,
     cases: list[SmokeCase],
-    service: DirectBaselineService,
+    service: InferenceRuntime,
     database: Path,
     catalog: CatalogSnapshot,
     prediction_path: Path,
@@ -61,12 +66,18 @@ def run_inference(
             case_id=case.id,
             result=service.run(case.question, database, catalog),
         )
+        if prediction.result.status is DirectStatus.MODEL_ERROR and any(
+            marker in (prediction.result.safe_message or "")
+            for marker in ("ReadTimeout", "ProviderUnavailable", "request failed")
+        ):
+            raise RuntimeError(
+                f"Infrastructure stop before checkpoint at {case.id}: "
+                f"{prediction.result.safe_message}"
+            )
         predictions.append(prediction)
-        temporary = prediction_path.with_suffix(f"{prediction_path.suffix}.tmp")
-        temporary.write_text(
+        atomic_text(
+            prediction_path,
             "\n".join(item.model_dump_json() for item in predictions) + "\n",
-            encoding="utf-8",
         )
-        temporary.replace(prediction_path)
         print(f"inference {index}/{len(cases)} {case.id}: {prediction.result.status.value}")
     return predictions

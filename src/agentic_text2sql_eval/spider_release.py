@@ -9,14 +9,17 @@ import math
 import sqlite3
 import time
 from collections import Counter
+from functools import partial
 from pathlib import Path
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
-from sqlglot import exp, parse_one
+from sqlglot import parse_one
 
 from agentic_text2sql.adapters.sqlite_text import decode_sqlite_text
+from agentic_text2sql.contracts.assessment import CandidateEvaluation
 from agentic_text2sql.contracts.sql import DirectStatus
+from agentic_text2sql_eval.candidate_quality import score_saved_candidates, summarize_candidates
 from agentic_text2sql_eval.inference_runner import SmokePrediction
 from agentic_text2sql_eval.report import _percentile
 from agentic_text2sql_eval.spider_adapter import case_hash, classify_complexity
@@ -244,12 +247,30 @@ def execution_equal(candidate: list[list[Any]], gold: list[list[Any]], *, ordere
     return False
 
 
+def _score_execution_candidate(
+    evaluation: CandidateEvaluation,
+    *,
+    connection: sqlite3.Connection,
+    gold_rows: list[list[Any]],
+    ordered: bool,
+    timeout_seconds: float,
+) -> bool | None:
+    if not evaluation.validation.accepted or evaluation.candidate is None:
+        return False
+    try:
+        rows = _execute(connection, evaluation.candidate.normalized_sql, timeout_seconds)
+        return execution_equal(rows, gold_rows, ordered=ordered)
+    except sqlite3.Error:
+        return None  # Offline timeout/row cap: not a proven semantic error.
+
+
 def _has_order(sql: str) -> bool:
     try:
         statement = parse_one(sql, read="sqlite")
     except Exception:
         return False
-    return statement.find(exp.Order) is not None
+    # Only the outer order constrains the order of the final result.
+    return statement.args.get("order") is not None
 
 
 def _failure_category(status: str, error_class: str | None, executed: bool) -> str:
@@ -299,6 +320,16 @@ def evaluate_spider_release(
                     )
                 except sqlite3.Error:
                     pass
+            candidates = score_saved_candidates(
+                result,
+                partial(
+                    _score_execution_candidate,
+                    connection=connection,
+                    gold_rows=gold_rows,
+                    ordered=_has_order(case.gold_sql),
+                    timeout_seconds=timeout_seconds,
+                ),
+            )
             details.append(
                 {
                     "id": case.id,
@@ -318,6 +349,7 @@ def evaluate_spider_release(
                     ),
                     "latency_ms": result.latency_ms,
                     "correction": result.correction,
+                    "a1_candidates": candidates,
                 }
             )
     finally:
@@ -343,10 +375,9 @@ def evaluate_spider_release(
     )
     report: dict[str, Any] = {
         "evaluation_id": (
-            "spider-dev-stratified-200-p6-v1"
-            if manifest.benchmark_profile == "laptop-stratified"
-            else "spider-dev-1034-p6-v1"
+            str(provenance.get("experiment_id", "spider-p6")) + "-" + manifest.benchmark_profile
         ),
+        "evaluator_version": "spider-release-v2-outer-order",
         "benchmark_kind": f"cross-domain-execution-{manifest.benchmark_profile}",
         "release_status": "complete",
         "case_count": len(details),
@@ -355,6 +386,7 @@ def evaluate_spider_release(
         "workflow_completion_rate": 1.0,
         "result_correct_count": correct_count,
         "result_accuracy": correct_count / len(details),
+        "a1_candidate_quality": summarize_candidates(details),
         "valid_candidate_count": sum(item["generated_sql"] is not None for item in details),
         "latency_ms": {
             "p50": _percentile(latency, 0.5),

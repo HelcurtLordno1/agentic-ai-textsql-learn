@@ -1,25 +1,24 @@
 # Agentic Text-to-SQL
 
+> **V4 research snapshot — 2026-10-16:** A1 `obligation-cpu` completed Spider **142/200 (71%)** and Olist **41/60 (68.33%)** on the pinned manifests. Historical P6 scores are 130/200 and 57/60; hardware differs. P6 remains the default. See the [full Vietnamese comparison](comparison_new4_to_baseline_vn.md) and [V4 reproduction guide](docs/v4_reproduction.md). Completion does not establish an accuracy improvement on both workloads.
+
 [![CI](https://github.com/HelcurtLordno1/agentic-ai-textsql-learn/actions/workflows/ci.yml/badge.svg)](https://github.com/HelcurtLordno1/agentic-ai-textsql-learn/actions/workflows/ci.yml)
 
 A fully local, free, six-layer agentic text-to-SQL learning and portfolio project.
 The canonical specification and completion ledger is
 [`realistic_project_creation_codex.md`](realistic_project_creation_codex.md).
 
-## Verified setup and Olist data foundation
+## Setup and Olist data foundation
 
 ```bash
-uv sync --frozen --group dev
-uv run ruff check .
-uv run mypy src
-uv run pytest
+make sync
+make check-static
+# Full pytest suite, when you want to run tests:
+make check
 uv run text2sql doctor
-uv run text2sql ollama-smoke
 uv run text2sql data download olist
 uv run text2sql data build olist
 uv run text2sql data validate olist
-uv run python scripts/run_smoke.py
-uv sync --frozen --extra ui --group dev
 uv run text2sql ingest --db data/processed/olist.sqlite --db-id olist
 uv run text2sql serve
 # In a second terminal:
@@ -30,6 +29,10 @@ The ordinary CI suite uses fake transports and a deterministic synthetic databas
 require Olist, Kaggle, a GPU, or a running model. Olist integration tests run automatically when
 `data/processed/olist.sqlite` exists and otherwise skip. `ollama-smoke` is the explicit local model
 acceptance test.
+
+The [2026-10-07 corrected commands](docs/run_commands_2026_10_07.md) cover setup, static checks,
+tmux pilots, full resume, and attachment. Whole-repository checks explicitly include the `ui`
+extra because they inspect API modules; the core installation can still omit this extra.
 
 The Olist build verifies the pinned archive and all CSV hashes/headers/counts, stores money as raw
 decimal text plus integer cents, checks integrity/FKs, builds grain-safe semantic views, and only
@@ -65,17 +68,13 @@ SHA-256. Full Spider-1034 remains a tracked, runnable P6.1 profile for stronger 
 claimed as completed by the laptop report. Inference checkpoints before any gold-aware evaluation:
 
 ```bash
+# Future one-case P6 control pilot; not run during A1 construction.
 uv run python scripts/serve_ollama_guarded.py --profile acceptance-safe
-uv run python scripts/create_spider_laptop_manifest.py
-OLLAMA_BASE_URL=http://127.0.0.1:11434 TEXT2SQL_OLLAMA_NUM_GPU=6 \
-  uv run python scripts/run_benchmark.py --correction --resume --max-new-cases 1
-# Remove --max-new-cases only after the pilot is healthy.
-OLLAMA_BASE_URL=http://127.0.0.1:11434 TEXT2SQL_OLLAMA_NUM_GPU=6 \
-  uv run python scripts/run_guarded_spider.py \
-  --profile interactive-balanced --batch-size 10 --cooldown-seconds 20 \
+uv run python scripts/run_guarded_spider.py \
+  --profile acceptance-safe --batch-size 1 --cooldown-seconds 60 --max-batches 1 \
   --manifest evals/configs/spider-laptop-200.json \
-  --predictions evals/predictions/spider-p6-200-gpu6.jsonl \
-  --report evals/reports/spider-p6-200.json
+  --predictions evals/predictions/p6-safe-new-pilot.jsonl \
+  --report evals/reports/p6-safe-new-pilot.json
 ```
 
 Benchmark Lab renders Olist and Spider in separate tabs. Spider reports execution equivalence,
@@ -87,3 +86,41 @@ holdout 67%, regression 63%) and Olist-60 57/60 (95.00%; Vietnamese 96.67%, hold
 workflows completed every case. P95 latency was 85.29 s for Spider and 91.62 s for Olist, above the
 60-second interactive target; this limitation is reported rather than hidden. Full Spider-1034 is
 still optional P6.1 and has no claimed release score.
+
+## A1 experiment (full V4 run completed)
+
+`TEXT2SQL_PIPELINE_MODE=a1` selects question-first generation without an LLM planner.
+Catalog evidence includes PK/FK/uniqueness; CPU clause checks expose contradictions or UNKNOWN.
+`TEXT2SQL_CRITIC_MODE=shadow` collects a bounded local critique without changing the draft.
+`repair` additionally requires correction enabled and admits at most one candidate only when
+grounded contradictions improve and untargeted SQL structure remains unchanged.
+Recoverable syntax/column/function errors have a separate one-repair route; policy violations
+and timeouts do not. Risk routing and a fixed shadow sample are configurable; LLM findings
+stay advisory. Typed traces preserve every evaluated draft/repair and the selection reason.
+A shared three-attempt budget includes malformed JSON retries. `TEXT2SQL_GENERATION_FORMAT=sql_text`
+prepares a native SQL output route for a digest-pinned specialist; model/template pilot is pending.
+
+All model calls require a monitored wrapper, explicit offload and unload. Current suite limits
+are RAM ≥14 GiB, swap <0.25 GiB, VRAM <6 GiB, GPU <68 C and <70 W, one case per batch,
+0.5-second sampling and 60-second cooldown. Generated audits/checkpoints stay ignored.
+P6 scores above are historical; they do not measure A1 or the current safety profile.
+The completed V4 run used the explicitly authorized full-GPU 450 MHz profile with
+41 GPU layers, RAM ≥8 GiB, VRAM <14 GiB, swap <0.25 GiB, temperature <68 C,
+power <70 W, batch 1, unload and cooldown 60 seconds. The defaults above remain
+conservative for other workloads. Follow the [V4 reproduction guide](docs/v4_reproduction.md)
+for the completed source and new-run commands; older dated handoffs retain their history.
+
+The [novelty assessment](docs/research_plan/novelty_and_repairability_2026_10_03.md) narrows the
+research question to repairability-based compute allocation and constrained AST edits.
+`TEXT2SQL_COMPUTE_POLICY=obligation` enables edit contracts; optional CPU ranking repair keeps
+the rest of the SQL unchanged. Metric binding is currently lexical and deliberately narrow.
+`TEXT2SQL_REPAIRABILITY_ROUTING=false` retains risk routing with the same contracts for ablation.
+The V4 run recorded zero eligible semantic contracts, zero CPU repairs and zero critic
+calls. Spider accuracy improved relative to historical P6 while Olist regressed; the
+different compute profiles prevent attributing the observed latency change to architecture.
+
+`scripts/tmux_experiment.py` provides `run`, `pause`, `resume`, `attach`, and `status` with frozen
+plans and persistent logs. Detach keeps the guarded workload running; pause waits for a case
+checkpoint and cooldown. Completion prints `SUCCESS FINISH ALL` after report validation;
+resource latches and source/config identity checks still refuse unsafe or mixed resumes.
+See the [Administrator cap and full run/resume commands](docs/a1_run_after_coding.md#6-nvidia-administrator-giới-hạn-graphics-clock-300800-mhz).

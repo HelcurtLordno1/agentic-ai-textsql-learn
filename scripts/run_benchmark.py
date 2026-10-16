@@ -12,6 +12,13 @@ from agentic_text2sql.layer2_grounding.introspector import SQLiteIntrospector
 from agentic_text2sql.layer6_application.service_factory import RuntimeBundle
 from agentic_text2sql.settings import Settings
 from agentic_text2sql_eval.inference_runner import SmokePrediction
+from agentic_text2sql_eval.runtime_checkpoint import (
+    atomic_json,
+    atomic_text,
+    freeze_backend,
+    freeze_checkpoint,
+    runtime_identity,
+)
 from agentic_text2sql_eval.spider_release import (
     create_release_manifest,
     evaluate_spider_release,
@@ -20,19 +27,11 @@ from agentic_text2sql_eval.spider_release import (
 
 
 def checkpoint(path: Path, predictions: list[SmokePrediction]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    temporary = path.with_suffix(f"{path.suffix}.tmp")
-    temporary.write_text(
-        "\n".join(item.model_dump_json() for item in predictions) + "\n", encoding="utf-8"
-    )
-    temporary.replace(path)
+    atomic_text(path, "\n".join(item.model_dump_json() for item in predictions) + "\n")
 
 
 def checkpoint_json(path: Path, payload: dict[str, object]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    temporary = path.with_suffix(f"{path.suffix}.tmp")
-    temporary.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
-    temporary.replace(path)
+    atomic_json(path, payload)
 
 
 def git_provenance(root: Path) -> dict[str, object]:
@@ -60,6 +59,7 @@ def main() -> None:
     parser.add_argument("--resume", action=argparse.BooleanOptionalAction, default=True)
     parser.add_argument("--correction", action=argparse.BooleanOptionalAction, default=True)
     parser.add_argument("--max-new-cases", type=int)
+    parser.add_argument("--allow-dirty-source", action="store_true")
     args = parser.parse_args()
 
     settings = Settings()
@@ -87,7 +87,26 @@ def main() -> None:
         )
         return
 
+    if not settings.guarded_run or args.max_new_cases != 1:
+        raise SystemExit("Inference requires guarded wrapper and max-new-cases=1")
+    if args.predictions is None or args.report is None:
+        raise SystemExit("Inference requires explicit new prediction/report paths")
+    if not args.resume and predictions_path.exists() and predictions_path.stat().st_size:
+        raise SystemExit("Refusing to overwrite existing predictions with --no-resume")
+
     manifest, cases = load_release_cases(spider_root, manifest_path)
+    database_paths = [
+        spider_root / "database" / db_id / f"{db_id}.sqlite"
+        for db_id in sorted({case.db_id for case in cases})
+    ]
+    identity = runtime_identity(
+        settings,
+        args.correction,
+        manifest_path,
+        databases=database_paths,
+        selection={"allow_dirty_source": args.allow_dirty_source},
+    )
+    freeze_checkpoint(predictions_path, identity)
     predictions: list[SmokePrediction] = []
     if args.resume and predictions_path.is_file():
         predictions = [
@@ -99,13 +118,19 @@ def main() -> None:
     if [prediction.case_id for prediction in predictions] != expected_prefix:
         raise SystemExit("persisted Spider predictions are not a release-manifest prefix")
     revision = git_provenance(root)
-    if revision["git_commit"] == "unknown" or not revision["tracked_worktree_clean"]:
+    if revision["git_commit"] == "unknown" or (
+        not revision["tracked_worktree_clean"] and not args.allow_dirty_source
+    ):
         raise SystemExit("release inference requires a known commit and clean tracked worktree")
     run_config = {
         "model": settings.ollama_model,
         "num_gpu": settings.ollama_num_gpu,
         "seed": settings.ollama_seed,
         "correction_enabled": args.correction,
+        "pipeline_mode": settings.pipeline_mode,
+        "critic_mode": settings.critic_mode,
+        "generation_format": settings.generation_format,
+        "source_sha256": identity["source_sha256"],
     }
     if provenance_path.is_file():
         run_provenance = json.loads(provenance_path.read_text(encoding="utf-8"))
@@ -116,8 +141,8 @@ def main() -> None:
     else:
         run_provenance = {
             **revision,
-            "experiment_id": "spider-dev-qwen3-14b-hybrid-p6-v1",
-            "evaluator_version": "spider_release_v1",
+            "experiment_id": f"spider-{settings.pipeline_mode}-{settings.critic_mode}-v1",
+            "evaluator_version": "spider-release-v2-outer-order",
             "oracle_evidence_used": False,
             "run_config": run_config,
             "database_runtime": {},
@@ -141,6 +166,7 @@ def main() -> None:
         database = spider_root / "database" / db_id / f"{db_id}.sqlite"
         catalog = introspector.inspect(database, db_id)
         with RuntimeBundle(settings, catalog, correction_enabled=args.correction) as runtime:
+            freeze_backend(predictions_path, db_id, runtime.provenance)
             database_provenance[db_id] = runtime.provenance
             checkpoint_json(provenance_path, run_provenance)
             for case in remaining[cursor:end]:

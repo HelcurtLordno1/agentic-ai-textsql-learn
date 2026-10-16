@@ -1,5 +1,7 @@
 # Agentic Text-to-SQL — Master Project Plan
 
+> **Active workspace — 2026-10-01:** branch `baseline`, source `0972e47`. Các phần R1/R2/coverage bên dưới giữ lịch sử evidence trên branch riêng, không khẳng định module research có trong runtime P6 hiện tại. §26 ghi boundary chuyển nền và gate audit offline tiếp theo.
+
 > Tài liệu nguồn chính duy nhất để thiết kế, xây dựng, kiểm thử và theo dõi hoàn thành project.  
 > Loại project: cá nhân, học tập, nghiên cứu và portfolio; không liên quan đến VNPT hoặc bất kỳ công ty nào.  
 > Nguyên tắc chi phí: 100% local và miễn phí; không cần OpenAI, Claude, Gemini hoặc API trả phí.  
@@ -927,6 +929,13 @@ Core code không import OpenAI/Anthropic/Google SDK. Không có API key trong `.
 
 Không hard-code `D:\...`, `/mnt/d/...` hoặc Ollama host IP trong code. Mọi path đi qua settings (`PROJECT_ROOT`, `TEXT2SQL_DATA_DIR`, `TEXT2SQL_ARTIFACT_DIR`). Repo có thể nằm trên ổ D; nếu full benchmark/index I/O chậm trên `/mnt/d`, đặt generated data/artifacts ở WSL ext4 và giữ source trong workspace. Doctor phải in resolved paths, free disk và quyền read/write nhưng không in secrets.
 
+### 12.7 Hardware incident và reproduction runbook hiện hành
+
+Quy trình hiện hành sau R1 power breach, hard-cap/pilot rule, lệnh Olist-60 v2 và đường tái lập full
+benchmark trên server nằm tại `docs/hardware_safety_and_server_reproduction.md`. Các profile P5/P6
+100–105 W được giữ làm provenance lịch sử nhưng không còn là permission cho run mới trên laptop.
+Không thay đổi trạng thái `R1-M1`: Olist-60 v2 và PRACTIQ-100 vẫn chưa hoàn tất.
+
 ---
 
 ## 13. Technology stack theo layer
@@ -1578,6 +1587,11 @@ Gate P6 — Core Complete:
 
 Chỉ chọn từng experiment một:
 
+- R0 khóa baseline/failure intelligence trước khi promote thuật toán mới;
+- R1 question reliability theo PRACTIQ: normalize → interpretations → answerability, chỉ nhánh
+  `ANSWER` được vào SQL pipeline;
+- R2 semantic planning theo DIN-SQL: schema link có owner → complexity route → typed clause plan →
+  plan consistency gate → clause-specific correction;
 - verified example retrieval;
 - LLM reranking;
 - multi-candidate selection;
@@ -1671,27 +1685,27 @@ Mỗi bug quan trọng cần:
 | L2-M3 | Embedding Indexer | Yes | L2-M1, P0-M2 | VERIFIED | immutable FAISS bundles, digest/cache/shape/checksum/rollback; `docs/evidence/p3_1_gate.md` |
 | L2-M4 | Keyword Indexer | Yes | L2-M1 | VERIFIED | JSON artifact, identifier/Vietnamese BM25 and exact boost tests |
 | L2-M5 | Hybrid Retriever | Yes | L2-M3, L2-M4 | VERIFIED | equal-weight RRF wins qualified column recall on disjoint holdout; db isolation |
-| L2-M6 | Schema Linker | Yes | L1-M3, L2-M5 | VERIFIED | plan-aware minimal FK closure, join columns, final serialized budget |
-| L3-M1 | Prompt Builder | Yes | L1-M3, L2-M6 | VERIFIED | cross-domain prompt v4 validates column ownership/minimal shape and prevents Olist glossary leakage |
+| L2-M6 | Schema Linker | Yes | L1-M3, L2-M5 | VERIFIED | metric/dimension/intent-aware component selection; semantic singleton vs connected raw regressions; `docs/evidence/p6_3_query_recovery.md` |
+| L3-M1 | Prompt Builder | Yes | L1-M3, L2-M6 | VERIFIED | generator v6 validates owner/scope/FK and scalar-over-group result shape; `docs/evidence/p6_3_query_recovery.md` |
 | L3-M2 | Generator Agent | Yes | L3-M1, P0-M2 | VERIFIED | 20-case live typed baseline, one candidate budget; `docs/evidence/p2_gate.md` |
 | L3-M3 | Candidate Normalizer | Yes | L3-M2 | VERIFIED | fence/semicolon/multi-statement/non-query/fingerprint tests |
 | L3-M4 | Candidate Selector | No | baseline complete | NOT_STARTED | — |
-| L4-M1 | Parser + Safety Policy | Yes | P0-M3 | VERIFIED | `tests/unit/layer4/test_policy.py`, `tests/safety/test_sql_safety.py` |
-| L4-M2 | Read-only Executor | Yes | L4-M1 | VERIFIED | RO URI/query_only/authorizer, timeout/caps/checksum tests; canonical Olist queries |
+| L4-M1 | Parser + Safety Policy | Yes | P0-M3 | VERIFIED | subquery-local unqualified-column resolution plus existing AST safety; `tests/unit/layer4/test_policy.py` |
+| L4-M2 | Read-only Executor | Yes | L4-M1 | VERIFIED | RO URI/query_only/authorizer plus atomic read-only WSL-native runtime cache, timeout/caps/checksum tests |
 | L4-M3 | Execution Validator | Yes | L4-M2 | VERIFIED | typed shape/warning reports; `tests/unit/layer4/test_semantic_validation.py`; `docs/evidence/p4_gate.md` |
-| L4-M4 | Semantic Validator | Yes | L4-M3 | VERIFIED | gold-blind intent/shape/business signals; frozen P5 replay + P5.1 rerun |
+| L4-M4 | Semantic Validator | Yes | L4-M3 | VERIFIED | gold-blind intent/shape/business signals including semantic-view grain/filter validation |
 | L4-M5 | Error Normalizer | Yes | L4-M1 | VERIFIED | `tests/unit/layer4/test_error_normalizer.py` |
 | L5-M1 | Error Classifier | Yes | L4-M5 | VERIFIED | rule-first eligibility; policy/timeout no-repair tests |
 | L5-M2 | Correction Planner | Yes | L5-M1 | VERIFIED | typed plan and signal-specific deterministic guidance |
-| L5-M3 | Corrector Agent | Yes | L5-M2, P0-M2 | VERIFIED | structured full-candidate local repair; gold separation test |
+| L5-M3 | Corrector Agent | Yes | L5-M2, P0-M2 | VERIFIED | corrector v5 enforces owner/scope and scalar grouped-result repair; gold separation test |
 | L5-M4 | Feedback Loop Controller | Yes | L5-M3, L4 | VERIFIED | call/repair/deadline/fingerprint stops; full L4 revalidation |
 | L6-M1 | Query State/short memory | Yes | L1–L5 contracts | VERIFIED | typed persistent run/config state + restart recovery; P5 unit/integration tests |
 | L6-M2 | Verified Example Store | No | baseline complete | NOT_STARTED | — |
 | L6-M3 | Trace Store | Yes | L6-M1 | VERIFIED | WAL SQLite layer 0–6 trace, SSE replay, restart persistence; `docs/evidence/p5_gate.md` |
 | L6-M4 | Benchmark Harness | Yes | L4, L6-M3 | VERIFIED | filtered/resumable gold-blind inference, checkpoint then evaluator; P5/P5.1 reports |
 | L6-M5 | CLI | Yes | workflow | VERIFIED | ingest/ask/trace/serve commands + CLI integration test |
-| L6-M6 | FastAPI | Yes | L6-M5 | VERIFIED | registered-db API, one-worker queue, SSE/trace/report/feedback; API restart test |
-| L6-M7 | Streamlit UI | Yes | L6-M6 | VERIFIED | five-workspace SQL Observatory, drag/keyboard UX, AppTest/live health evidence |
+| L6-M6 | FastAPI | Yes | L6-M5 | VERIFIED | registered-db API, one-worker queue, summary projection, SSE/trace/report/feedback; API restart test |
+| L6-M7 | Streamlit UI | Yes | L6-M6 | VERIFIED | correction-on default, confidence/accuracy distinction and failed-attempt diagnostics; `docs/evidence/p6_3_query_recovery.md` |
 | L6-M8 | Documentation/portfolio | Yes | reports/demo | VERIFIED | README, architecture, runbook, demo script, sanitized UI artifact and `docs/evidence/p6_gate.md` |
 | E-M1 | Olist smoke/UAT report | Yes | D-M6, L1–L6 | VERIFIED | P6 Olist-60: 57/60 result correct, 60/60 typed terminal; `docs/evidence/p6_gate.md` |
 | E-M2 | Spider smoke-20 | Yes | L1–L6 | VERIFIED | subsumed by the completed deterministic Spider-200 run; exact-gold evaluator self-test 1,034/1,034 |
@@ -1701,7 +1715,25 @@ Mỗi bug quan trọng cần:
 | E-M5 | Retrieval ablation | Yes | L2 | VERIFIED | qualified k=5/10/20, raw/semantic, mini + disjoint holdout; `docs/evidence/p3_1_gate.md` |
 | E-M6 | Correction ablation | Yes | L5 | VERIFIED | frozen Olist 14/18 off vs 17/18 on; `docs/evidence/p4_gate.md` |
 | E-M7 | BIRD Mini-Dev | No | core complete | NOT_STARTED | — |
+| R1-M1 | PRACTIQ question reliability | No | R0 baseline lock | IN_PROGRESS | Typed/glossary-grounded gate, early-exit và clarification đã có, nhưng source-locked Olist v3 bị dừng tại 35/60 theo accuracy kill criterion: prefix 30/35 so với paired baseline 33/35 và full-suite upper bound chỉ 55/60 < champion 57/60. Current integrated variant bị reject promotion; chưa có final macro-F1 và không `VERIFIED`; `comparison_new_to_baseline.md`, `docs/evidence/r1_question_reliability.md`, `docs/evidence/r1_olist_benchmark.md`, `docs/evidence/r1_resource_guard_incident.md` |
+| R2-M1 | DIN-SQL semantic links + adaptive clause planner | No | R0 baseline lock, rejected R1 promotion | IN_PROGRESS | Revisions `f70d191` and `c40b75c` failed their 57/60 upper-bound gates. Baseline-equivalent revision B then removed the planner/retrieval confounds but stopped at 10/14 (upper bound 56/60), versus paired P6 13/14. Its sole `DIN_SQL_ENHANCE` case was correct; three new failures were preserve cases, so DIN effect is still unidentified and run variance must be measured separately. P6 remains default; DIN is research opt-in. Guarded run had no resource breach and model/server were unloaded. Not `VERIFIED`; `docs/research_plan/r2_a4500_optimization.md`, `comparison_new2_to_baseline_vn.md`, `docs/evidence/r2_din_sql_implementation.md` |
 | X-M1 | PostgreSQL adapter | No | core complete | NOT_STARTED | — |
+
+R2 revision B (2026-09-12) đã loại confound của candidate A4500: hybrid
+`BASELINE_PRESERVE` chạy planner v2, hybrid grounding, generator v4 và corrector v3 của P6; chỉ route
+complex gọi decomposed grounding/DIN. `make check` pass 240 test non-Ollama. Sau hard-cap 300--600
+MHz, pilot pass và cùng checkpoint dừng đúng accuracy gate tại 10/14, cận trên 56/60, so với P6
+13/14 trên cùng prefix. Case DIN duy nhất đúng nhưng ba paired regression đều ở preserve route;
+chưa đủ bằng chứng quy kết DIN và revision bị reject promotion. Không resource breach, Ollama đã
+unload; Spider không chạy. R2 vẫn `IN_PROGRESS`, không `VERIFIED`.
+
+R2 revision C (2026-09-13) bổ sung semantic proof question--entity--skeleton và hierarchical
+backtracking tối đa hai bước theo SQLens/DAC-style evidence. Diagnostic bốn failure cũ cứu 003/007,
+phát hiện safety `LIMIT 200` bị hiểu nhầm ở 014, và chứng minh schema expansion/retry không cứu 011
+khi baseline skeleton sai. Validation nay tách original semantic SQL khỏi normalized execution SQL;
+owner failure chỉ expand catalog nhỏ có token bound; returning-customer group-filter được chuyển
+sang DIN semantic route. Đây là development diagnostic, không phải promotion score. R2 vẫn
+`IN_PROGRESS`; cần clean Olist evaluation trước Spider.
 
 Overall project status tại thời điểm cập nhật master plan: `GATE_P6_VERIFIED`. P0
 environment, P1 data/safety, P2 direct baseline, P3.1 grounded retrieval và P4 bounded correction
@@ -1712,6 +1744,240 @@ Spider-200 đạt 130/200 (65,00%; holdout 67%, regression 63%) và Olist-60 đ�
 evidence tại `docs/evidence/p6_gate.md`. Latency p95 85,29 giây (Spider) và 91,62 giây (Olist) còn
 vượt target interactive 60 giây nên được giữ như limitation. Full Spider-1.034 vẫn là P6.1 optional
 `NOT_STARTED`, không được suy diễn từ score Spider-200.
+
+Gate R2 Paper II hiện `IN_PROGRESS`: implementation DIN-SQL đã có typed semantic ownership,
+complexity routing, clause/subquery plan, plan consistency, catalog-checked scalar EASY compiler,
+prompt theo strategy, correction theo clause và offline planning metrics. Revision A4500 chuyển
+route sang deterministic control plane, dùng một model call cho EASY/hai cho complex, grounding một
+lần và model pin hash-verified trên ext4; evaluator prefix là linear-time và interrupt dừng child
+inference. Source-locked evaluation `olist-paper2-a4500-c40b75c-v1` dừng đúng accuracy gate tại
+16/20, so với paired P6 19/20, vì cận trên chỉ còn 56/60 < champion 57/60. 19/20 case đi qua
+`BASELINE_PRESERVE`; cả ba hồi quy mới nằm ở route này, còn complex DIN case duy nhất đúng. Việc
+thay P6 planner bằng deterministic skeleton và frozen hybrid retrieval bằng BM25 làm treatment bị
+confound: candidate tích hợp bị reject, nhưng chưa đủ dữ liệu kết luận DIN-SQL nói chung. P6 vẫn là
+runtime default, DIN chỉ opt-in;
+Spider không chạy. Guard không breach, Ollama đã unload và Administrator clock cap đã reset. Module
+không `VERIFIED`. Evidence nằm tại
+`docs/research_plan/r2_a4500_optimization.md`,
+`comparison_new2_to_baseline_vn.md` và `docs/evidence/r2_din_sql_implementation.md`.
+
+Revision R2 D--G ngày 2026-09-13 bổ sung semantic proof theo population/grain/clause, scope-aware
+SQL validation, typed frequency ranking, deterministic proof compiler và hierarchical backtracking
+theo SQLens/DAC/Multi-grained/DART-SQL. Revision E dừng ở 28/31 vì cận trên chỉ còn 57/60; holdout
+46--60 chưa chạy. Revision G global proof-first bị reject sau 7/10: catalog hẹp đã route 8/10
+case và gây regression. Trạng thái rejected được lưu ở `c4851eb`; code đã phục hồi Revision E
+tại `80e94ec`, với Ruff/format/mypy pass và 260 test non-Ollama pass (1 deselect). P6 57/60 vẫn
+là champion; R2 vẫn `IN_PROGRESS`, không `VERIFIED`. Revision kế tiếp phải dùng typed role/grain
+proof, AST lineage và bounded fallback, không thêm benchmark phrase rules. Chi tiết và protocol
+khóa holdout nằm tại `codex_answer.md` và `docs/research_plan/r2_semantic_proof_backtracking.md`.
+Revision H3 sau đó đã construct bounded fallback: DIN planner failure chỉ backtrack một lần
+về P6 plan + baseline grounding/generation, với route signal có thể audit; không retry DIN,
+không best-of-N. Construction gate pass Ruff/format, mypy 111 source và 261 test non-Ollama
+(1 deselect). H1/H2 tại `d309ed4` suy ra frequency ranking từ unique entity/dimension shape,
+chứng minh `per entity` bằng source-grain identity, và cho validator tin lineage đã proven thay
+vì lexical column occurrence. Full construction gate pass 264 test non-Ollama. Guarded diagnostics
+giữ cả v1 fail 0/1; sau fix, v2 case 030, v3 case 020 và v4 case 031 đều 1/1 first-pass.
+Peak <=2.366 MiB VRAM, 58 C, 50,47 W, swap 0. Đây không phải full accuracy evidence; R2 vẫn
+`IN_PROGRESS` và holdout 46--60 vẫn khóa.
+
+Revision H3.1 ngày 2026-09-14 mở rộng cùng invariant fail-closed sang lỗi grounding của specialist
+và DIN plan bị consistency gate từ chối: cả hai đều bỏ specialist state, quay đúng một lần về P6
+plan + baseline grounding/generation, và ghi stage-specific route signal. `make check` pass Ruff,
+format, strict mypy trên 111 source files và 266 test non-Ollama (1 deselect). Đây chỉ là construction
+evidence; generation/validation fallback, shadow candidate arbitration và accuracy mới chưa được
+claim. Kế hoạch monotonic champion--challenger nằm tại
+`docs/research_plan/r2_monotonic_champion_challenger.md`; R2 tiếp tục `IN_PROGRESS`.
+
+Revision H4--H7 construction ngày 2026-09-15 bổ sung champion--challenger shadow ledger, typed
+AST-vs-binding contradictions, offline proof-class certification và one-command guarded research
+runner. Shadow luôn trả P6 incumbent; enforce chỉ promote challenger đã full-validation khi operator
+class được chứng nhận trên dev/regression với support >=5, accuracy 100%, ít nhất một improvement và
+zero regression. Runtime không import evaluator và settings chỉ nhận closed operator vocabulary,
+không nhận case ID. Runner khóa source digest, dùng duy nhất `olist-paper1-ultrasafe`, batch 1, GPU
+layer 1, sample 0,5 giây, cooldown 60 giây và accuracy target 58/60. `make check` pass Ruff/format,
+strict mypy trên 114 source files và 281 test non-Ollama (1 deselect). Không có local-model benchmark
+được chạy nên R2 vẫn `IN_PROGRESS`, chưa `VERIFIED` và chưa có accuracy/Spider claim mới. Báo cáo
+nghiên cứu tại `docs/research_plan/r2_architecture_deep_research.md`.
+
+Revision H8 construction ngày 2026-09-15 sửa intervention-isolation và vận hành dài hạn. Shadow
+không còn gọi lại P6 planner hay chạy challenger trên `BASELINE_PRESERVE`: nó admission bằng đúng
+typed adaptive policy, tái sử dụng immutable `LogicalPlan` của incumbent, rồi chỉ chạy phần DIN/proof
+intervention. Runner mới luôn chạy one-case pilot trước mỗi phase, thực hiện đủ cooldown 60 giây
+trước continuation, đọc resource-stop lock trước `make check`, và đổi child exit thành checkpoint
+diagnostic thay vì Python traceback. Tmux launcher tạo hai window độc lập cho guarded Ollama và
+guarded benchmark, persist log, cleanup server khi benchmark kết thúc. Incident
+`r2-monotonic-v1-shadow-dev-regression` dừng đúng tại checkpoint 0 vì clock 1215 MHz; peak chỉ 489
+MiB VRAM, 49 C, 21,29 W và swap 0. Lock được giữ nguyên, không retry. `make check` pass Ruff/format,
+strict mypy trên 114 source files và 287 test non-Ollama (1 deselect). Benchmark mới chưa được phép
+start cho tới khi Administrator hard lock 300--600 MHz được áp và one-case guarded pilot pass; R2
+vẫn `IN_PROGRESS`, không `VERIFIED`.
+
+Revision H9 construction ngày 2026-09-15 phân tích run
+`r2-monotonic-v2-shadow-dev-regression`: checkpoint 34/45 dừng bởi batch deadline 360 giây khi
+challenger không-certifiable của grouped three-table case kế tiếp vẫn được chạy; đây không phải
+resource breach (peak 1.826 MiB VRAM, 57 C, 67,6 W, clock hard-capped <=600 MHz, swap 0). Prefix
+incumbent đạt exact-result hash 28/34. Sáu failure là 011/020/021/025/031/032; typed challenger cũ
+đã đúng 6/6 proof samples, tạo bốn improvement và zero regression, nhưng certification cũ chia nhỏ
+operator khiến không class nào đủ support 5. H9 admission nay yêu cầu catalog-proven terminal,
+tái sử dụng P6 plan, cưỡng chế wall-clock deadline và đổi mọi optional-branch timeout/exception
+thành typed skip. Typed catalog/compiler/AST validator được mở rộng cho bounded numeric equality và
+NULL predicates; model-free replay của hai lớp chưa admission trả đúng hash 021=610 và 032=11.424.
+Certification v2 yêu cầu family support >=5, ít nhất ba proof kinds, accuracy 100%, ít nhất một
+improvement và zero regression, rồi chỉ allowlist proof kinds thực sự quan sát đúng. Replay artifact
+cũ thỏa 6 samples/4 kinds/100%/4 gains/0 regressions; đây là diagnostic, không phải score mới.
+`make check` pass Ruff/format, strict mypy 114 source files và 299 test non-Ollama (1 deselect).
+Fresh source-locked benchmark vẫn bắt buộc trước promotion; R2 tiếp tục `IN_PROGRESS`.
+
+Revision H10 construction ngày 2026-09-15 sửa proof completeness sau shadow v3. Root cause được
+quy về ba lỗi hệ thống: count language lấn át AVG/MAX, count normalization làm mất distinct
+dimension, và model corrector có thể thay đổi deterministic proof SQL mà arbitration không kiểm tra
+candidate cuối. Resolver nay ưu tiên explicit scalar operator, giữ và resolve dimension duy nhất từ
+schema owner, compose metric với derived population cùng owner, hỗ trợ typed non-NULL delivery
+predicate, và fail-closed khi comparison/null qualifier chưa được biểu diễn. Derived late-delivery
+và multi-payment chỉ dùng concept aliases trong semantic catalog, không dùng case ID/gold result.
+Proof compiler output không còn đi qua model correction; arbitration yêu cầu đúng deterministic
+producer và zero SQL-vs-binding contradiction, còn evaluator chỉ đưa proof-accepted pairs vào
+certification. Tmux launcher cleanup bằng EXIT trap, ghi terminal exit vào log, giữ cả hai window,
+và runner ghi atomic pipeline-status đồng thời source-lock toàn bộ operational scripts. Dependency
+audit pass `uv lock --check` và `uv pip check`; không nâng major dependency ngoài gate. Model-free
+replay trên toàn dev/regression đạt 23/23 admitted proofs đúng, sáu proof kinds, bảy improvement,
+zero regression và zero proof contradiction. `make check` pass Ruff/format, strict mypy 114 source
+files và 324 test non-Ollama (1 deselect). Đây vẫn là construction evidence, không phải benchmark
+score mới; R2 giữ `IN_PROGRESS` cho tới fresh guarded shadow/certification/enforce run.
+
+Revision H11 construction ngày 2026-09-17 phân tích enforce run `r2-proof-complete-v4` tại
+checkpoint 40/60: score prefix là 37/40, dev 30/30 và regression 7/10; ba failure thực là
+035/039/040. Root cause chung là proof IR chỉ hỗ trợ aggregate một owner: 035 ghép category với
+`order_item_totals` vốn không có `product_id`, còn 039/040 tạo SQL chạy được nhưng validator không
+có contract để chứng minh join theo `order_id` và comparison cột--cột. H11 thêm typed relational
+proof gồm join cardinality `ONE_TO_ONE`/`MANY_TO_ONE`, alternate metric source theo grain, typed
+dimension/fallback, column comparison và grouped aggregate ranking. Compiler v9 chỉ biên dịch
+catalog-validated joins bảo toàn left grain; AST validator kiểm đủ owner/join/comparison/group/order/
+limit trước arbitration. Không có case ID, gold result hoặc full benchmark utterance trong runtime.
+Model-free replay trên toàn dev/regression xác nhận mọi proof được admission có exact result, bao
+gồm 035/039/040, và ba incumbent SQL quan sát đều tạo contradiction typed.
+
+H11 đồng thời thêm sparse adaptive-recovery runner. Runner bind progress report với status/SQL/rows
+của prediction source, khóa SHA-256 từng dòng của 37 success, chỉ queue ba failure cộng 20 case chưa
+chạy, luôn dùng guarded one-case pilot/batch 1/unload/cooldown, rồi merge theo case ID. Nó fail-closed
+nếu success seed đổi hoặc recovery đè lên seed, và gắn `adaptive_recovery_not_blind` vào provenance
+cũng như final report. Dry-run xác nhận đúng 37 preserved + 23 inference cases. `make check` pass
+Ruff/format, strict mypy trên 114 source files và 331 test non-Ollama (1 deselect); `uv lock --check`
+và `uv pip check` pass với 83 packages compatible. Chưa chạy local-model recovery trong construction
+turn này; R2 vẫn `IN_PROGRESS`. Report merge là evidence sửa lỗi/adaptive recovery, không được gọi là
+fresh blind benchmark; claim cuối vẫn cần một run blind mới sau khi freeze revision.
+
+H12 adaptive recovery ngày 2026-09-17 hoàn tất hai lượt guarded dưới Administrator hard GPU clock
+cap 300--600 MHz. Lượt `r2-relational-recovery-v1` bảo toàn byte-for-byte 37 prediction đúng của
+`r2-proof-complete-v4`, suy luận nốt 23 case, và đạt 54/60; các relational failure 035/039/040
+đều được sửa đúng bằng certified typed proof. Phân tích sáu lỗi mới dẫn đến typed anti-join trên
+one-to-one child totals, raw-row-grain `payment_installments` AVG và payment-type frequency
+ranking. Đây là semantic catalog/contract tổng quát, không dùng benchmark ID/gold trong runtime.
+Model-free proof replay xác nhận 045/046/054/059 khớp gold result, và paraphrase tests pass.
+
+Lượt `r2-relational-recovery-v2` chỉ suy luận lại sáu failure 043/045/046/048/054/059 từ full
+source report v1, khóa SHA-256 và giữ nguyên 54 success. Final 60-case evaluator trên SQLite
+staged sang WSL-native filesystem xác nhận **58/60 = 96,67%**: dev 30/30, regression 14/15,
+holdout 14/15; English 29/30, Vietnamese 29/30. Các case 045/046/054/059 được certified
+challenger sửa đúng; 043 `EXECUTION_ERROR` và 048 `VALIDATION_FAILED` vẫn sai/fail-closed.
+One-case pilot và toàn bộ continuation dùng `olist-paper1-ultrasafe`, GPU layer 1, batch 1,
+sampling 0,5 giây, model unload, cooldown 60 giây. Peak guard quan sát qua hai phase v2: VRAM
+2.178 MiB, 56 C, 63,98 W, RAM used 1,219 GiB, swap 0; không có resource-stop lock.
+Harness stage và xác minh SHA-256 của database một lần mỗi guarded invocation, cache catalog
+snapshot cho từng child và giảm final evaluator I/O trên ổ D:. `make check` trước run pass Ruff,
+format, strict mypy 114 source files, 340 non-Ollama tests (1 deselect). Reports:
+`evals/reports/r2-relational-recovery-v1-combined-olist60.json` và
+`evals/reports/r2-relational-recovery-v2-combined-olist60.json` (local/ignored artifacts).
+
+Spider R2 construction ngày 2026-09-17 chuẩn bị phép đo chéo miền trên đúng manifest Spider-200
+stratified đã dùng cho P6 baseline 130/200. Runner mới khóa Git commit, manifest hash, active-index
+pointer hashes, evaluation ID, runtime mode và cấu hình model trong provenance; mỗi case có atomic
+checkpoint, resume chỉ nhận prefix hợp lệ, final evaluator tách khỏi inference. Tmux launcher chạy
+guarded one-case pilot trước continuation, batch 1, explicit GPU layer 1, model unload/cooldown 60
+giây, hai watchdog lấy mẫu RAM/swap/VRAM/nhiệt/power/util/clock mỗi 0,5 giây, và giữ resource-stop
+lock nếu có breach. Đây là `planning_mode=hybrid`, `candidate_mode=legacy` vì Spider không có Olist
+certified proof catalog; không được claim monotonic champion--challenger hay so latency trực tiếp với
+P6 sáu GPU layers. Score Spider R2 chỉ được ghi sau khi full 200-case report hoàn tất; gate vẫn
+`IN_PROGRESS` trong giai đoạn chạy. Construction gate: `make check` pass Ruff/format, strict mypy
+trên 114 source files và 344 test non-Ollama (1 deselect); `uv lock --check`, `uv pip check` và
+`git diff --check` pass. Đây chưa phải evidence accuracy Spider R2.
+
+Spider R2 operational incident cùng ngày: inference tới checkpoint 34/200 ở source revision
+`d926df5` thì guarded server dừng khi operator đổi OS clock cap từ 300--600 sang 900--1200 MHz;
+guard cũ bắt `GPU graphics clock 900 MHz` (trần 601). Incident record peak 2.347 MiB VRAM, 56 C,
+53,42 W, swap 0, 22,20 GiB RAM khả dụng; không phải nhiệt/power/memory breach. User yêu cầu resume
+ở cap mới. Construction revision tiếp theo chỉ nâng ceiling Spider guard lên 1201 MHz, vẫn giữ
+power stop 70 W, nhiệt 65 C, VRAM 4 GiB, RAM tối thiểu 14 GiB, batch 1/unload/cooldown 60 giây.
+Migration audit phải xác nhận toàn bộ inference/config/index/manifest bất biến, giữ incident cũ,
+ghi transition tại case 34 và chỉ sau đó chạy lại one-case guarded pilot. Score và latency chưa
+claim; vì cap thay đổi giữa run, report phải ghi hardware segments và không so latency trực tiếp.
+Construction gate của revision clock-only pass `make check`: Ruff/format, mypy 114 source files,
+347 test non-Ollama (1 deselect).
+
+Spider R2 deadline incident ngày 2026-09-17: sau các resume có operator kiểm tra, inference đạt
+checkpoint 170/200 nhưng case kế tiếp không hoàn tất trước child wall-time 360 giây; watchdog
+SIGINT trong lúc generator chờ Ollama HTTP nên log có `KeyboardInterrupt`. Stop record ghi
+`batch_deadline`, không phải resource threshold: peak 58 C, 66,34 W, 1.790 MiB VRAM, swap 0,
+RAM khả dụng thấp nhất 22,39 GiB. Không có full report hay Spider accuracy claim. Revision
+deadline-only tiếp theo mở launcher cho per-case limit 900 giây (vẫn bounded), giữ nguyên toàn bộ
+LLM/inference/prompt settings, sampling 0,5 giây, batch 1, unload/cooldown 60 giây và hardware
+breakers; migration phải chứng minh diff chỉ ở harness/docs/tests, khóa SHA 170 predictions và
+ghi transition trong provenance trước một one-case guarded pilot mới. R2 giữ `IN_PROGRESS`.
+Construction gate revision deadline-only pass `make check`: Ruff/format, mypy 114 source files,
+349 test non-Ollama (1 deselect).
+
+Spider R2 power incident ngày 2026-09-18: continuation đạt checkpoint 174/200 rồi guard dừng
+ở 87,82 W khi graphics clock 1200 MHz; nhiệt 57 C, VRAM 1.789 MiB, swap 0 và RAM khả dụng
+22,43 GiB. NVIDIA báo current power limit 85 W, cao hơn default 80 W. Đây là power breach thật,
+không được skip case hoặc auto-retry. User muốn nhanh hơn cap 65 W nên construction revision mới
+chỉ cho phép resume sau khi Administrator đặt hard power cap <=75 W (dưới default 80 W) và
+guard Spider-only stop tại 78 W; vẫn batch 1, sample 0,5 giây, cooldown 60 giây, GPU layer 1,
+temp stop 65 C/VRAM 4 GiB/RAM 14 GiB/swap 0,25 GiB. Một one-case guarded pilot là bắt buộc trước
+continuation. Guard-only migration audit source diff, manifest/index/config/prefix và SHA 174
+predictions; inference code/prompt không thay đổi. Chưa có Spider final report/accuracy claim.
+Construction gate của revision power-cap pass `make check`: Ruff/format, mypy 114 source files,
+353 test non-Ollama (1 deselect). Chưa chạy pilot ở cap 75 W vì operator chưa xác nhận giới hạn
+phần cứng qua NVIDIA Administrator.
+Operator đã xác nhận `nvidia-smi -i 0 -pl 75` **không được mobile driver hỗ trợ**;
+therefore power-cap construction path bị hủy, chưa migrate hay chạy pilot. Guard-only recovery
+revision mới giảm Spider graphics-clock ceiling 1200 -> 900 MHz và power stop 78 -> 70 W,
+không đổi inference/model/prompt/index/manifest/174 saved predictions. Chỉ sau khi Administrator
+`nvidia-smi -i 0 -lgc 300,900` thành công và operator xác nhận mới được migrate audit provenance,
+chạy one-case guarded pilot rồi mới continuation batch 1/cooldown 60 s. Clock cap không đảm bảo
+power; guard vẫn dừng ngay nếu đạt 70 W. R2 tiếp tục `IN_PROGRESS`, chưa có final report.
+Construction gate clock-cap fallback pass `make check`: Ruff/format, mypy 114 source files,
+352 test non-Ollama (1 deselect). Chưa chạy pilot do chưa có xác nhận hard clock cap 300--900 MHz.
+Spider R2 final operator run tiếp theo đã hoàn tất checkpoint 200/200, `SPIDER_BENCHMARK_EXIT=0`,
+report `evals/reports/spider-r2-hybrid-200-v1.json`: execution-correct **120/200 (60%)** so với
+P6 **130/200 (65%)** trên đúng manifest/200 ID/expected-result hashes. Paired +10 case sửa được,
+−20 case P6 đúng bị regression, net −10; holdout 61/100 vs 67/100, regression 59/100 vs 63/100.
+Model/embedding digests và catalog/index versions đều match 20/20 database; hardware offload và
+correction budgets khác nhau, nên đây không phải ablation cô lập typed challenger. R2 Spider dùng
+hybrid planning + legacy candidate, không certified proof promotion. Report/predictions/provenance
+local được giữ và `comparison_new2_to_baseline_vn.md` đã cập nhật. R2 vẫn `IN_PROGRESS`, không
+promote; P6 tiếp tục default/champion. Không suy diễn score này thành full Spider-1.034.
+Đây là **adaptive recovery**, không phải fresh blind source-locked benchmark độc lập; ngưỡng
+accuracy development đã đạt nhưng R2 vẫn `IN_PROGRESS`, không `VERIFIED`/không promote default.
+Fresh guarded blind run sau source freeze và evaluation methodology review vẫn là gate tiếp theo.
+
+Post-P6 usability hardening ngày 2026-08-16 đã sửa lỗi thực tế trong câu hỏi Olist “Top 5 danh mục
+theo doanh thu sản phẩm, tách phí vận chuyển, giải thích”. Nguyên nhân không phải từ “giải thích” mà
+do retrieval trộn raw tables với disconnected aggregate view, khiến model bịa
+`order_item_totals.product_id`. Schema linker nay chọn connected component phủ nhiều evidence nhất,
+không phụ thuộc thứ tự rank; generator v5/corrector v4 bắt buộc kiểm tra owner/FK. Runtime SQLite
+được stage atomic/read-only sang filesystem WSL và Streamlit không còn block toàn app trong polling
+loop. Evidence tái hiện, kiểm thử và giới hạn benchmark nằm tại
+`docs/evidence/p6_2_hardening.md`. Score P6 lịch sử vẫn gắn với revision cũ; chưa tuyên bố accuracy
+mới nếu chưa rerun manifest.
+
+Post-P6 query-recovery hardening ngày 2026-08-17 xử lý incident returning-customer
+`e4e905f4...`: generator dùng column ngoài subquery scope; correction sau đó trả một dòng `1` cho
+mỗi group; semantic validator lại false-positive với canonical semantic view. Schema linker nay
+đánh giá đồng thời dimension/metric/intent và mọi singleton component, policy chặn implicit outer
+column, generator v6/corrector v5 bắt buộc scalar shape, validator hiểu grain của
+`customer_order_facts`, và correction được bật mặc định cho interactive API/UI. Live run
+`170c567e...` trả scalar `2997` ngay first pass. Chi tiết tại
+`docs/evidence/p6_3_query_recovery.md`. Đây không phải accuracy benchmark mới.
 
 ---
 
@@ -1892,3 +2158,257 @@ Chỉ điền số liệu thật sau full report.
 - Safety do code + read-only database thực thi, không do prompt.
 - Score >80% là stretch goal; score thực và độ hiểu hệ thống quan trọng hơn việc làm đẹp số.
 - File này tiếp tục được cập nhật như master plan cho đến khi project đạt Core Complete.
+
+## 25. Schema Context coverage gate — 2026-09-24
+
+Trạng thái `IN_PROGRESS`, chưa `VERIFIED` và chưa đổi champion/default. Đã thêm mode
+`TEXT2SQL_SCHEMA_CONTEXT_MODE=coverage` opt-in, giữ nguyên Qwen3-14B và mode `legacy` mặc định.
+Model-free Spider mini-100 và holdout-100 cùng BM25 top-20 đạt micro table/column/FK recall
+1.0 vì toàn catalog vừa giới hạn 1.200 token/sáu bảng; đây **không phải** execution accuracy.
+`make check` pass 358 non-Ollama tests, mypy 115 source files, Ruff/format. Bằng chứng,
+phương pháp và giới hạn ở `docs/evidence/schema_context_coverage_2026_09_24.md`.
+Guarded paired Qwen3 pilot/benchmark, latency, non-regression và schema rộng vẫn còn thiếu;
+Spider guard chưa có hard clock cap Administrator 300–900 MHz được xác minh nên không chạy model.
+
+## 26. Return to P6 baseline with research evidence preserved — 2026-10-01
+
+Workspace đã chuyển sang `baseline` tại `0972e4715f2aa8a64652c3b27d10c80f178bc162`; runtime,
+scripts, tests, prompts/configs, datasets definitions và dependency/lockfile giữ đúng tree P6.
+Các Markdown, reports/plans/slides và artifacts local được bảo toàn; bản README/architecture/runbook
+trước switch được giữ riêng dưới `docs/research_history/pre_baseline_2026_10_01/`. Toàn bộ laptop
+safety policy hiện hành trong AGENTS tiếp tục áp dụng.
+
+Remote `research_3_128` được xác nhận tại `f0852ac88b2bdb3cad150e55bb85beed925946c6`;
+inference source của 128/200 là `389b8154054243ff00ac67e420f5d042b15f34fd`. Coverage inference
+đã hoàn tất 200/200 sau construction ở §25; paired so P6 +4/−6, net −2, P50/P95
+69,89/156,86 giây. §25 được giữ như bản ghi construction ngày 24/9; trạng thái thiếu pilot ở đó
+không mô tả final coverage run hoặc trạng thái máy hôm nay. Gate R2/coverage vẫn `IN_PROGRESS`,
+không promote hoặc đánh dấu `VERIFIED`.
+
+**Bước nghiên cứu hiện hành là E0 — audit offline theo `codex_answer.md`.** Chưa implement
+A1/critic/model mới, chưa tạo development branch và không có benchmark mới. Trước local-model run
+trên nền P6 phải review/port safety guard, explicit offload, budgets, checkpoint/provenance và
+cleanup; không dùng thresholds/offload lịch sử của baseline. Sau audit mới tạo nhánh phát triển
+riêng từ P6, mỗi intervention có hypothesis, negative fixtures, cost và regression criteria.
+
+Transition record, source/evidence mapping, backup/stash và verification nằm ở
+[`docs/research_plan/baseline_transition_2026_10_01.md`](docs/research_plan/baseline_transition_2026_10_01.md).
+Canonical ledger vẫn là file này; transition record là evidence, không một completion ledger khác.
+
+## 27. A1 source construction — 2026-10-03
+
+Nhánh phát triển `research_local_sql_a1_20261003` được tạo từ P6 `0972e47`.
+Assessment và implementation plan ở
+[`local_sql_a1_2026_10_03.md`](docs/research_plan/local_sql_a1_2026_10_03.md).
+Source opt-in A1 đã được viết: question-first generation, catalog evidence,
+clause checks/shadow critique, một targeted repair với structural admission,
+shared request budget, native SQL output seam, shared factory và conservative guards.
+P6 vẫn là default control. Gate giữ `IN_PROGRESS`; không promote hoặc đánh dấu `VERIFIED`.
+
+**Ràng buộc mới nhất của người dùng: chỉ viết code; không chạy test/dataset.**
+Người dùng đã hủy phần kiểm tra. Không tiếp tục `make check`, test, dataset,
+local-model pilot hoặc benchmark khi chưa được cho phép chạy lại. Source cuối
+không được tuyên bố verified. Các kiểm tra model-free trước yêu cầu dừng đã gồm
+SQLite integration; không có Ollama inference hoặc benchmark mới.
+Trạng thái và giới hạn được ghi ở
+[`a1_construction_2026_10_03.md`](docs/evidence/a1_construction_2026_10_03.md).
+
+Bàn giao source theo yêu cầu “code xong hết”: A1 trace v2, critic router/shadow sample,
+operational repair một lượt, admission semantic repair giữ order keys/untargeted AST,
+checkpoint database/index/backend/template/profile identity, resource journal/workload lease,
+UI assessment và offline reviewed-label diagnostics đã có source. Test source được viết
+nhưng không chạy bản cuối. Construction source bàn giao; gate tiếp tục `IN_PROGRESS`.
+`make check` và các evidence gates/pilot/accuracy vẫn thiếu, không mark module `VERIFIED`.
+Trình tự để người dùng chạy cuối ở [`docs/a1_run_after_coding.md`](docs/a1_run_after_coding.md).
+
+Bổ sung source cùng gate theo yêu cầu nghiên cứu novelty/tmux: independent lexical metric binding,
+obligation compute policy, scoped AST `RepairContract`, CPU ranking edit opt-in và trace v3;
+Olist draft/pool scoring, Spider evaluator v2 outer-order, runtime setup latency;
+managed tmux run/pause/resume/attach/status, frozen operator plan, suite lifecycle state,
+graceful pause/cooldown, stale process-group checks và full-report validation trước SUCCESS.
+Olist checkpoint đủ có đường report finalization không khởi tạo LLM runtime.
+Assessment novelty/prior art/claim limits ở
+[`novelty_and_repairability_2026_10_03.md`](docs/research_plan/novelty_and_repairability_2026_10_03.md).
+Đã viết thêm negative/lifecycle test source; không chạy tests, formatters, `make check`, tmux,
+dataset, model hay GPU commands. Construction bổ sung chưa verified; default/control chưa promote.
+
+**2026-10-07 — sửa lỗi static check theo log người dùng:** `rank_binding` narrow AST về
+`Select` trước khi đọc `.selects`; Make/CI sync và check toàn source chọn UI extra từ lockfile.
+Đã chạy `make sync`, `make check-static` (Ruff pass, 266 formatted files, mypy 118 files pass)
+và ba CLI `--help`; không chạy `make check`, pytest, dataset, model, benchmark hoặc tmux session.
+Chỉ xác nhận lỗi lint/type trong log đã được xử lý; gate vẫn `IN_PROGRESS`, chưa `VERIFIED`.
+Evidence: [`a1_static_fix_2026_10_07.md`](docs/evidence/a1_static_fix_2026_10_07.md).
+Commands mới: [`run_commands_2026_10_07.md`](docs/run_commands_2026_10_07.md).
+
+**2026-10-07 — người dùng cho phép chạy lại, giữ Qwen3-14B và kiểm tra hai batch trước full:**
+Yêu cầu chạy hiện hành thay thế hạn chế chỉ-code/không-test ở trên. Administrator đã báo
+clock cap 300–800 MHz. Bổ sung monitor RAM/pagefile Windows, max instantaneous/average GPU power,
+profile `clock-capped-safe` (24 GPU layers, CPU threads 8, prefill 64, context 4096,
+14 GiB/0.25 GiB/6144 MiB/65°C/65 W/800 MHz), native Windows backend được Job Object sở hữu,
+heartbeat và wrapper guard; tmux sequence Spider 200 + Olist 60 với hai pilot, pause/recovery
+và checkpoint riêng. Không tái sử dụng exception 78 W, không đổi model hoặc nới safety limits.
+Sửa path casing trên DrvFS và test evaluator v2 outer-order đã lỗi thời.
+`make check`: Ruff/format pass (272 files), mypy pass (119 files), 245 tests pass,
+1 Ollama test deselected. Native Job Object smoke dừng owned child thành công;
+owned backend/proxy startup, API ps empty và cleanup model-free pass, không còn owned native jobs.
+Hai local-model pilots/full vẫn đang chờ thực hiện tại thời điểm ghi đoạn này;
+gate giữ IN_PROGRESS, không đánh dấu module VERIFIED hoặc kết luận novelty/accuracy/latency.
+Commands: [run_both_benchmarks_2026_10_07.md](docs/run_both_benchmarks_2026_10_07.md).
+
+**Actual guarded pilot — RESOURCE_STOP (cùng ngày):** Session `a1-qwen-both-20261007`
+đã bắt đầu pilot Spider đầu tiên với24 GPU layers. Guard dừng vì VRAM6223MiB >=6144MiB;
+peakRAMmin16.545GiB, swap0, GPU53C/30.13W/795MHz. Chưa hoàn tất case: Spider0/200,
+Olist0/60; không chạy pilot thứ hai/full, không tự retry hoặc xóa latch. Native owned server,
+runners, proxy và wrapper không còn; service Windows cũ ps=[]; idleRAM21.19GiB,
+GPU711MiB/49C. Source mới giảmoffload20, giữthresholds, sửa cleanup evidence/state reporting;
+20 lớp chưa được pilot và cần phép chạy mới sau breach. Gate vẫn IN_PROGRESS.
+Evidence: [a1_guarded_pilot_2026_10_07.md](docs/evidence/a1_guarded_pilot_2026_10_07.md).
+
+Final remediation source checks: `make check` pass (Ruff/format273 files, mypy119 files,
+246 tests pass/1 Ollama deselected); cả4 PowerShell scripts parse pass. Runtime profile20 lớp
+chưa có model evidence. Đã hỏi người dùng phép chạy pilot mới sau VRAM breach; trong lúc chờ
+không chạy lại model và không thay đổi/xóa latch24 lớp. Không mark gate VERIFIED.
+
+**Consent mới — hardware16GiB VRAM / 32GiB RAM, cùng07/10:** Người dùng yêu cầu chạy hết,
+cho phép cân lại hardware và các limits; permission pending từ lần trước đã được giải quyết.
+Giữ artifact/latch24-layers cũ. Bổ sung profile riêng `qwen14b-16gb-clock-capped`:
+bounded GPUlayers41 (API show xác nhận40 blocks + output), CPU8, prefill64, ctx4096,
+RAMavailable>=8GiB, VRAM<14GiB, swap<0.25GiB, temp<68C, power<70W, clock<=800MHz;
+keepalive0, maxloaded1, batch1/unload/cooldown60 và continuous Windows+WSL monitor.
+Native guardian nhận cùng typed limits với Python; không hardcode6GiB nữa.
+Default conservative profiles không được đổi, không dùng exception78W lịch sử.
+Session mới dự kiến `a1-fullgpu-20261007`: pilot1 mỗi benchmark rồi tự full Spider→Olist,
+không max-batches, giữ checkpoint/provenance/report gates. Source checks/runtime evidence đang
+được hoàn tất; gate nghiên cứu tiếp tục IN_PROGRESS, không VERIFIED.
+Commands: [run_full_qwen14b_2026_10_07.md](docs/run_full_qwen14b_2026_10_07.md).
+
+**Full-offload pilot & hard-cap remediation:** `a1-fullgpu-20261007` đã thử model41 GPUlayers
+ở cap800MHz. RAM/VRAM vừa (min19.793GiB / max9705MiB), swap0.0205GiB, GPUtemp58C;
+instantaneous powermax81.2W vượtwatchdog70W, nên guard dừng trước prediction (0/200+0/60).
+Native cleanup_complete=true, workers/server/proxyPIDs=null; latch/evidence được giữ.
+Driver không hỗ trợ power-limit trong cả WSL/native scope. Đã thực hiện Windows Administrator
+hard clock lock300–450MHz qua helper và nhận success/audit tại08:30:31UTC.
+Profile fullGPU vẫnmodel41layers/limitsVRAM14GiB,RAM8GiB,temp68C,power70W,clock450MHz;
+case deadline180s để giảm timeout ở xung thấp, không đổi token/request counts hoặc method.
+Session mới dự kiến `a1-fullgpu450-20261007`; sourcechecks và pilot đang hoàn tất.
+Consent mới nhất yêu cầu planned fixes khifail và fullrun, không hỏi lại phép đã có.
+
+**FullGPU450 source + runtime evidence:** Final `make check` pass (Ruff/format275 files,
+mypy119, 247 tests pass/1 Ollama deselected,79.38s);5 PSscripts parse pass. Administrator
+cap300–450MHz verified bằng actual guarded pilots: Spider1case SUCCEEDED/RAMmin19.926GiB/
+VRAM9716MiB/temp58C/power59.99W/clock450MHz/63samples; Olist1case SUCCEEDED/
+RAMmin19.734GiB/VRAM9716MiB/temp57C/power60.59W/clock450MHz/62samples.
+Cả hai cleanup/cooldown60s sạch, resource_stop=false, root PILOT VERIFIED và tự RUNNING.
+Đã quan sát Spider checkpoint2/200 (case2 SUCCEEDED), Olist1/60; prefix resume qua batch
+boundary không lỗi. Session `a1-fullgpu450-20261007` tiếp tục full Spider→Olist không max-batches.
+Chưa hoàn tất260cases, không tuyên bố accuracy/novelty hoặc gate VERIFIED.
+Evidence: [a1_fullgpu450_2026_10_07.md](docs/evidence/a1_fullgpu450_2026_10_07.md).
+
+**Monitor/cleanup remediation cùng ngày:** Session `a1-fullgpu450-20261007` sau đó dừng
+ở Spider18/200, Olist1/60: Python chỉ lưu `monitor failure: ValueError`; KeyboardInterrupt
+ở import là SIGINT của guard, không chứng minh lỗi module correction. Native guardian
+sau đó hết hạn heartbeat khi root chờ worker cleanup/cooldown mà không touch heartbeat.
+Native peak RAMmin19.7406GiB, pagefile0.035156GiB, VRAM9725MiB,temp59C,power65.19W,
+clock450MHz; không ghi nhận hardware breach. Không thể truy hồi sensor failure chi tiết
+từ exception type đã bị cắt trong log cũ.
+
+Đã thay pagefile CIM mỗi vòng bằng native EnumPageFilesW, giữ freshness1s/sampling0.5s,
+lưu exception message/bounded stderr/EOF và duy trì heartbeat0.2s trong cleanup wait
+có deadline200s. `make check` pass: Ruff/format278files, mypy119sourcefiles,
+255tests passed/1Ollama deselected;5PowerShell scripts parse pass. Idle telemetry180s/
+360samples an toàn. Baseline source hash được xác nhận khớp hai frozen checkpoints
+trước edit. Sequence mới `a1-monitorfix450-20261007` giữ byte-identical prefixes18/1,
+audit chỉ6file monitor/guard/cleanup đổi; profile/settings/model/backend/manifest/DB/index
+không đổi. Run/latches cũ nguyên vẹn; pilot mới mỗi benchmark phải sạch trước full resume.
+Plan: [monitor_recovery_plan_2026_10_07.md](docs/monitor_recovery_plan_2026_10_07.md).
+Gate nghiên cứu vẫn IN_PROGRESS; chưa claim hoàn tất260case hoặc accuracy mới.
+
+Hai recovery pilots mới SUCCEEDED: Spider case19/200 (RAMmin19.9638GiB,VRAM9834MiB,
+58C,power61.09W,clock450MHz,64samples), Olist case2/60 (RAMmin19.8406GiB,VRAM9834MiB,
+58C,power62.90W,clock450MHz,65samples); reason/cleanup_error=null,resource_stop=false,
+unload/cooldown60s sạch và native shutdown kiểm tra xong. Đã resume full sequence mới
+không tổng max-batches; trạng thái RUNNING, Spider còn lại rồi Olist còn lại.
+Evidence: [a1_monitor_recovery_2026_10_07.md](docs/evidence/a1_monitor_recovery_2026_10_07.md).
+
+Batch đầu sau resume phát hiện thêm false backend fingerprint stop: `/api/show.parameters`
+trả cùng key/values nhưng rawlineorder đổi. Đã tái tạo đúng hash cũ bằng permutation6lines,
+giữ template/model/options. Metadata digest nay canonical key/value, giữ actual values,
+scalarduplicateorder/stopcount; actual changes vẫn chặn. Có explicit metadata migration
+audit và originals19/2, không sửa evidence/latch run gốc. Preflight startup/catalog/index/
+sharedbackend cả20SpiderDB+Olist pass với0inference requests. Final `make check` pass:
+257tests/1Ollama deselected, Ruff/format279files, mypy119sourcefiles.
+Pilot flags reset để kiểm tra normalization trên guarded cases trước full resume.
+
+Post-normalization pilots20/200Spider và3/60Olist đều SUCCEEDED,clock450MHz,peakpower
+60.37W/58.83W,temp58C/57C,VRAM9834MiB,RAMmin19.8119/19.7965GiB,63samples mỗi pilot.
+Hairesource_stop=false,reason/cleanup_error=null;unload/cooldown60s và ownedservercleanup
+sạch,rootPILOT VERIFIED cả2. Đã resume full không tổngmax-batches sau PAUSED20/200+3/60.
+Source/pipeline/model/profile freeze vẫn hoạt động; research gate giữ IN_PROGRESS.
+
+Đã quan sát thêm batch sau restart SUCCEEDED,Spider21/200+Olist3/60; monitor/cleanup
+sạch,pane alive,root RUNNING trong tmux để tiếp tục Spider→Olist tự động.
+Chưa có đủ260predictions/finalreports; không claim full completion hoặc accuracy.
+
+**Monitor initialization recovery at173/200 — 2026-10-07:**
+`a1-monitorfix450-20261007` progressed toSpider173/200,Olist3/60 before a Windows host
+monitor startup timeout. Samples=0,peak=null,cleanup_error=null; case174 never spawned.
+Native server cleaned up, no native resource latch, all owned PIDs null; stale jobs absent.
+No hardware threshold breach recorded. Exact slow initialization stage is unavailable in
+the old timeout log. User explicitly requested continuation of the remaining workload.
+
+Onlymonitorbootstrap files changed: `windows_memory.ps1` now caches the native helper by
+C#sourcehash and validates a source/DLLchecksum manifest before loading; Python readiness
+wait is bounded15s with initialization stderr diagnostics. No workload starts before a fresh
+sample; runningfreshness1s/sampling0.5s,450MHzprofile,allhardwarelimits,batch1/unload/
+cooldown60s unchanged. `make check` pass:260tests/1Ollama deselected,Ruff/format279files,
+mypy119sourcefiles;5PowerShellscripts parse.12live cached starts0.4056–0.4279s plus
+60s/132samples idle telemetry safe. Frozen source before edit matches both runtime checkpoints.
+
+Newcontinuation `a1-startupfix450-20261007` preserves byte-identical prefixes173/3 and
+backend snapshots; runtimeidentity onlysource_sha256 changed, audited2sourcefiles.
+Originalrun/latch/logs/predictions untouched. Oneguardedpilot perbenchmark precedes full
+resume, with no totalmax-batches after successful pilots. Researchgate remainsIN_PROGRESS.
+Evidence: [a1_monitor_startup_recovery_2026_10_07.md](docs/evidence/a1_monitor_startup_recovery_2026_10_07.md).
+
+StartuprecoverypilotsSUCCEEDED:Spider174/200,RAMmin18.7626GiB/VRAM9875MiB/58C/
+60.52W/450MHz/63samples;Olist4/60,RAMmin18.6355GiB/VRAM9877MiB/58C/60.51W/450MHz/
+67samples. Bothresource_stop=false,reason/cleanup_error=null,unload/cooldown60s complete,
+rootpilotverified and nativecleanupPIDsnull. Original173/3prefixes and oldlatch intact.
+Fullsequence resumed withouttotalmax-batches tofinishSpider thenOlist; finalreports stillpending.
+
+Firstbatch after resumedserverrestart SUCCEEDED:Spider175/200+Olist4/60,
+69samples/60.51W/58C/9892MiB/450MHz,reason/cleanup_error=null,resource_stop=false.
+RootRUNNING,panealive,60scooldown before nextcase;25Spider+56Olist remain at handoff.
+No fullcompletion or newaccuracy claim yet; gateIN_PROGRESS.
+
+**Full workload completion and current-code comparison — 2026-10-08:**
+`a1-startupfix450-20261007` has completed Spider **200/200** and Olist **60/60**.
+Final reports, prediction IDs/order, frozen runtime identities and expected-result hashes
+were checked offline. Root and both suite states are COMPLETE; cleanup_pending=false,
+owned worker/server/proxy PIDs null. Logs confirm full completion and clean native shutdown.
+Original stop evidence and byte-identical migrated prefixes remain preserved.
+
+Measured result correctness: Spider **142/200 (71.00%)**, versus historical P6 130/200,
+paired gains/losses **19/7**; Olist **41/60 (68.33%)**, versus P6 57/60, paired **2/18**.
+Common-evaluator rescoring of saved SQL/previews leaves all P6/A1/R2-coverage labels
+unchanged. A1 recorded zero critic calls, eligible semantic contracts and CPU repairs;
+four operational model repair attempts produced one admitted Spider gain.
+The historical comparisons use different hardware profiles and do not establish
+mechanism-specific accuracy or latency gains. P6 remains the default/champion and
+the A1 research gate remains **IN_PROGRESS** because of application regression,
+incumbent losses and missing matched controls/fresh-schema evidence.
+
+Across the 260 successful guarded batch journals: 16,079 Python samples,
+RAM minimum 17.9595 GiB, swap maximum 0.03954 GiB, VRAM maximum 9,971 MiB,
+temperature maximum 60 C, power maximum 64.71 W and clock maximum 450 MHz.
+Native server journals additionally record maxima 61 C and 65.19 W.
+Batch=1, unload and cooldown=60 seconds were retained. No model inference was run
+to prepare this report; offline diagnostics and read-only rescoring were used.
+
+`make check` on 2026-10-08 passed: Ruff/format 281 files, mypy 119 source files,
+260 tests passed / 1 Ollama deselected (80.11 s). Current source digest matches both
+final runtime identities: `b9f38c2260dece07a0b9f476ac284689a0b3e2e50a35aa65b367d2c785683193`.
+Full Vietnamese report, following the new3 sections 0–9:
+[comparison_new4_to_baseline_vn.md](comparison_new4_to_baseline_vn.md).
+Reproduction script and analysis remain ignored local artifacts under
+`data/artifacts/comparison-new4-20261008/`; generated predictions/data were not committed.

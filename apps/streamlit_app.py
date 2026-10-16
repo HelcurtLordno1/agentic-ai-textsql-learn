@@ -113,6 +113,8 @@ def render_result(run: dict[str, Any]) -> None:
     result = run.get("result") or {}
     status = str(result.get("status", run["status"]))
     corrected = bool((result.get("correction") or {}).get("recovered"))
+    assessment = result.get("assessment") or {}
+    corrected = corrected or bool(assessment.get("repair_admitted"))
     rows = result.get("result_rows", [])
     columns = result.get("result_columns", [])
     latency = float((result.get("latency_ms") or {}).get("total", 0)) / 1000
@@ -128,10 +130,17 @@ def render_result(run: dict[str, Any]) -> None:
     with c3:
         metric("Rows", str(len(rows)))
     with c4:
-        calls = int((result.get("correction") or {}).get("llm_calls", 0))
-        metric("Repair calls", str(calls))
+        if assessment:
+            metric("Model requests", str(assessment.get("actual_generation_requests", 0)))
+        else:
+            calls = int((result.get("correction") or {}).get("llm_calls", 0))
+            metric("Repair calls", str(calls))
 
     if status == "SUCCEEDED":
+        if assessment:
+            st.info("SQL executed. Check the result against your question; meaning is unverified.")
+            if assessment.get("result_truncated"):
+                st.caption("Showing a bounded preview. The CSV contains only these preview rows.")
         table, chart, sql, trust = st.tabs(["Result", "Visualization", "SQL", "Trust & evidence"])
         frame = pd.DataFrame(rows, columns=columns)
         with table:
@@ -165,8 +174,12 @@ def render_result(run: dict[str, Any]) -> None:
                 "Read-only policy verified · Copy is allowed · Browser execution is disabled"
             )
         with trust:
-            st.subheader("Logical plan")
-            st.json(result.get("plan") or {})
+            if assessment:
+                st.subheader("Clause checks and evidence")
+                st.json(assessment)
+            else:
+                st.subheader("Logical plan")
+                st.json(result.get("plan") or {})
             st.subheader("Schema evidence")
             schema = result.get("schema_context") or {}
             st.code(schema.get("rendered_context", "Full catalog mode"), language="text")

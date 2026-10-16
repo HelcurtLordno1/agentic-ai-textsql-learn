@@ -25,6 +25,11 @@ from agentic_text2sql_eval.schema_metrics import extract_gold_schema, score_retr
 from agentic_text2sql_eval.spider_adapter import create_manifest
 
 
+@pytest.fixture(autouse=True)
+def mocked_embedding_guard(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("TEXT2SQL_GUARDED_RUN", "true")
+
+
 def fake_vector(text: str) -> list[float]:
     digest = hashlib.sha256(text.encode()).digest()
     return [float(value) for value in digest[:16]]

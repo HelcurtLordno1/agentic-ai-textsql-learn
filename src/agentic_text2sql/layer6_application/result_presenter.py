@@ -20,6 +20,8 @@ class Presentation(BaseModel):
 def present_result(result: DirectRunResult) -> Presentation:
     if result.status is DirectStatus.SUCCEEDED:
         corrected = bool(result.correction and result.correction.get("recovered"))
+        if result.assessment is not None:
+            corrected = bool(result.assessment.get("repair_admitted"))
         row_count = len(result.result_rows)
         column_count = len(result.result_columns)
         visualization: Literal["kpi", "bar", "line", "table", "none"] = "table"
@@ -29,7 +31,13 @@ def present_result(result: DirectRunResult) -> Presentation:
             first = result.result_rows[0] if result.result_rows else []
             visualization = "line" if first and _looks_temporal(first[0]) else "bar"
         return Presentation(
-            headline=("Corrected safely" if corrected else "Query completed"),
+            headline=(
+                "Query executed; meaning unverified"
+                if result.assessment is not None
+                else "Corrected safely"
+                if corrected
+                else "Query completed"
+            ),
             tone="corrected" if corrected else "success",
             visualization=visualization,
             rows=result.result_rows,

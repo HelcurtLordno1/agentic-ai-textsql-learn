@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 from dataclasses import dataclass
 from typing import Any, TypeVar
@@ -9,10 +10,34 @@ from typing import Any, TypeVar
 import httpx
 from pydantic import BaseModel, ValidationError
 
-from agentic_text2sql.exceptions import ProviderUnavailableError, StructuredOutputError
+from agentic_text2sql.exceptions import (
+    ConfigurationError,
+    ProviderUnavailableError,
+    StructuredOutputError,
+)
 from agentic_text2sql.settings import Settings
+from agentic_text2sql.workflow.budgets import ACTIVE_REQUEST
 
 StructuredModel = TypeVar("StructuredModel", bound=BaseModel)
+
+
+def canonical_model_parameters(parameters: str) -> str:
+    """Pin parameter values independently of /api/show's map rendering order.
+
+    Preserve the order of repeated scalar values; stop strings form a set of
+    terminators. This only normalizes provenance, never inference options.
+    """
+    grouped: dict[str, list[str]] = {}
+    for line in parameters.splitlines():
+        if not line.strip():
+            continue
+        parts = line.strip().split(maxsplit=1)
+        if len(parts) != 2:
+            raise ProviderUnavailableError("Installed model has malformed parameter metadata")
+        grouped.setdefault(parts[0], []).append(parts[1])
+    if "stop" in grouped:
+        grouped["stop"].sort()
+    return json.dumps(grouped, sort_keys=True, separators=(",", ":"))
 
 
 @dataclass
@@ -79,6 +104,8 @@ def _ollama_compatible_schema(schema: dict[str, Any]) -> dict[str, Any]:
 class OllamaProvider:
     """Use Ollama's local chat API without any paid-provider dependency."""
 
+    uses_request_budget = True
+
     def __init__(
         self,
         settings: Settings | None = None,
@@ -94,6 +121,28 @@ class OllamaProvider:
         )
         self.malformed_retries = malformed_retries
         self.telemetry = OllamaTelemetry()
+
+    def _generation_options(self) -> tuple[dict[str, int | float], float]:
+        if self.settings.ollama_num_gpu is None:
+            raise ConfigurationError("Set explicit TEXT2SQL_OLLAMA_NUM_GPU before generation")
+        if not self.settings.guarded_run:
+            raise ConfigurationError("Local generation requires a continuously monitored wrapper")
+        scope = ACTIVE_REQUEST.get()
+        if scope is not None:
+            scope.budget.consume(scope.stage)
+        output_tokens = scope.output_tokens if scope else self.settings.output_token_budget
+        return {
+            "temperature": 0,
+            "num_ctx": 4096,
+            "num_predict": output_tokens,
+            "num_gpu": self.settings.ollama_num_gpu,
+            "num_thread": self.settings.ollama_num_thread,
+            "num_batch": self.settings.ollama_num_batch,
+            "seed": self.settings.ollama_seed,
+        }, min(
+            self.settings.request_timeout_seconds,
+            scope.budget.remaining_seconds if scope else self.settings.request_timeout_seconds,
+        )
 
     def close(self) -> None:
         if self._owns_client:
@@ -119,6 +168,22 @@ class OllamaProvider:
             raise ProviderUnavailableError("Ollama returned an invalid version response")
         return version
 
+    def model_metadata(self, model: str) -> dict[str, str]:
+        """Read installed template identity without loading or generating with the model."""
+        payload = self._request_json("POST", "/api/show", json={"model": model})
+        template = payload.get("template")
+        if not isinstance(template, str) or not template.strip():
+            raise ProviderUnavailableError("Installed model has no usable chat template")
+        parameters = payload.get("parameters", "")
+        if not isinstance(parameters, str):
+            raise ProviderUnavailableError("Installed model has invalid parameter metadata")
+        return {
+            "template_sha256": hashlib.sha256(template.encode()).hexdigest(),
+            "parameters_sha256": hashlib.sha256(
+                canonical_model_parameters(parameters).encode()
+            ).hexdigest(),
+        }
+
     def generate_structured(
         self,
         *,
@@ -140,27 +205,25 @@ class OllamaProvider:
                         ),
                     }
                 )
-            options = {
-                "temperature": 0,
-                "num_ctx": 4096,
-                "seed": self.settings.ollama_seed,
-            }
-            if self.settings.ollama_num_gpu is not None:
-                options["num_gpu"] = self.settings.ollama_num_gpu
+            options, timeout = self._generation_options()
             payload = self._request_json(
                 "POST",
                 "/api/chat",
+                timeout=timeout,
                 json={
                     "model": chosen_model,
                     "messages": messages,
                     "stream": False,
                     "think": False,
+                    "keep_alive": 0,
                     "format": _ollama_compatible_schema(response_model.model_json_schema()),
                     "options": options,
                 },
             )
             self.telemetry.observe(payload)
             try:
+                if payload.get("done_reason") == "length":
+                    raise ValueError("Structured response reached its output cap")
                 content = payload["message"]["content"]
                 if not isinstance(content, str):
                     raise TypeError("message content is not a string")
@@ -171,6 +234,30 @@ class OllamaProvider:
             "Ollama failed the structured-output contract after "
             f"{self.malformed_retries + 1} attempt(s)"
         ) from validation_error
+
+    def generate_sql_text(self, *, prompt: str, model: str | None = None) -> str:
+        """Use the installed model chat template without forcing JSON or disabling reasoning."""
+        options, timeout = self._generation_options()
+        payload = self._request_json(
+            "POST",
+            "/api/chat",
+            timeout=timeout,
+            json={
+                "model": model or self.settings.ollama_model,
+                "messages": [{"role": "user", "content": prompt}],
+                "stream": False,
+                "keep_alive": 0,
+                "options": options,
+            },
+        )
+        self.telemetry.observe(payload)
+        message = payload.get("message")
+        content = message.get("content") if isinstance(message, dict) else None
+        if not isinstance(content, str):
+            raise StructuredOutputError("Ollama SQL text response is missing content")
+        if payload.get("done_reason") == "length":
+            raise StructuredOutputError("SQL text generation reached its output cap")
+        return content
 
     def _request_json(self, method: str, path: str, **kwargs: Any) -> dict[str, Any]:
         try:

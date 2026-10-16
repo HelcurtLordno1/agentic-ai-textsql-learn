@@ -1,4 +1,4 @@
-"""Persistent Layer 6 orchestration around the verified runtime."""
+"""Persistent Layer 6 orchestration around the selected local runtime."""
 
 from __future__ import annotations
 
@@ -54,6 +54,8 @@ class ApplicationQueryService:
             normalized,
             {
                 "generation_model": self.settings.ollama_model,
+                "pipeline_mode": self.settings.pipeline_mode,
+                "critic_mode": self.settings.critic_mode,
                 "ollama_num_gpu": self.settings.ollama_num_gpu,
                 "embedding_model": "bge-m3:latest",
                 "correction_enabled": correction_enabled,
@@ -107,14 +109,22 @@ class ApplicationQueryService:
             ("1", "PLANNED", ("route", "planning")),
             ("2", "GROUNDED", ("grounding",)),
             ("3", "GENERATED", ("generation",)),
-            ("4", "VALIDATED", ("policy", "execution", "validation")),
+            ("4", "VALIDATED", ("policy", "execution", "validation", "critic")),
             ("5", "CORRECTED", ("correction",)),
         )
         for layer, event, keys in mappings:
             elapsed = sum(result.latency_ms.get(key, 0.0) for key in keys)
             details = {"status": result.status.value}
+            if result.assessment is not None:
+                if layer == "1":
+                    event = "ROUTED"
+                if layer == "4":
+                    details["semantic_status"] = str(result.assessment.get("semantic_status"))
             if layer == "5":
-                details["state"] = "USED" if result.correction else "SKIPPED"
+                used = result.correction or (
+                    result.assessment and result.assessment.get("repair_attempted")
+                )
+                details["state"] = "USED" if used else "SKIPPED"
             elif elapsed == 0:
                 details["state"] = "SKIPPED"
             else:

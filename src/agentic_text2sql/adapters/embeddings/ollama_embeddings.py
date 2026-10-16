@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from collections.abc import Sequence
 from typing import Any
 
@@ -32,6 +33,8 @@ class OllamaEmbeddingClient:
         )
 
     def embed(self, texts: Sequence[str], batch_size: int = 32) -> list[list[float]]:
+        if os.environ.get("TEXT2SQL_GUARDED_RUN", "").lower() not in {"1", "true"}:
+            raise ValueError("Local embedding requires a continuously monitored wrapper")
         if not 1 <= batch_size <= 128:
             raise ValueError("batch_size must be between 1 and 128")
         vectors: list[list[float]] = []
@@ -42,6 +45,7 @@ class OllamaEmbeddingClient:
                     "model": self.model,
                     "input": list(texts[offset : offset + batch_size]),
                     "options": {"num_gpu": self.num_gpu},
+                    "keep_alive": 0,
                 },
             )
             response.raise_for_status()

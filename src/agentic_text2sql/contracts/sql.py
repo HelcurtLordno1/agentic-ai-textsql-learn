@@ -55,3 +55,4 @@ class DirectRunResult(BaseModel):
     safe_message: str | None = None
     latency_ms: dict[str, float] = Field(default_factory=dict)
     correction: dict[str, Any] | None = None
+    assessment: dict[str, Any] | None = None

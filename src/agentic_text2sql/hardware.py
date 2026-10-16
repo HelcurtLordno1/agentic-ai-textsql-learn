@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 import subprocess
 from dataclasses import dataclass
 from enum import StrEnum
@@ -16,15 +17,18 @@ class ProfileName(StrEnum):
     INTERACTIVE = "interactive-balanced"
     ACCEPTANCE = "acceptance-safe"
     CPU_FALLBACK = "cpu-fallback"
+    CLOCK_CAPPED = "clock-capped-safe"
+    QWEN_FULL_GPU = "qwen14b-16gb-clock-capped"
 
 
 class ResourceLimits(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
-    minimum_available_ram_gib: float = Field(default=10, gt=0)
-    maximum_swap_used_gib: float = Field(default=1, gt=0)
-    maximum_gpu_memory_mib: int = Field(default=11776, gt=0)
-    maximum_gpu_temperature_c: int = Field(default=76, gt=0)
-    maximum_gpu_power_w: float = Field(default=105, gt=0)
+    minimum_available_ram_gib: float = Field(default=14, gt=0)
+    maximum_swap_used_gib: float = Field(default=0.25, gt=0)
+    maximum_gpu_memory_mib: int = Field(default=6144, gt=0)
+    maximum_gpu_temperature_c: int = Field(default=68, gt=0)
+    maximum_gpu_power_w: float = Field(default=70, gt=0)
+    maximum_gpu_clock_mhz: int | None = Field(default=None, gt=0)
 
 
 class HardwareProfile(BaseModel):
@@ -34,11 +38,12 @@ class HardwareProfile(BaseModel):
     ollama_num_gpu: int = Field(ge=0)
     cpu_cores: int = Field(ge=1)
     context_length: int = Field(default=4096, ge=1024)
-    max_loaded_models: int = Field(ge=1, le=2)
+    run_deadline_seconds: int = Field(default=120, ge=30, le=180)
+    max_loaded_models: int = Field(ge=1, le=1)
     keep_alive: str
     flash_attention: bool
     kv_cache_type: str
-    batch_size: int = Field(ge=1, le=3)
+    batch_size: int = Field(ge=1, le=1)
     cooldown_seconds: int = Field(ge=0)
     limits: ResourceLimits = ResourceLimits()
 
@@ -52,36 +57,75 @@ class HardwareProfile(BaseModel):
             "OLLAMA_FLASH_ATTENTION": "1" if self.flash_attention else "0",
             "OLLAMA_KV_CACHE_TYPE": self.kv_cache_type,
             "TEXT2SQL_OLLAMA_NUM_GPU": str(self.ollama_num_gpu),
-            "TEXT2SQL_RUN_DEADLINE_SECONDS": "120",
+            "TEXT2SQL_RUN_DEADLINE_SECONDS": str(self.run_deadline_seconds),
+            "TEXT2SQL_OLLAMA_NUM_THREAD": str(self.cpu_cores),
+            "TEXT2SQL_OLLAMA_NUM_BATCH": "64",
         }
 
 
 PROFILES = {
-    ProfileName.INTERACTIVE: HardwareProfile(
-        name=ProfileName.INTERACTIVE,
-        description=(
-            "Keep Qwen and BGE resident to avoid model thrash while bounding compute offload."
-        ),
-        ollama_num_gpu=6,
-        cpu_cores=12,
-        max_loaded_models=2,
-        keep_alive="5m",
+    ProfileName.QWEN_FULL_GPU: HardwareProfile(
+        name=ProfileName.QWEN_FULL_GPU,
+        description="User-authorized 16 GiB GPU / 32 GiB host, full offload and 450 MHz cap.",
+        ollama_num_gpu=41,  # Installed Qwen3-14B has 40 transformer blocks + output.
+        cpu_cores=8,
+        run_deadline_seconds=180,
+        max_loaded_models=1,
+        keep_alive="0",
         flash_attention=True,
         kv_cache_type="q8_0",
         batch_size=1,
-        cooldown_seconds=0,
+        cooldown_seconds=60,
+        limits=ResourceLimits(
+            minimum_available_ram_gib=8,
+            maximum_gpu_memory_mib=14336,
+            maximum_gpu_temperature_c=68,
+            maximum_gpu_power_w=70,
+            maximum_gpu_clock_mhz=450,
+        ),
     ),
-    ProfileName.ACCEPTANCE: HardwareProfile(
-        name=ProfileName.ACCEPTANCE,
-        description="One checkpointed case, explicit unload, and cooldown for long benchmarks.",
-        ollama_num_gpu=6,
+    ProfileName.CLOCK_CAPPED: HardwareProfile(
+        name=ProfileName.CLOCK_CAPPED,
+        description="800 MHz cap verification, host RAM monitoring, and conservative pilot/run.",
+        ollama_num_gpu=20,
+        cpu_cores=8,
+        max_loaded_models=1,
+        keep_alive="0",
+        flash_attention=True,
+        kv_cache_type="q8_0",
+        batch_size=1,
+        cooldown_seconds=60,
+        limits=ResourceLimits(
+            maximum_gpu_temperature_c=65,
+            maximum_gpu_power_w=65,
+            maximum_gpu_clock_mhz=800,
+        ),
+    ),
+    ProfileName.INTERACTIVE: HardwareProfile(
+        name=ProfileName.INTERACTIVE,
+        description=(
+            "Sequential local requests with conservative offload and explicit model unload."
+        ),
+        ollama_num_gpu=1,
         cpu_cores=12,
         max_loaded_models=1,
         keep_alive="0",
         flash_attention=True,
         kv_cache_type="q8_0",
         batch_size=1,
-        cooldown_seconds=20,
+        cooldown_seconds=60,
+    ),
+    ProfileName.ACCEPTANCE: HardwareProfile(
+        name=ProfileName.ACCEPTANCE,
+        description="One checkpointed case, explicit unload, and cooldown for long benchmarks.",
+        ollama_num_gpu=1,
+        cpu_cores=12,
+        max_loaded_models=1,
+        keep_alive="0",
+        flash_attention=True,
+        kv_cache_type="q8_0",
+        batch_size=1,
+        cooldown_seconds=60,
     ),
     ProfileName.CPU_FALLBACK: HardwareProfile(
         name=ProfileName.CPU_FALLBACK,
@@ -93,7 +137,7 @@ PROFILES = {
         flash_attention=False,
         kv_cache_type="f16",
         batch_size=1,
-        cooldown_seconds=30,
+        cooldown_seconds=60,
     ),
 }
 
@@ -106,6 +150,9 @@ class ResourceSample:
     gpu_temperature_c: int
     gpu_power_w: float
     gpu_utilization_pct: int
+    gpu_clock_mhz: int | None = None
+    windows_available_ram_gib: float | None = None
+    windows_swap_used_gib: float | None = None
 
 
 def sample_resources() -> ResourceSample:
@@ -116,24 +163,52 @@ def sample_resources() -> ResourceSample:
     output = subprocess.check_output(
         [
             "nvidia-smi",
-            "--query-gpu=memory.used,temperature.gpu,power.draw,utilization.gpu",
+            "--query-gpu=memory.used,temperature.gpu,power.draw.average,power.draw.instant,"
+            "utilization.gpu,clocks.current.graphics",
             "--format=csv,noheader,nounits",
         ],
         text=True,
-        timeout=5,
+        timeout=0.5,
     ).strip()
-    memory, temperature, power, utilization = [item.strip() for item in output.split(",")]
+    memory, temperature, average, instant, utilization, clock = [
+        item.strip() for item in output.split(",")
+    ]
+    powers = (float(average), float(instant))
+    if not all(math.isfinite(value) and value >= 0 for value in powers):
+        raise ValueError("Invalid average/instant GPU power sensor")
     return ResourceSample(
         available_ram_gib=values["MemAvailable"] / GIB,
         swap_used_gib=(values["SwapTotal"] - values["SwapFree"]) / GIB,
         gpu_memory_mib=int(memory),
         gpu_temperature_c=int(temperature),
-        gpu_power_w=float(power),
+        gpu_power_w=max(powers),
         gpu_utilization_pct=int(utilization),
+        gpu_clock_mhz=int(clock),
     )
 
 
 def unsafe_reason(sample: ResourceSample, limits: ResourceLimits) -> str | None:
+    values = (
+        sample.available_ram_gib,
+        sample.swap_used_gib,
+        sample.gpu_memory_mib,
+        sample.gpu_temperature_c,
+        sample.gpu_power_w,
+        sample.gpu_utilization_pct,
+    )
+    if not all(math.isfinite(value) and value >= 0 for value in values):
+        return "monitor failure: invalid resource observation"
+    if sample.gpu_utilization_pct > 100:
+        return "monitor failure: invalid GPU utilization"
+    if limits.maximum_gpu_clock_mhz is not None:
+        if (
+            sample.gpu_clock_mhz is None
+            or not math.isfinite(sample.gpu_clock_mhz)
+            or sample.gpu_clock_mhz < 0
+        ):
+            return "monitor failure: GPU clock observation missing or invalid"
+        if sample.gpu_clock_mhz > limits.maximum_gpu_clock_mhz:
+            return f"GPU clock {sample.gpu_clock_mhz} MHz exceeds cap"
     checks = (
         (
             sample.available_ram_gib < limits.minimum_available_ram_gib,
