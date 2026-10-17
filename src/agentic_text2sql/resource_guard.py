@@ -17,6 +17,8 @@ from typing import Any
 
 import httpx
 
+from agentic_text2sql.clock import monotonic_seconds, sleep_seconds
+from agentic_text2sql.gpu_monitor import GpuMonitor
 from agentic_text2sql.hardware import (
     ResourceLimits,
     ResourceSample,
@@ -85,8 +87,10 @@ def merge_peak(previous: ResourceSample, current: ResourceSample) -> ResourceSam
     )
 
 
-def observe_resources(host_monitor: WindowsHostMonitor | None = None) -> ResourceSample:
-    observation = sample_resources()
+def observe_resources(
+    host_monitor: WindowsHostMonitor | None = None, gpu_monitor: GpuMonitor | None = None
+) -> ResourceSample:
+    observation = sample_resources(gpu_monitor.sample()) if gpu_monitor else sample_resources()
     if host_monitor is None:
         return observation
     ram, swap = host_monitor.sample()
@@ -105,14 +109,14 @@ def _stop(process: subprocess.Popen[bytes]) -> None:
             # uv may exit before its Python worker. Stop the owned group even
             # when the group leader already has a return code.
             os.killpg(process.pid, sig)
-            deadline = time.monotonic() + wait
-            while time.monotonic() < deadline:
+            deadline = monotonic_seconds() + wait
+            while monotonic_seconds() < deadline:
                 process.poll()  # Reap the leader so it does not keep the group alive.
                 try:
                     os.killpg(process.pid, 0)
                 except ProcessLookupError:
                     return
-                time.sleep(0.05)
+                sleep_seconds(0.05)
         except ProcessLookupError:
             return
     raise ResourceGuardError("Child process did not terminate after SIGKILL")
@@ -154,7 +158,7 @@ def guarded_process(
                     if on_cooldown is not None:
                         on_cooldown(time.time() + cooldown_seconds)
                 finally:
-                    time.sleep(cooldown_seconds)
+                    sleep_seconds(cooldown_seconds)
 
 
 def _guarded_process(
@@ -187,11 +191,13 @@ def _guarded_process(
         if environment.get("TEXT2SQL_MONITOR_WINDOWS_HOST", "").lower() == "true"
         else None
     )
+    gpu_monitor = GpuMonitor()
     try:
         try:
             if host_monitor is not None:
                 host_monitor.__enter__()
-            peak = observe_resources(host_monitor)
+            gpu_monitor.__enter__()
+            peak = observe_resources(host_monitor, gpu_monitor)
             samples += 1
             reason = unsafe_reason(peak, limits)
         except (OSError, subprocess.SubprocessError, ValueError, KeyError) as exc:
@@ -208,9 +214,9 @@ def _guarded_process(
         if on_spawn is not None:
             on_spawn(process.pid)
         while process.poll() is None:
-            observation_started = time.monotonic()
+            observation_started = monotonic_seconds()
             try:
-                current = observe_resources(host_monitor)
+                current = observe_resources(host_monitor, gpu_monitor)
                 samples += 1
                 peak = merge_peak(peak, current) if peak else current
                 reason = unsafe_reason(current, limits)
@@ -219,10 +225,10 @@ def _guarded_process(
             if reason:
                 resource_stop = True
                 raise ResourceGuardError(reason)
-            time.sleep(max(0, sample_interval - (time.monotonic() - observation_started)))
+            sleep_seconds(max(0, sample_interval - (monotonic_seconds() - observation_started)))
         # Even a short child gets a final observation; it cannot mask a breach.
         try:
-            current = observe_resources(host_monitor)
+            current = observe_resources(host_monitor, gpu_monitor)
             samples += 1
             peak = merge_peak(peak, current) if peak else current
             reason = unsafe_reason(current, limits)
@@ -253,6 +259,12 @@ def _guarded_process(
                 cleanup_error = (
                     cleanup_error or ""
                 ) + f" host monitor stop failed: {type(exc).__name__}"
+        try:
+            gpu_monitor.close()
+        except (OSError, subprocess.SubprocessError, ValueError) as exc:
+            cleanup_error = (
+                cleanup_error or ""
+            ) + f" GPU monitor stop failed: {type(exc).__name__}"
         summary = {
             "reason": reason,
             "observed_peak": asdict(peak) if peak else None,

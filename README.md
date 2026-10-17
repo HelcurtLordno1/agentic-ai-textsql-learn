@@ -1,6 +1,17 @@
 # Agentic Text-to-SQL
 
-> **V4 research snapshot — 2026-10-16:** A1 `obligation-cpu` completed Spider **142/200 (71%)** and Olist **41/60 (68.33%)** on the pinned manifests. Historical P6 scores are 130/200 and 57/60; hardware differs. P6 remains the default. See the [full Vietnamese comparison](comparison_new4_to_baseline_vn.md) and [V4 reproduction guide](docs/v4_reproduction.md). Completion does not establish an accuracy improvement on both workloads.
+> **V5 research release — 2026-10-17:** A1 `v4-reliability` completed Spider **143/200 (71.50%)** and Olist **50/60 (83.33%)** with the guarded CPU-only profile. Clone `best_research_v5` for this release; `main` publishes the same snapshot. Start with the [V5 reproduction guide](docs/v5_reproduction.md), [machine-readable recipe](configs/experiments/v5_reliability_cpu.json), [aggregate evidence](docs/evidence/v5_benchmark_summary.json), and [Vietnamese report](comparison_new5_to_baseline_vn.md). Historical P6 remains the default/champion; moving this source to `main` does not change pipeline defaults or establish matched-control superiority.
+
+```bash
+git clone --branch best_research_v5 https://github.com/HelcurtLordno1/agentic-ai-textsql-learn.git
+cd agentic-ai-textsql-learn
+make sync
+make check
+```
+
+The clone contains source, tests, locked dependencies, schema/data contracts, prompts,
+guarded benchmark tools and setup examples. Datasets, model weights, databases, indexes,
+raw traces/predictions and secrets are rebuilt locally; follow the V5 guide before model work.
 
 [![CI](https://github.com/HelcurtLordno1/agentic-ai-textsql-learn/actions/workflows/ci.yml/badge.svg)](https://github.com/HelcurtLordno1/agentic-ai-textsql-learn/actions/workflows/ci.yml)
 
@@ -87,7 +98,16 @@ workflows completed every case. P95 latency was 85.29 s for Spider and 91.62 s f
 60-second interactive target; this limitation is reported rather than hidden. Full Spider-1034 is
 still optional P6.1 and has no claimed release score.
 
-## A1 experiment (full V4 run completed)
+## A1 experiment (full V5 run completed)
+
+V5 retains the V4 question-first path and adds opt-in recovery for empty selected relations
+and lexical-scope resolution for derived outputs. The measured variant is `v4-reliability`;
+the historical experiment prefix is retained in the report for provenance. Its approved
+profile is `qwen14b-cpu600-stable`: generation GPU offload0, CPU8, internal batch64,
+FA off/f16 KV, context4096, input2800/output768, maximum3 requests, case900s/request300s.
+Benchmark batch1, unload/cooldown60s and continuous Windows/WSL resource monitoring remain
+mandatory. Use [V5 setup and guarded commands](docs/v5_reproduction.md) for a fresh run.
+The paragraphs about V4 below retain the preceding experiment's historical configuration.
 
 `TEXT2SQL_PIPELINE_MODE=a1` selects question-first generation without an LLM planner.
 Catalog evidence includes PK/FK/uniqueness; CPU clause checks expose contradictions or UNKNOWN.

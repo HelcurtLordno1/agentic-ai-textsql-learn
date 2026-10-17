@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-import time
 from collections.abc import Iterator
 from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass, field
 
+from agentic_text2sql.clock import monotonic_seconds
 from agentic_text2sql.exceptions import Text2SQLError
 
 
@@ -19,7 +19,7 @@ class BudgetExceededError(Text2SQLError):
 class RequestBudget:
     max_requests: int = 3
     deadline_seconds: float = 120
-    started: float = field(default_factory=time.monotonic)
+    started: float = field(default_factory=monotonic_seconds)
     attempts: list[str] = field(default_factory=list)
 
     def __post_init__(self) -> None:
@@ -28,7 +28,7 @@ class RequestBudget:
 
     @property
     def remaining_seconds(self) -> float:
-        return max(0, self.deadline_seconds - (time.monotonic() - self.started))
+        return max(0, self.deadline_seconds - (monotonic_seconds() - self.started))
 
     def check(self) -> None:
         if self.remaining_seconds <= 0:

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
@@ -11,6 +12,20 @@ from agentic_text2sql.hardware import ResourceLimits, ResourceSample, unsafe_rea
 from agentic_text2sql.resource_guard import ResourceGuardError, guarded_process
 
 SAFE = ResourceSample(15, 0, 3000, 60, 40, 10)
+
+
+@pytest.fixture(autouse=True)
+def mocked_gpu_stream(monkeypatch: pytest.MonkeyPatch) -> None:
+    # These tests inject the resource observations; GPU transport has its own tests.
+    observe = resource_guard.observe_resources
+    monkeypatch.setattr(
+        resource_guard, "observe_resources", lambda host=None, gpu=None: observe(host)
+    )
+    monkeypatch.setattr(
+        resource_guard,
+        "GpuMonitor",
+        lambda: SimpleNamespace(__enter__=lambda: None, close=lambda: None),
+    )
 
 
 def test_watchdog_preflight_breach_never_starts_child(
@@ -86,7 +101,7 @@ def test_watchdog_observes_mid_run_breach_and_preserves_peak(
     monkeypatch.setattr(resource_guard.subprocess, "Popen", lambda *a, **k: Child())
     monkeypatch.setattr(resource_guard, "_stop", lambda child: None)
     monkeypatch.setattr(resource_guard, "unload_models", lambda url: None)
-    monkeypatch.setattr(resource_guard.time, "sleep", lambda seconds: None)
+    monkeypatch.setattr(resource_guard, "sleep_seconds", lambda seconds: None)
     stop = tmp_path / "stop.json"
     with pytest.raises(ResourceGuardError):
         guarded_process(
@@ -165,7 +180,7 @@ def test_ordinary_child_failure_is_not_a_hardware_latch_and_still_cools(
     sleeps = []
     spawned = []
     deadlines = []
-    monkeypatch.setattr(resource_guard.time, "sleep", sleeps.append)
+    monkeypatch.setattr(resource_guard, "sleep_seconds", sleeps.append)
     stop = tmp_path / "stop.json"
     with pytest.raises(ResourceGuardError, match="child exited 2"):
         guarded_process(

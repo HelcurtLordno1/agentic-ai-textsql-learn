@@ -37,6 +37,7 @@ from agentic_text2sql.layer3_generation.a1_prompt import (
     A1_PROMPT_VERSION,
     build_a1_prompt,
     build_evidence,
+    complete_empty_relation_context,
     enforce_prompt_budget,
 )
 from agentic_text2sql.layer3_generation.normalizer import CandidateNormalizer
@@ -242,7 +243,8 @@ class A1QueryService:
         except SQLParseError:
             pass
         sql = record.normalized_sql if record is not None else candidate.sql
-        policy = SQLSafetyPolicy().evaluate(sql, catalog)
+        safety = SQLSafetyPolicy(resolve_derived_columns=self.settings.resolve_derived_columns)
+        policy = safety.evaluate(sql, catalog)
         result = None
         if not policy.allowed:
             validation = ValidationReport(
@@ -253,7 +255,8 @@ class A1QueryService:
             )
         else:
             service = ValidationService(
-                executor=ReadOnlySQLiteExecutor(timeout_seconds=min(10, budget.remaining_seconds))
+                policy=safety,
+                executor=ReadOnlySQLiteExecutor(timeout_seconds=min(10, budget.remaining_seconds)),
             )
             validation, result = service.run(database, sql, catalog)
         return CandidateEvaluation(
@@ -405,6 +408,10 @@ class A1QueryService:
                 if self.grounding is not None:
                     neutral = LogicalPlan(question_language="other", task_type="lookup")
                     context = self.grounding.ground(question, neutral)
+                    if self.settings.recover_empty_relations:
+                        context = complete_empty_relation_context(
+                            catalog, context, token_budget=self.grounding.token_budget
+                        )
                 domain = ""
                 if catalog.db_id == "olist":
                     glossary = self.settings.project_root / "datasets/olist/business_glossary.yaml"

@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 from sqlglot import exp
+from sqlglot.errors import OptimizeError
+from sqlglot.optimizer.scope import Scope, traverse_scope
 
 from agentic_text2sql.contracts.catalog import CatalogSnapshot
 from agentic_text2sql.contracts.validation import ErrorClass, PolicyDecision
@@ -31,9 +33,38 @@ def _blocked(message: str, error: ErrorClass = ErrorClass.POLICY_VIOLATION) -> P
     return PolicyDecision(allowed=False, error_class=error, safe_message=message)
 
 
+def _visible_derived_output(statement: exp.Query, column: exp.Column) -> bool:
+    """License only a unique named derived output in the reference's own SELECT.
+
+    Unreferenced sibling CTEs and aliases from other scopes are not sources.
+    Wildcard or correlated resolution is deliberately outside this narrow exception.
+    """
+    try:
+        for scope in traverse_scope(statement):
+            if column.find_ancestor(exp.Select) is not scope.expression:
+                continue
+            matches = 0
+            for _, source in scope.selected_sources.values():
+                if not isinstance(source, Scope):
+                    continue
+                # This pinned SQLite renderer drops explicit CTE output lists.
+                # Do not newly admit syntax whose column binding would be lost.
+                if source.outer_columns:
+                    return False
+                outputs = source.expression.named_selects
+                if "*" in outputs or outputs.count(column.name) > 1:
+                    return False
+                matches += column.name in outputs
+            return matches == 1
+    except (OptimizeError, ValueError):
+        return False
+    return False
+
+
 class SQLSafetyPolicy:
-    def __init__(self, *, default_limit: int = 200) -> None:
+    def __init__(self, *, default_limit: int = 200, resolve_derived_columns: bool = False) -> None:
         self.default_limit = default_limit
+        self.resolve_derived_columns = resolve_derived_columns
 
     def evaluate(self, sql: str, catalog: CatalogSnapshot) -> PolicyDecision:
         try:
@@ -89,6 +120,8 @@ class SQLSafetyPolicy:
                     item.alias for item in statement.selects if getattr(item, "alias", "")
                 }
                 if column.name not in projection_aliases:
+                    if self.resolve_derived_columns and _visible_derived_output(statement, column):
+                        continue
                     return _blocked(f"Unknown column: {column.name}", ErrorClass.UNKNOWN_COLUMN)
 
         limit_injected = False

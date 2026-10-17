@@ -27,3 +27,42 @@ def test_profiles_bound_parallelism_and_long_run_unloads() -> None:
     assert acceptance.batch_size == 1
     assert acceptance.keep_alive == "0"
     assert acceptance.cooldown_seconds == 60
+
+
+def test_v4_600_b16_changes_only_clock_and_prompt_batch_from_full_gpu() -> None:
+    import json
+
+    import httpx
+
+    from agentic_text2sql.adapters.llm.ollama_provider import OllamaProvider
+    from agentic_text2sql.contracts.sql import SqlCandidate
+    from agentic_text2sql.settings import Settings
+
+    old = PROFILES[ProfileName.QWEN_FULL_GPU]
+    new = PROFILES[ProfileName.QWEN_V4_600_B16]
+    assert new.model_dump(exclude={"name", "description", "limits", "prompt_batch_tokens"}) == (
+        old.model_dump(exclude={"name", "description", "limits", "prompt_batch_tokens"})
+    )
+    assert new.limits.model_dump(exclude={"maximum_gpu_clock_mhz"}) == old.limits.model_dump(
+        exclude={"maximum_gpu_clock_mhz"}
+    )
+    assert new.limits.maximum_gpu_clock_mhz == 600
+    assert all(p.prompt_batch_tokens == 64 for key, p in PROFILES.items() if key != new.name)
+
+    def respond(request: httpx.Request) -> httpx.Response:
+        body = json.loads(request.content)
+        assert body["options"]["num_gpu"] == 41
+        assert body["options"]["num_batch"] == 16
+        assert body["options"]["num_thread"] == 8
+        assert body["options"]["num_ctx"] == 4096
+        assert body["options"]["num_predict"] == 768
+        assert body["keep_alive"] == 0
+        return httpx.Response(
+            200, json={"message": {"content": '{"sql":"SELECT 1","confidence":1}'}}
+        )
+
+    settings = Settings(**new.ollama_environment(), TEXT2SQL_GUARDED_RUN=True)
+    with httpx.Client(transport=httpx.MockTransport(respond), base_url="http://test") as client:
+        OllamaProvider(settings, client=client).generate_structured(
+            prompt="test", response_model=SqlCandidate
+        )

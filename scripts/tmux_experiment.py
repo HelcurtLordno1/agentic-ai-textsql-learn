@@ -61,6 +61,18 @@ VARIANTS: dict[str, dict[str, str]] = {
     },
 }
 
+# Opt-in mechanical ablations preserve the V4 generator and correction controls.
+for _variant, _context, _scope in (
+    ("v4-grounding", "true", "false"),
+    ("v4-scope", "false", "true"),
+    ("v4-reliability", "true", "true"),
+):
+    VARIANTS[_variant] = {
+        **VARIANTS["obligation-cpu"],
+        "TEXT2SQL_RECOVER_EMPTY_RELATIONS": _context,
+        "TEXT2SQL_RESOLVE_DERIVED_COLUMNS": _scope,
+    }
+
 
 class ExperimentPlan(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
@@ -95,6 +107,8 @@ def create_plan(
     settings_overrides: dict[str, str] | None = None,
 ) -> ExperimentPlan:
     overrides = {
+        "TEXT2SQL_RECOVER_EMPTY_RELATIONS": "false",
+        "TEXT2SQL_RESOLVE_DERIVED_COLUMNS": "false",
         "TEXT2SQL_COMPUTE_POLICY": "legacy",
         "TEXT2SQL_DETERMINISTIC_REPAIR": "false",
         "TEXT2SQL_REPAIRABILITY_ROUTING": "true",
@@ -138,6 +152,9 @@ def create_plan(
             "obligation-cpu",
             "obligation-risk",
             "obligation-risk-cpu",
+            "v4-grounding",
+            "v4-scope",
+            "v4-reliability",
         }
         else "--no-correction",
     ]

@@ -7,10 +7,15 @@ import math
 import subprocess
 import threading
 import time
+import uuid
 from pathlib import Path
 from typing import Any
 
+from agentic_text2sql.clock import monotonic_seconds
+
 STARTUP_TIMEOUT_SECONDS = 15
+PROTOCOL = "text2sql-memory-rpc-v2"
+RESPONSE_TIMEOUT_SECONDS = 1.0
 
 
 class WindowsHostMonitor:
@@ -22,6 +27,41 @@ class WindowsHostMonitor:
         self.latest: tuple[float, float, float] | None = None
         self.error: str | None = None
         self.lock = threading.Lock()
+        self.sample_lock = threading.Lock()
+        self.ready = False
+        self.pending: tuple[str, float] | None = None
+        self.completed_id: str | None = None
+        self.maximum_roundtrip_seconds = 0.0
+
+    def _accept(self, payload: Any) -> None:
+        if not isinstance(payload, dict) or payload.get("protocol") != PROTOCOL:
+            raise ValueError("Windows monitor protocol mismatch")
+        if payload.get("kind") == "ready":
+            with self.lock:
+                if self.ready:
+                    raise ValueError("Duplicate Windows monitor readiness")
+                self.ready = True
+            return
+        if payload.get("kind") != "sample":
+            raise ValueError("Unknown Windows monitor frame")
+        ram, swap = float(payload["available_ram_gib"]), float(payload["swap_used_gib"])
+        timestamp = float(payload["sampled_at_ms"])
+        if not all(math.isfinite(value) and value >= 0 for value in (ram, swap, timestamp)):
+            raise ValueError("Invalid Windows resource sample")
+        if timestamp == 0:
+            raise ValueError("Invalid Windows sample timestamp")
+        now = monotonic_seconds()
+        with self.lock:
+            if self.pending is None or payload.get("request_id") != self.pending[0]:
+                raise ValueError("Unsolicited, replayed or mismatched Windows sample")
+            request_id, sent = self.pending
+            elapsed = now - sent
+            if not 0 <= elapsed <= RESPONSE_TIMEOUT_SECONDS:
+                raise ValueError(f"Windows response is stale: roundtrip_seconds={elapsed}")
+            self.latest = (ram, swap, now)
+            self.completed_id = request_id
+            self.pending = None
+            self.maximum_roundtrip_seconds = max(self.maximum_roundtrip_seconds, elapsed)
 
     def _read(self) -> None:
         process = self.process
@@ -30,21 +70,7 @@ class WindowsHostMonitor:
         try:
             for line in process.stdout:
                 payload: Any = json.loads(line.lstrip("\ufeff"))
-                ram = float(payload["available_ram_gib"])
-                swap = float(payload["swap_used_gib"])
-                sampled_at_ms = float(payload["sampled_at_ms"])
-                if (
-                    not math.isfinite(sampled_at_ms)
-                    or abs(time.time() * 1000 - sampled_at_ms) > 1000
-                ):
-                    raise ValueError(
-                        "Windows sensor data is stale or host clocks differ: "
-                        f"age_ms={time.time() * 1000 - sampled_at_ms:.0f}"
-                    )
-                if not all(math.isfinite(value) and value >= 0 for value in (ram, swap)):
-                    raise ValueError("Invalid Windows resource sample")
-                with self.lock:
-                    self.latest = (ram, swap, time.monotonic())
+                self._accept(payload)
         except (ValueError, KeyError, TypeError, OSError) as exc:
             with self.lock:
                 self.error = f"Windows monitor failed: {type(exc).__name__}: {exc}"
@@ -76,6 +102,7 @@ class WindowsHostMonitor:
                 "-File",
                 windows_path,
             ],
+            stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
@@ -97,10 +124,10 @@ class WindowsHostMonitor:
     def _wait_ready(self) -> None:
         # Initialization may compile/load the native helper. No workload starts
         # until a fresh sample exists; running sensor freshness stays at one second.
-        deadline = time.monotonic() + STARTUP_TIMEOUT_SECONDS
-        while time.monotonic() < deadline:
+        deadline = monotonic_seconds() + STARTUP_TIMEOUT_SECONDS
+        while monotonic_seconds() < deadline:
             with self.lock:
-                ready, error = self.latest is not None, self.error
+                ready, error = self.ready, self.error
             if error or ready or self.process is None or self.process.poll() is not None:
                 self.sample()
                 return
@@ -113,20 +140,56 @@ class WindowsHostMonitor:
         )
 
     def sample(self) -> tuple[float, float]:
+        if not self.sample_lock.acquire(blocking=False):
+            raise ValueError("Concurrent Windows monitor requests are not allowed")
+        try:
+            self._alive()
+            if not self.ready or self.process is None or self.process.stdin is None:
+                raise ValueError("Windows monitor request channel is not ready")
+            request_id = uuid.uuid4().hex
+            sent = monotonic_seconds()
+            with self.lock:
+                self.pending = (request_id, sent)
+                self.completed_id = None
+            try:
+                self.process.stdin.write(json.dumps({"request_id": request_id}) + "\n")
+                self.process.stdin.flush()
+            except OSError as exc:
+                with self.lock:
+                    self.error = f"Windows monitor request failed: {type(exc).__name__}"
+                raise ValueError(self.error) from exc
+            while True:
+                self._alive()
+                with self.lock:
+                    if self.completed_id == request_id and self.latest is not None:
+                        if monotonic_seconds() - sent > RESPONSE_TIMEOUT_SECONDS:
+                            self.error = "Windows sample delivery exceeded one second"
+                            raise ValueError(self.error)
+                        return self.latest[:2]
+                if monotonic_seconds() - sent >= RESPONSE_TIMEOUT_SECONDS:
+                    with self.lock:
+                        self.error = "Windows monitor response timeout after one second"
+                    raise ValueError(self.error)
+                time.sleep(0.01)
+        finally:
+            self.sample_lock.release()
+
+    def _alive(self) -> None:
         with self.lock:
-            record, error, stderr = self.latest, self.error, self.stderr_tail
+            error, stderr = self.error, self.stderr_tail
         if error or self.process is None or self.process.poll() is not None:
             raise ValueError(
                 f"{error or 'Windows resource monitor is not running'}; stderr={stderr.strip()}"
             )
-        if record is None or time.monotonic() - record[2] > 1:
-            age = time.monotonic() - record[2] if record else None
-            raise ValueError(f"Windows resource monitor is stale: age_seconds={age}")
-        return record[0], record[1]
 
     def close(self) -> None:
         process = self.process
         if process is not None:
+            if process.stdin is not None:
+                try:
+                    process.stdin.close()
+                except OSError:
+                    pass  # A broken request pipe must not skip terminating the sensor.
             if process.poll() is None:
                 process.terminate()
                 try:

@@ -1,5 +1,14 @@
 # Research Paper 2 branch provenance
 
+> **Current release: V5, 2026-10-17.** `best_research_v5` and the updated `main` publish
+> the A1 `v4-reliability` CPU snapshot documented in [V5 reproduction](docs/v5_reproduction.md).
+> Its development parent is `663879ab034dce1c604784a45504a03753926282`; the measured
+> continuation source digest is `76a2c89a21778e0d0bed0812c9b5343bf366ec85b59e1b7020d60e76b761990a`.
+> The previous remote main `cebfeb1fd1499c0fcb7f88634b594e2bf9b5135e` is retained as
+> merge ancestry while the published tree uses the tested V5 runtime. Its older
+> question-reliability implementation is not merged into the measured A1 pipeline.
+> The Paper II narrative below is historical. P6 remains the default runtime pipeline.
+
 > **Historical Paper II provenance:** active workspace is now P6 `baseline` at `0972e47`. This retained document describes the earlier research branch; DIN/semantic modules below are not installed in the active baseline. See [baseline transition record](docs/research_plan/baseline_transition_2026_10_01.md).
 
 ## Branch identity

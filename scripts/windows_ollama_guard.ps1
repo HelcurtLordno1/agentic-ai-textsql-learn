@@ -5,11 +5,14 @@ param(
     [Parameter(Mandatory=$true)][string]$StopRequest,
     [Parameter(Mandatory=$true)][string]$Heartbeat,
     [Parameter(Mandatory=$true)][string]$Journal,
-    [Parameter(Mandatory=$true)][string]$LimitsPath
+    [Parameter(Mandatory=$true)][string]$LimitsPath,
+    [ValidateSet('0','1')][string]$FlashAttention = '1',
+    [ValidateSet('f16','q8_0')][string]$KvCacheType = 'q8_0'
 )
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'windows_memory.ps1')
 . (Join-Path $PSScriptRoot 'windows_ollama_job.ps1')
+. (Join-Path $PSScriptRoot 'windows_gpu_stream.ps1')
 $text2sql_job = $null
 $text2sql_server = $null
 $text2sql_peak = $null
@@ -17,32 +20,8 @@ $text2sql_sample = $null
 $text2sql_samples = 0
 $text2sql_reason = $null
 $text2sql_limits = Get-Content -LiteralPath $LimitsPath -Raw | ConvertFrom-Json
-$text2sql_gpu_exe = (Get-Command nvidia-smi.exe -ErrorAction Stop).Source
-function Get-Text2SqlSample {
-    $info = New-Object Diagnostics.ProcessStartInfo
-    $info.FileName = $text2sql_gpu_exe
-    $info.Arguments = '--query-gpu=memory.used,temperature.gpu,power.draw.average,power.draw.instant,utilization.gpu,clocks.current.graphics --format=csv,noheader,nounits'
-    $info.UseShellExecute = $false
-    $info.RedirectStandardOutput = $true
-    $info.RedirectStandardError = $true
-    $info.CreateNoWindow = $true
-    $sensor = [Diagnostics.Process]::Start($info)
-    try {
-        if (-not $sensor.WaitForExit(500)) {
-            $sensor.Kill()
-            throw 'GPU sensor timeout'
-        }
-        if ($sensor.ExitCode -ne 0) { throw 'GPU sensor failed' }
-        $parts = $sensor.StandardOutput.ReadToEnd().Trim().Split(',')
-        if ($parts.Count -ne 6) { throw 'GPU sensor malformed or multiple GPUs' }
-        $values = @()
-        foreach ($part in $parts) {
-            $number = [double]::Parse($part.Trim(), [Globalization.CultureInfo]::InvariantCulture)
-            if ([double]::IsNaN($number) -or [double]::IsInfinity($number) -or $number -lt 0) {
-                throw 'Invalid GPU sensor value'
-            }
-            $values += $number
-        }
+function Get-Text2SqlSample([bool]$Startup = $false) {
+        $values = Read-Text2SqlGpuStream $Startup
         return @{
             available_ram_gib = [Text2SqlHostMemory]::AvailableBytes() / 1073741824.0
             swap_used_gib = [Text2SqlHostMemory]::PageFileUsedBytes() / 1073741824.0
@@ -52,7 +31,6 @@ function Get-Text2SqlSample {
             gpu_utilization_pct = $values[4]
             gpu_clock_mhz = $values[5]
         }
-    } finally { $sensor.Dispose() }
 }
 function Assert-Text2SqlSafe($sample) {
     $checks = @(
@@ -89,10 +67,12 @@ function Merge-Text2SqlPeak($sample) {
 try {
     if (Test-Path -LiteralPath $StopFile) { throw 'Resource stop already latched; never auto retry' }
     if (-not (Test-Path -LiteralPath (Join-Path $ModelsDir 'manifests'))) { throw 'Existing model store missing' }
-    $text2sql_sample = Get-Text2SqlSample
+    $text2sql_job = New-Object Text2SqlJob
+    Start-Text2SqlGpuStream
+    $text2sql_job.Assign($text2sql_gpu_stream)
+    $text2sql_sample = Get-Text2SqlSample $true
     Merge-Text2SqlPeak $text2sql_sample
     Assert-Text2SqlSafe $text2sql_sample
-    $text2sql_job = New-Object Text2SqlJob
     $env:OLLAMA_HOST = $BindAddress
     $env:OLLAMA_MODELS = $ModelsDir
     $env:OLLAMA_NUM_PARALLEL = '1'
@@ -100,8 +80,8 @@ try {
     $env:OLLAMA_MAX_QUEUE = '2'
     $env:OLLAMA_KEEP_ALIVE = '0'
     $env:OLLAMA_CONTEXT_LENGTH = '4096'
-    $env:OLLAMA_FLASH_ATTENTION = '1'
-    $env:OLLAMA_KV_CACHE_TYPE = 'q8_0'
+    $env:OLLAMA_FLASH_ATTENTION = $FlashAttention
+    $env:OLLAMA_KV_CACHE_TYPE = $KvCacheType
     $info = New-Object Diagnostics.ProcessStartInfo
     $info.FileName = (Get-Command ollama.exe -ErrorAction Stop).Source
     $info.Arguments = 'serve'
@@ -112,12 +92,22 @@ try {
     $text2sql_job.Assign($text2sql_server)
     $text2sql_server.PriorityClass = [Diagnostics.ProcessPriorityClass]::BelowNormal
     [Console]::WriteLine("NATIVE SERVER OWNED: pid=$($text2sql_server.Id) address=$BindAddress")
+    $text2sql_heartbeat_length = -1
+    $text2sql_heartbeat_timer = [Diagnostics.Stopwatch]::StartNew()
+    $text2sql_observation_timer = [Diagnostics.Stopwatch]::StartNew()
     while (-not (Test-Path -LiteralPath $StopRequest)) {
         $timer = [Diagnostics.Stopwatch]::StartNew()
+        if ($text2sql_observation_timer.ElapsedMilliseconds -gt 1000) { throw 'Windows sampling gap exceeded one second' }
+        $text2sql_observation_timer.Restart()
         if ($text2sql_server.HasExited) { throw 'Owned native Ollama exited' }
         if (-not (Test-Path -LiteralPath $Heartbeat)) { throw 'Harness heartbeat missing' }
-        $age = ([DateTime]::UtcNow - (Get-Item -LiteralPath $Heartbeat).LastWriteTimeUtc).TotalSeconds
-        if ($age -gt 10) { throw 'Harness heartbeat stale; stop orphaned native runners' }
+        $text2sql_current_length = (Get-Item -LiteralPath $Heartbeat).Length
+        if ($text2sql_current_length -lt $text2sql_heartbeat_length) { throw 'Harness heartbeat counter regressed' }
+        if ($text2sql_current_length -gt $text2sql_heartbeat_length) {
+            $text2sql_heartbeat_length = $text2sql_current_length
+            $text2sql_heartbeat_timer.Restart()
+        }
+        if ($text2sql_heartbeat_timer.Elapsed.TotalSeconds -gt 10) { throw 'Harness heartbeat stale; stop orphaned native runners' }
         $text2sql_sample = Get-Text2SqlSample
         Merge-Text2SqlPeak $text2sql_sample
         $text2sql_samples += 1
@@ -138,6 +128,8 @@ try {
         if (-not $text2sql_server.WaitForExit(2000)) { $text2sql_server.Kill(); $text2sql_reason = 'Native cleanup timeout'; $text2sql_cleanup_complete = $false }
         $text2sql_server.Dispose()
     }
+    try { Stop-Text2SqlGpuStream }
+    catch { $text2sql_reason = 'GPU sensor cleanup failed: ' + $_.Exception.Message; $text2sql_cleanup_complete = $false }
     if ($null -ne $text2sql_reason) {
         $payload = @{ reason = $text2sql_reason; last_sample = $text2sql_sample; observed_peak = $text2sql_peak; samples = $text2sql_samples; cleanup_complete = $text2sql_cleanup_complete; limits = $text2sql_limits }
         if (-not (Test-Path -LiteralPath $StopFile)) {

@@ -6,9 +6,9 @@ import json
 
 from agentic_text2sql.contracts.assessment import SemanticEvidence
 from agentic_text2sql.contracts.catalog import CatalogSnapshot, ForeignKeyInfo, TableInfo
-from agentic_text2sql.contracts.retrieval import SchemaContext
+from agentic_text2sql.contracts.retrieval import EvidenceItem, SchemaContext
 from agentic_text2sql.contracts.sql import SqlCandidate
-from agentic_text2sql.layer2_grounding.context_packer import estimate_tokens
+from agentic_text2sql.layer2_grounding.context_packer import estimate_tokens, render_schema_context
 
 A1_PROMPT_VERSION = "a1-question-evidence-v1"
 
@@ -34,9 +34,9 @@ def _target_columns(fk: ForeignKeyInfo, target: TableInfo) -> tuple[str, ...]:
     raise ValueError("Catalog foreign key has unresolved target columns")
 
 
-def build_evidence(
-    question: str, catalog: CatalogSnapshot, context: SchemaContext | None, domain: str
-) -> tuple[SemanticEvidence, ...]:
+def _grounded_selection(
+    catalog: CatalogSnapshot, context: SchemaContext | None
+) -> tuple[set[str], set[str] | None]:
     if context is not None and (
         context.db_id != catalog.db_id or context.catalog_hash != catalog.catalog_hash
     ):
@@ -62,6 +62,65 @@ def build_evidence(
                         f"{fk.target_table}.{column}"
                         for column in _target_columns(fk, catalog_tables[fk.target_table])
                     )
+    return selected, qualified
+
+
+def complete_empty_relation_context(
+    catalog: CatalogSnapshot, context: SchemaContext, *, token_budget: int = 1200
+) -> SchemaContext:
+    """Recover only relations V4 cannot render; keep every working context unchanged.
+
+    Completion is catalog evidence, not a claim of per-column retrieval relevance.
+    Wide relations abstain instead of dropping sources or raising the input budget.
+    """
+    if token_budget < 1:
+        raise ValueError("schema budget must be positive")
+    selected, qualified = _grounded_selection(catalog, context)
+    assert qualified is not None
+    empty = [
+        table
+        for table in catalog.tables
+        if table.name in selected
+        and not any(
+            f"{table.name}.{column.name}" in qualified or column.primary_key_position
+            for column in table.columns
+        )
+    ]
+    if not empty:
+        return context
+    added = []
+    for table in empty:
+        if not table.columns:
+            raise ValueError("Selected relation has no catalog columns")
+        qualified.update(f"{table.name}.{column.name}" for column in table.columns)
+        added.append(
+            EvidenceItem(
+                evidence_id=f"catalog-completion:{catalog.catalog_hash}:{table.name}",
+                kind="catalog_completion",
+                table=table.name,
+                score=0,
+            )
+        )
+    rendered = render_schema_context(catalog, selected, qualified, context.joins)
+    tokens = estimate_tokens(rendered)
+    if tokens > token_budget:
+        raise ValueError("Catalog completion exceeds the schema budget; no silent truncation")
+    return context.model_copy(
+        update={
+            "selected_columns": sorted(qualified),
+            "rendered_context": rendered,
+            "estimated_tokens": tokens,
+            "evidence": [*context.evidence, *added],
+        },
+        deep=True,
+    )
+
+
+def build_evidence(
+    question: str, catalog: CatalogSnapshot, context: SchemaContext | None, domain: str
+) -> tuple[SemanticEvidence, ...]:
+    selected, qualified = _grounded_selection(catalog, context)
+    catalog_tables = {table.name: table for table in catalog.tables}
     evidence = [SemanticEvidence(evidence_id="question", kind="question", text=question)]
     for table in catalog.tables:
         if table.name not in selected:

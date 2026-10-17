@@ -10,6 +10,7 @@ import subprocess
 import time
 from pathlib import Path
 
+from agentic_text2sql.gpu_monitor import GpuMonitor
 from agentic_text2sql.hardware import PROFILES, ProfileName, unsafe_reason
 from agentic_text2sql.resource_guard import merge_peak, observe_resources
 from agentic_text2sql.windows_monitor import WindowsHostMonitor
@@ -40,13 +41,14 @@ def main() -> None:
     try:
         if host_monitor is not None:
             host_monitor.__enter__()
-        run_server(host_monitor)
+        with GpuMonitor() as gpu_monitor:
+            run_server(host_monitor, gpu_monitor)
     finally:
         if host_monitor is not None:
             host_monitor.close()
 
 
-def run_server(host_monitor: WindowsHostMonitor | None) -> None:
+def run_server(host_monitor: WindowsHostMonitor | None, gpu_monitor: GpuMonitor) -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--profile",
@@ -67,7 +69,7 @@ def run_server(host_monitor: WindowsHostMonitor | None) -> None:
 
     profile = PROFILES[ProfileName(args.profile)]
     try:
-        preflight = observe_resources(host_monitor)
+        preflight = observe_resources(host_monitor, gpu_monitor)
     except (OSError, subprocess.SubprocessError, ValueError, KeyError) as exc:
         raise SystemExit(
             f"RESOURCE_GUARD_REFUSED_START: monitor failure {type(exc).__name__}"
@@ -114,7 +116,7 @@ def run_server(host_monitor: WindowsHostMonitor | None) -> None:
             time.sleep(max(0, next_sample - time.monotonic()))
             next_sample = time.monotonic() + args.sample_seconds
             try:
-                current = observe_resources(host_monitor)
+                current = observe_resources(host_monitor, gpu_monitor)
             except (OSError, subprocess.SubprocessError, ValueError, KeyError) as exc:
                 stop_reason = f"monitor failure {type(exc).__name__}"
                 raise SystemExit(

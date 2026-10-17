@@ -1,5 +1,45 @@
 # Agentic Text-to-SQL — Master Project Plan
 
+> **Latest state — 2026-10-17 FULL BENCHMARK COMPLETE; V5 report:**
+> v4-cpu600-stream-20261016 COMPLETE: Spider200/200 + Olist60/60; both reports,
+> suite states and owned cleanup validated; worker/server/proxy PIDs null, no new latches.
+> Result-correct: Spider143/200 (71.50%), Olist50/60 (83.33%). Same-evaluator offline
+> re-score of P6/V4/current preserves every label. Source76a2c89a...1990a/HEAD663879a
+> unchanged; inherited45 CPU predictions retain audited parent source b5e80887...eab.
+> S2 full workload/provenance verification VERIFIED: make check341passed/1deselected,
+> data/index/source/prefix and23parent-file preservation checks pass. Plan§12.10 and
+> [V5 report](comparison_new5_to_baseline_vn.md) record full evidence. A1 research/promotion
+> remains IN_PROGRESS; current is A1 v4-reliability/CPU0, not the stopped intent variants.
+> P6 remains default/champion: current Olist50<57; Spider vsV4 has5gain/4loss.
+>
+> **V5 publication packaging — user-authorized 2026-10-17:** complete source/tests/setup
+> prepared for `best_research_v5` and `main`; measured source fingerprint preserved.
+> A data/env/weight-free Git archive passes make sync/check:336passed,5dataset skips,
+> 1Ollama deselected. See [V5 reproduction](docs/v5_reproduction.md) and
+> [publication verification](docs/evidence/v5_release_verification.md). New setup examples
+> and aggregate evidence are included; raw datasets, DBs, indexes, predictions and secrets
+> remain local. Publishing main preserves old main ancestry and keeps P6 defaults.
+
+> **Prior task — sensor recovery, user-authorized:** CPU experiment stopped at
+> Spider44/200+Olist1/60 on WSL nvidia-smi startup timeout0.5s (samples0). Old
+> incident/prefix immutable. Plan§12: persistent sensors, strict freshness, audited
+> infrastructure-only continuation v4-cpu600-stream-20261016; S0/S1 VERIFIED
+> (makecheck341passed/1deselected,240dualidle samples). S2 calibration5passed (48Spider+2Olist), full IN_PROGRESS. No auto-retry
+> or threshold increase; makecheck and guarded pilots precede full continuation.
+
+> **Current task — 2026-10-16 stability remediation:** GPU sequence
+> v4-smallfix600b16-20261016 RESOURCE_STOP atSpider30+Olist1,73.39W>70W/600MHz;
+> cleanup complete,incident/checkpoints preserved,no GPUretry. Native60Wpowercap
+> unsupported despite exit0. Plan§11: accurate_real_problem_set_plan.md.
+> R0 CPU/native launch bounds and R1 truthful persistentmonitor VERIFIED:
+> makecheck317passed/1Ollamadeselected. R2 CPUcalibration5passed,fullIN_PROGRESS:
+> v4-cpu600-stable-20261016,CPU0/8threads/batch64/f16/noFA,case900/request300,
+> unchanged model/context/token/request/resource limits;600MHzcap retained.
+> Fivecases5/5correct vsV4same5/5;1061guardsamples,max33.96W/52C,RAMmin8.606GiB.
+> CPUservice78–110s acknowledged;no fullaccuracy/stability/no-failure guarantee.
+> Sourceb5e80887c0636c911119cc2feaf81f30cf881c52ea1109223205d6e886e60eab andHEAD663879a
+> frozen duringinference;monitoralive doesnotmeanworkloadhealthy,actualbreach stops.
+
 > **Active workspace — 2026-10-01:** branch `baseline`, source `0972e47`. Các phần R1/R2/coverage bên dưới giữ lịch sử evidence trên branch riêng, không khẳng định module research có trong runtime P6 hiện tại. §26 ghi boundary chuyển nền và gate audit offline tiếp theo.
 
 > Tài liệu nguồn chính duy nhất để thiết kế, xây dựng, kiểm thử và theo dõi hoàn thành project.  
@@ -2412,3 +2452,462 @@ Full Vietnamese report, following the new3 sections 0–9:
 [comparison_new4_to_baseline_vn.md](comparison_new4_to_baseline_vn.md).
 Reproduction script and analysis remain ignored local artifacts under
 `data/artifacts/comparison-new4-20261008/`; generated predictions/data were not committed.
+
+## 28. V4 snapshot and V5 upgrade — 2026-10-16
+
+V4 source/docs/tests are committed as `4395e4a` and pushed to remote
+`v4_research_best`. `make check` passes: Ruff/format281files, mypy119sourcefiles,
+260 tests passed / 1 Ollama deselected (56.17s). Raw data/models/indexes/traces/
+predictions/secrets are excluded. [Reproduction guide](docs/v4_reproduction.md)
+records dependencies, model identities, data preparation and guarded commands.
+
+The user authorized implementation and testing of an upgrade addressing both
+benchmarks, followed by hardware/tmux commands for their monitored full run.
+Development uses `v5_research_upgrade`; V4 evidence stays unchanged. The
+[V5 plan](docs/research_plan/v5_upgrade_2026_10_16.md) is subordinate to this ledger.
+
+| Gate | State | Required evidence |
+|---|---|---|
+| V5-G1 mechanical schema/scope/intent boundaries | VERIFIED | 8/8 saved grounding contexts now render within budget; CTE/read-intent reproduced and corrected; no new policy rejection of saved SUCCEEDED SQL; 285 tests pass |
+| V5-G2 independent advisory intent and bounded integration | VERIFIED | Intent/draft/repair provenance, HTTP retry/deadline caps, budget fallback, explicit controls; 304 tests pass |
+| V5-G3 offline failure replay and full-run handoff | VERIFIED | Reproducible replay,21index preflight,fresh plan/paths,305tests and validated handoff commands |
+
+Research accuracy/promotion remains IN_PROGRESS. No new model score is claimed.
+
+V5-G1 evidence: `make check` passes Ruff/format284files, mypy119sourcefiles,
+285 tests / 1 Ollama deselected (42.29s). Renamed synthetic fixtures exercise PK-free
+views, budget overflow, CTE output lists, derived/correlated/sibling alias scopes,
+unknown/ambiguous columns, external/internal sources and write/read metadata intent.
+Ignored real-case diagnostics: `data/artifacts/v5-upgrade-20261016/{before,g1-replay}.json`.
+Eight recovered contexts cost241–359 schema tokens and1417–1634 full-prompt tokens.
+Replay of251 saved candidates changes only the previously false-rejected CTE; no
+previously SUCCEEDED candidate is newly rejected. This does not change V4 scores.
+
+V5-G2 evidence: `make check` passes Ruff/format288files, mypy121sourcefiles,
+304 tests / 1 Ollama deselected (40.22s). Independent intent sees no draft SQL,
+validates question spans and selected catalog bindings, and remains advisory.
+One HTTP attempt is allowed for optional intent; malformed retries cannot consume
+the reserved draft budget. All stages retain one invocation deadline and ≤3 requests.
+Invalid/overbudget intent falls back explicitly; operation repair still requires
+policy/validation/admission. Counterfactual no-intent and legacy/P6 variants freeze
+these new settings rather than inheriting ambient environment values.
+All259 saved contexts fit the new base intent/draft prompts: Spider maxima1113/1047
+tokens; Olist maxima2004/1939, below2800. Oversized intent is omitted and traced,
+never silently truncates schema. Source+runtime metrics now expose intent use.
+No new local model inference or accuracy measurement has been performed.
+
+V5-G3 final evidence: `make check` passes Ruff/format290files, mypy121sourcefiles,
+305 tests / 1 Ollama deselected (91.55s). `scripts/replay_v4_failures.py
+--execute-failures` checks259contexts/251candidates and preserves original report/
+prediction hashes. Eight Olist contexts recover, no prior SUCCEEDED SQL is newly
+rejected, and the previously rejected CTE executes with local result equivalence.
+The other56Spider saved SQL mismatches remain mismatches;9Olist saved mismatches
+remain mismatches and2unknown-column queries remain correctly rejected. These are
+old SQL diagnostics, not a V5 accuracy score or a change to V4 scores.
+
+All21semanticindexes pass checksum/catalog/model/FAISS loading checks without model
+requests; the new sequence plan validates with fresh unused paths, intent enabled,
+correction enabled and required indexes. Benchmarks now refuse silent full-catalog
+fallback if an index is missing. CLI run/resume help and documented setup syntax pass.
+Final source SHA:
+`c0e8b23aec61a6411d6d26f6f4f77f3c6d34e791520c13d53d2036713df84326`.
+Local ignored evidence is under `data/artifacts/v5-upgrade-20261016/`.
+
+Remote V4 head `663879a` adds only index-reproduction documentation to snapshot4395e4a;
+its measured source SHA remains `b9f38c2260dece07a0b9f476ac284689a0b3e2e50a35aa65b367d2c785683193`.
+V5 full model inference is NOT_STARTED: the current idle-clock read cannot verify
+the Administrator450MHzhard cap. No unguarded pilot or model work was started.
+The user will apply the cap and monitor the fresh full run using
+[V5 commands](docs/v5_run_2026_10_16.md). Engineering coding/handoff is complete;
+research accuracy, matched controls and promotion remain IN_PROGRESS.
+
+**User-requested700MHz profile — 2026-10-16:** profile implementation VERIFIED;
+hardware/model calibration NOT_STARTED.
+The user explicitly authorizes a300–700MHzhard cap for the next full V5 run.
+Add a separate `qwen14b-16gb-clock-capped-700` identity and fresh
+`v5-intent700-20261016` paths. Preserve450MHzprofile/history and all prior stops.
+Only the graphics-clock maximum changes; power70W,temperature68C,RAM8GiB,
+swap0.25GiB,VRAM14GiB,GPU41layers,batch1,unload,cooldown60s,deadline180s and
+continuous monitoring remain fixed. One guarded pilot per benchmark must pass
+before sequential full execution. No new model run or700MHzcalibration is claimed.
+
+`make check`: Ruff/format292files,mypy121sourcefiles,306tests pass/1Ollama deselected
+(40.16s). A regression test verifies that only the clock maximum differs from450MHz,
+the old profile stays450MHz,700MHzis allowed,701MHzis stopped, and70W/68Cstill stop.
+CLI hardware-plan/run help accepts the new identity. Both benchmark plans validate
+with intent/correction, continuous host monitoring and fresh unused paths; no plan
+was launched. Evidence: [700MHz profile](docs/evidence/v5_700_profile_2026_10_16.md).
+
+**Full-run request and preflight — 2026-10-16:** user confirms Administrator700MHzcap
+success and authorizes full Spider200+Olist60, observing first2–3iterations. Fresh
+`make check` passes306tests/1Ollama deselected,41.85s; all21indexes and unchanged
+source SHA85d6b4eb...verify. Workload is NOT_STARTED: live idle telemetry rejects
+Windows/WSL clock skew; raw captures/tick9000 show a real timing problem. Windows
+Time is unsynchronized/LocalCMOSClock; Administrator resync is unavailable to the
+current interop token. User action requested; freshness1s and all resource stops
+remain unchanged. Temporary unsuccessful clock trials were rolled back to tsc and
+active timesyncd. [Preflight evidence](docs/evidence/v5_run_preflight_2026_10_16.md).
+
+**Clock-independent monitor remediation — IN_PROGRESS:** Windows resync remains
+unavailable to the interop token. Implement explicit fresh challenge/response memory
+samples (one in-flight request,nonce match,≤1s raw elapsed), retaining fail-closed
+sensor/cleanup behavior and15s bootstrap. Replace cross-host heartbeat mtime comparison
+with append-counter progress measured by native Windows Stopwatch. Use raw monotonic
+elapsed for request budgets, measurements, guard intervals and≥60s cooldown; Unix
+timestamps remain audit/display fields. No resource limit or freshness threshold is
+relaxed; old failures remain preserved. Verify delayed/replayed/missing responses,
+wall-clock jumps and sensor exit with deterministic tests and continuous live idle
+telemetry before launching any model. No existing workload has started, so a new
+frozen source identity can be used without migrating predictions.
+
+**Clock-independent monitor remediation — VERIFIED (code + live idle):**
+`make check`: Ruff/format296files,mypy122sources,315tests pass/1Ollama deselected,
+100.11s. PowerShell parser accepts Windows scripts.119fresh challenge/response idle
+samples across60.354raw seconds pass; maxRTT0.025763s,minRAM20.0548GiB,
+maxswap0.076485GiB,VRAM730MiB,temp52C,power23.55W,clock300MHzidle.
+No freshness/resource threshold was loosened, no old failure evidence was removed.
+Source SHA `ee81930a85315c7fba287b19b922f76d27d22b16c9a2d455d1cba66f2ce39aea`.
+Full inference/calibration is the next gate, IN_PROGRESS; no model accuracy or pilot
+success is claimed by these offline/idle checks.
+
+**700MHzguarded full-sequence attempt — hardware calibration FAILED, full run
+IN_PROGRESS:** code commit8d4756f/sourceee81930a...; fresh sequence
+`v5-intent700-20261016` started both-suite plan without max-batches. First Spider
+pilot hit71.11W>70W at690MHz,56C,9725MiBVRAM;70samples/0.5s,maxmemoryRPC0.024435s.
+Guard stopped/unloaded/cooled; cleanup_error=null,nativejobclosed,allownedPIDsnull.
+Final RESOURCE_STOP,Spider0/200+Olist0/60,no pilot passed. Preserve latch/evidence;
+no automatic retry and no power-limit increase. Requested Administrator300–450MHz
+hard-cap remediation; only after confirmation and safe idle may a new450MHzsequence
+perform both pilots and proceed. See preflight evidence for complete observations.
+
+**User-authorized600MHzremediation — IN_PROGRESS (2026-10-16):** user confirms
+Administrator `nvidia-smi -i 0 -lgc 300,600` success and requests fullSpider200+Olist60.
+Add separate600MHzprofile/CLI identity and fresh `v5-intent600-20261016` paths;
+preserve700MHzstop and450MHzprofile. Keep70W/68C/RAM8GiB/swap0.25GiB/VRAM14GiB,
+GPU41layers,deadline180s,batch1,unload,cooldown60s and continuous dual monitoring.
+Require makecheck,stale-jobabsence,safeidle and independent guarded pilots before
+full execution. Do not claim calibration/stability/accuracy before actual evidence.
+
+**600MHzprofile implementation VERIFIED; model calibration IN_PROGRESS:**
+`make check`316passed/1Ollamadeselected,Ruff/format296files,mypy122sources,43.41s.
+CLI accepts600MHzprofile; regression preserves other limits and450/700identities.
+119continuous idle samples over60.338raw seconds SAFE,minRAM20.1987GiB,
+maxswap0.074448GiB,VRAM761MiB,temp48C,power22.15W,clock300MHzidle,maxRPC0.027255s.
+No stalebenchmark/native runners; ordinaryappservermodels=[]. Prior700MHzstop intact.
+See [600MHzevidence](docs/evidence/v5_600_profile_2026_10_16.md) and
+[operator commands](docs/v5_run_600_2026_10_16.md). Fresh full-sequence launch next;
+model calibration and full completion are not yet claimed.
+
+**600MHzinitial guarded calibration VERIFIED; full sequence RUNNING:** codecommit
+dd3d85b,sourceSHA2111a5832b417c92313d6f22bd3199f1a46cdc25794274d22c12d40c7948fbe8,
+frozen equally for both benchmarks. Fresh fulltmuxsequence `v5-intent600-20261016`
+started without max-batches. Spiderpilot+Olistpilot verified;3fully checkpointed,
+unloaded,cooled batches SUCCEEDED (Spider2/200+Olist1/60), then automatically next
+Spider. All3intentaccepted,2requests/case≤3,no resource/sensor/cleanup errors;
+combinedobservedpower67.64W,temp61C,VRAM9744MiB,clock600MHz,minRAM19.5891GiB,
+swap0.074761GiB;native708samples includes next inference. MemoryRPC max<30ms in
+3completedbatches. Old700MHzstop preserved. Leave full job running; completion and
+accuracy remain IN_PROGRESS, not inferred from initial stability. See600MHzevidence
+and operatorcommands for attach/logs/pause/resume/recovery. Only docs changed after
+launch; source/config/model/data/index identity remains fixed for continuation.
+
+**600MHzprovenance interruption/remediation:** afterSpider3/200+Olist1/60clean
+batches, writing docs commit6811fc5 changedHEAD; next Spider startup refused pinned
+Gitcommit despite unchanged source. OrdinaryWORKLOAD_STOP,no hardware/sensorbreach,
+cleanup_error=null; waitedcooldownandownedservercleanup. Preserved docscommit on
+v5_research_upgrade,created v5_run600_frozen at exactcheckpointcommitdd3d85b,restored
+only docs uncommitted. Verified HEADmatchesprovenance+safeidle,then explicitly resumed
+sameprofile/checkpoints3/200+1/60; no identity/prediction edits or stop override.
+Do not commit/changeHEADuntil fullcompletion. Recovery observation IN_PROGRESS;
+initial3batchstable evidence does not imply uninterrupted fullrun.
+
+**600MHzfull sequence RESOURCE_STOP (supersedes initial safe calibration):**
+matching-commitresume executedSpidercase4SUCCEEDED,unloaded/cooled and automatically
+startedcase5. NativeWindowswatchdog hit70.37W>70W at600MHz,temp61C,VRAM9745MiB;
+300nativesamples,cleanup_complete=true. Nativejobkilledbackend/runners; client and
+unloadRPCthenRemoteProtocolError are consequences. Preservebothnative/childlatches;
+noautotry/70Wrelaxation. FinalcheckpointSpider4/200+Olist1/60;fullaccuracyunfinished.
+600MHznot safe for sustained run within current envelope. UseraskedforAdministrator
+300–450MHzcap; none applied byagent. Require actualremediation,safeidle andfresh
+profileconsistentpilotsbeforefurthermodelwork. Do not resume600MHz or mix its
+checkpoint into450MHz. Source remainsdd3d85b;docs remainuncommittedwhilefrozen.
+Final600MHzcleanupverified:allownedPIDsnull,nativecleanup_complete=true,no runners,
+ordinaryappmodels=[].17continuousidle samples/10sSAFE,49C/17.75W/747MiBVRAM.
+No activebenchmark; furthermodelworkawaitsnewhardcapremediation confirmation.
+
+**User-authorized500MHzremediation — IN_PROGRESS (2026-10-16):** user confirms
+Administrator300–500MHzcap success and requests fullSpider200+Olist60. Add separate
+500MHzprofile/newexperiment; preserve600/700stops and checkpoints,keep70W/68C/RAM8GiB/
+swap0.25GiB/VRAM14GiB,GPU41layers,180sdeadline,batch1,unload,cooldown60s. Require
+makecheck+safeidle+no stalejobs+bothguardedpilots. Freeze Git commit before first
+prediction; do not commit even docs during run. Observe early stable batches and,
+if safe, the prior600MHzbreach caseSpider_holdout_0499 before final handoff. No new
+calibration/completion/accuracy claim before actual evidence.
+
+**500MHzprofile implementation VERIFIED; model calibration IN_PROGRESS:**
+`make check`317passed/1Ollamadeselected,Ruff/format296files,mypy122sources,44.34s.
+CLI500MHzaccepted; regression500/501clockboundary andunchanged70W/68C/otherlimits.
+119continuousidle samples/60.359raw secondsSAFE,minRAM20.1081GiB,maxswap0.074418GiB,
+VRAM824MiB,temp50C,power28.85W,clock495MHzidle,maxRPC0.029342s. No stalerunners,
+ordinaryappmodels=[].600/700stopsintact;fresh500pathsunused. Freezeallsource/GitHEAD
+beforelaunch,thenonlyliveuncommitteddocs. See500MHzprofileevidence/operatorcommands.
+
+**500MHzfull sequence RESOURCE_STOP after initial pilots:** codecommitd80081b,
+sourceSHA157568af3d7c9ba26f65b8aa04500b6d2f8b13a82140ca06ecf6aacfa4bc5aa0,
+GitHEAD/sourceunchanged. BothpilotsVERIFIED,5batchesSUCCEEDED+unload+cooldown,
+Spider4/200+Olist1/60;thenpriorbreachcaseSpiderholdout0499hit70.71W>70W at495MHz,
+61C,9784MiBVRAM,94samples/0.5s,maxmemoryRPC0.023817s,cleanup_error=null.
+No predictionforfailedcase;stop/checkpoints preserved, noautotry/thresholdincrease.
+500MHzcannotbeleftfullrunningwithin70W. UseraskedforAdministrator300–450MHzcap
+beforefurthermodelwork; waitcleanup+safeidle/no stalejobs,thenfreshprofileconsistent
+pilots only after actualhardware remediation. Keep500/600/700evidenceuntouched.
+Full completion/accuracy IN_PROGRESS. Docs stayuncommitted; noGitprovenancefailure.
+Final500MHzcleanupverified:RESOURCE_STOP,allownedPIDsnull,nativejob+runnersclosed,
+onlyoldappPID3736andmodels=[].18continuousidle samples/10s SAFE,49C/18.04W/785MiB.
+No activebenchmark; awaitactualhardcapremediation before furthermodelwork.
+
+**User-confirmed450MHzremediation — IN_PROGRESS (2026-10-16):** Administrator
+300–450MHzcap success reported; user requests fullSpider200+Olist60. Existingprofile
+qwen14b-16gb-clock-capped alreadyhasmax450MHz,GPU41,RAM8GiB,swap0.25GiB,VRAM14GiB,
+temp68C,power70W,180sdeadline,batch1,unload,cooldown60s. No runtimecodechange needed.
+Usefresh v5-intent450-20261016 paths; keep500/600/700stop evidence/checkpoints.
+Freeze currentcommitd80081b on v5_run450_frozen; docs stayuncommitted. Require
+makecheck+safeidle/no stalejobs,bothguardedpilots,thenobserveearlybatches through
+priorbreachcaseSpiderholdout0499 beforehandoff. No full completion claim yet.
+450MHzpreflightpassed:makecheck317passed/1Ollamadeselected,Ruff/format296files,
+mypy122sources,46.81s;119continuousidle samples/60.433rawsecondsSAFE,
+minRAM19.9981GiB,maxswap0.071469GiB,VRAM894MiB,temp52C,power26.85W,clock450MHz,
+maxRPC0.026010s. No stalejobs,oldappmodels=[]. Currentcommitd80081b/sourcehash157568af...
+unchanged. Existing450profilecodeverified; newmodelcalibrationIN_PROGRESS. Fresh
+fullsequence launch next,docs remainuncommitted,oldstops/checkpointsuntouched.
+
+**450MHzV5powerstop — supersedes initial pilots:** bothguardedpilots passed,
+Spider1/200+Olist1/60checkpointed/unloaded/cooled. NextSpidercase0495hit72.18W>70W
+at450MHz,temp60C,VRAM9873MiB,RAMmin19.2572GiB,swap0.071469GiB,87samples/0.5s,
+maxmemoryRPC0.025274s,cleanup_error=null. Guard stopped/unloaded;finalRESOURCE_STOP,
+allownedPIDsnull,nativejob/runnersclosed,originalstops/evidencepreserved.
+No automaticretry. ReadonlyGPUdiagnostic:RTXA4500Laptop,driver597.06,default80W,
+power.limitN/A; clockcap alone does not enforce70W on current workload.
+
+**Candidate generationbatch16 remediation — IN_PROGRESS (offline only):** prepare
+separate450MHzprofile lowering generationnum_batch64→16,keepGPU41/model/context/
+token/deadline/requestbudget/embeddingoptions/allresourcelimitsunchanged. Addtyped
+batchfield with default64 to preserve oldprofiles; regressionproveenv→settings→HTTP
+payload16,embeddingunchanged,oldprofiledefaults64. Runmakecheckbeforeclaimingcode
+verified. Candidate is not powercalibrated or authorization to retry a stopped run;
+request explicit pilot/full-continuation approval after concreteofflinepreparation,
+because450MHzactualpowerbreachrequires stop/noauto-retry. No localmodelstarted.
+
+**Batch16candidate code VERIFIED (offline only):** makecheck319passed/1Ollama
+deselected,Ruff/format296files,mypy122sources,41.31s. SourceSHA767a99cbb9989d0d526f2af0af99ea885efff5bf764aa74d418f0d36d26681d7.
+Testsverifyexistingprofiles64,newcandidate16,allotherbudgets/safetyunchanged,
+actualHTTPpayload16,embeddingCPUoptionsunchanged. CLIready;no modeltrialstarted.
+Final450cleanupallownedPIDsnull,nativejobclosed,models=[];17idle samples/10sSAFE,
+48C/17.10W/875MiBVRAM. Needexplicitnewpilot/fullcontinuationapproval after actual
+450MHzbreach; do not auto-retry or claim candidatepowercalibration.
+
+**User-requested V4incremental architecture/hardware redesign — IN_PROGRESS:**
+user explicitly supersedes pendingbatch16approval:cap600MHzconfirmed,newdesign+
+pilots/failuretests/≥5iterations/fullbothsuites authorized. Firstrecordedplan:
+[4gateplan](docs/v6_v4_incremental_plan_2026_10_16.md). Retain V4questionfirstdraft,
+scopedCPUrecovery,existinggrounding/scopefixes;remove mandatoryextraLLMintent for
+newvariant. Newcandidate600MHz/GPU20/batch8/CPU8,all70W/68C/otherbudgetsunchanged;
+not calibrated. G1implementationnext;G2/G3/G4sequential. No accuracy/safetyguarantee
+beforemeasurements;noactualbreachautotry;oldstops/remotebranchesunchanged.
+
+**G1/G2/G3offline VERIFIED:** makecheck336passed/1Ollamadeselected,46.21s,
+Ruff/format306files,mypy123sources. Newvariant optin,V4Spiderpromptidentitytest,
+1generationrequest+CPUrepairtest,scope/ambiguity/ASTpreservation/admissiontests,
+HTTPexplicitGPU20/batch8/CPU8 and otherbudgetsunchanged. OfflineV4replay259contexts/
+251candidates,no newpolicyreject/contextfailure,8Olistcontextrecoveries,1routerfix,
+oldCTEfailurelocal-equivalent;counteditfixesolist020,zero priorcorrectlosses.
+Alloldprediction/reporthashesunchanged. Notnewaccuracy. G4modelcalibrationIN_PROGRESS;
+preparefresh2Spider+6Olistdiagnostics,thenonlyifgatespassfullbothoriginalmanifests.
+Commandhandoff:docs/v6_hybrid600_run.md. Source/HEADfreeze before firstinference.
+
+**InitialG4hybridpilots:** Spider0499(previouspowerstop)andOlist001bothSUCCEEDED,
+Spiderresult-correctoffline;Olist laterfoundwrongscalarshape despiteexecution.
+BothpilotsresourceVERIFIED,no resource/monitor/cleanuperror. Measured
+service100s/129s,guardpower66.39/66.14W,VRAM5765/5455MiB,RAMmin12.9641/15.1068GiB.
+Operatorpausedcleanly at1+1beforefurthercases;allownedPIDsnull. Initialrunpreserved.
+Newruntimecorrectionbeforefull:hybrid600sboundeddeadline/360srequesttimeout toavoid
+sacrificinghardcase/repaircompletiononCPU;otherprofilesdefaultsunchanged. Shared
+max3requests/inputoutputbudgets/model/safetyunchanged. Cleanupwait accountsforprofile
+boundeddeadline+cooldown,heartbeatkept;deterministictestsfor660sgrace and601rejection.
+Freshcal2diagnosticrequired;no checkpointmigration,nopowerstop/autotry occurred.
+Finaldeadlinechecks:makecheck338passed/1Ollamadeselected,Ruff/format306files,
+mypy123sources,45.99s. Newtestsverify600sboundedcase/360srequest,old120/180defaults,
+601srejected,andgracefulcleanupkeepsheartbeatthrough660swithoutkill. No resource
+thresholdrelaxed. Firstdiagnosticpausedclean,finalcal2pathsnew;freezefinalcode next.
+
+**G4qualitycorrectionbeforefull:** offlineOlist001actual SELECTorder_count FROM
+customer_order_facts returnedmanyrows,not requestedtotal. InitialSUCCEEDED did not
+meanresultcorrect; previousboth-correctdraftnote corrected. RejectedbroadOlistprompt
+change,revertedbothbenchmarks toV4draftformat; retaineddomain/schema/scopefixes.
+Addedquestion-onlyscalarcountshapecheck(abstainsgroup/multipleoutputs),boundedmodel
+repairwithonecolumn/onerow,no semanticvalueproof. No gold/runtimeimports. Offline
+allV4savedSUCCEEDEDcountoutputs havezero newshapeviolations. Bothdiagnosticversions
+pausedcleanly,noresourcebreach. Freshcal3identity required; do not resume oldsources.
+FinalG1–G3checksafterqualityfix:makecheck350passed/1Ollamadeselected,44.81s,
+Ruff/format309files,mypy124sources;27focusedshape/counttests pass. FinalsavedV4replay
+haszero priorcorrectshape/policyrejections,counteditonegain/no losses,8viewcontexts
+recovered. SourceSHA bf5e521ce16e05f1167905cbec064f1c69b9370d34e9129d186eb9b5cc7e6ff0.
+Finalcal3modelinference next; noaccuracy/powercertificationfromofflinechecks.
+
+**G4countgrainfinding→closedrecordcontract:** cal3 resource-stable but Olist001
+COUNTcustomerfactswrong (96096vs99441orders); scalarshapeinsufficient. Operatorpaused
+cleanatSpider2+Olist1,nohardwarebreach; nofullrunstarted. Addedtyped RecordCountGoal
+fromglossarybaseentities/aliases/≤2statusfilters;completequestionmatchonly,extra
+languageabstains. NoID/gold/answerdata. Goalvalidatescatalogtable/filterownership;
+targetDDLaddedifmissingretrieval;originalmodeldraftretainedifmatchescontract,else
+CPUquerycompiledandsamepolicy/executor/exactASTadmission. Generalquerynotrewritten.
+Coremodel/pipeline/resourceprofileunchanged. 17focusedtestscoverpure/statuscounts,
+wrongsource/wrongshape/invaliddraftrecoveryin1modelrequest,unknownconditionsabstention.
+OfflineV4replay:003recordcontractgain+020countrankgain,zero priorcorrectlosses/new
+policy/shape/contextrejections. Freshcal4source/checkpointwillbeused. G4IN_PROGRESS.
+FinalrecordcontractofflinegateVERIFIED:makecheck367passed/1Ollamadeselected,
+Ruff/format312files,mypy126sources,44.82s. Finalrecordreplay old260IDs/hashesintact,
+2Olistcompilededitgains003/020,zero priorcorrectlosses,8contextrecoveries. No model
+trialofrecordcontractyet. Freezecode+metadata+HEADforfreshcal4/full;no morecommits
+duringmodelwork. AllpriorV6diagnosticstatesPAUSED,backendclosed,noretryofstops.
+
+**G4initialcalibration VERIFIED; fullbenchmarkIN_PROGRESS:** finalcode0fba637,
+source3843b851191de2d819f7fa3613e8423f0d9852eed72575a1e6b450288fa1df96;
+8cal4guardedbatchesSUCCEEDED+checkpoint/unload/cooldown,0resource/sensor/cleanuperrors.
+2466guardobservations+3421nativesamples;nativepowerpeak69.47W(close70Wstop),
+guard66.24W,temp58C,VRAM5460MiB,minRAM14.1946GiB,swap0.072064GiB,clock600MHz,
+maxRPC0.028790s. Selecteddiagnosticnew6/8vsV4 2/8,4gains003/010/020/032,0losses;
+0795/030stillwrong. All8onegenerationrequest,noadmittedrepair; don't attribute gains
+solelytoCPUrepair or claimfull/blindstatisticalsuperiority. No runtimegolddata.
+Fullgatevalidatedall8results/cleanup/source/config/idle/no latches and started
+v6-hybrid600-full-20261016 on originalSpider200+Olist60manifests,nomaxbatches.
+Diagnosticpausedcleanly,ownedPIDsnull; fulljobactive,fullaccuracy/completionnotyetknown.
+No code/HEADchange afterlaunch. Evidence:docs/evidence/v6_hybrid600_calibration_20261016.md.
+
+**Fullhandoff — RUNNING,notcomplete:** verifiedSpider2/200+Olist1/60cleancheckpoint,
+nextSpiderbatchautomatic;bothfullpilotsverified,3fullbatchesSUCCEEDED/unloaded/cooled,
+noresource/sensor/cleanuperror,guardmax66.88W. Withcal4=11cleanbatchesoverall.
+AllownedPIDsalive,tmuxpanealive,no stoplatches/pausemarker;fullruntimeidentitiesmatch
+finalsource/GPU20/batch8/resilienton/intentoff,original200/60manifestsverified.
+Previous450powerstopcase0495passedfullsecondbatch(52.53Wguard);0499passedcalibration.
+Leave v6-hybrid600-full-20261016 active;accuracy/completion IN_PROGRESS. No source/
+HEADchanges,onlyuncommittedhandoffdocs. Commandsdocs/v6_hybrid600_run.md.
+
+**Superseding incident — full run RESOURCE_STOP, not complete:**
+v6-hybrid600-full-20261016 stopped at Spider12/200+Olist1/60; next case
+spider_holdout_0119 uncheckpointed. Watchdog peak84.55W>70W at600MHz,54C,
+VRAM5448MiB,RAMmin15.2801GiB,swap0.070626GiB; cleanup_error null. Nativejournal
+did not capture the same transient; do not discard the WSL stop or infer its
+electrical cause. Intended GPU20/batch8/CPU8 settings confirmed in runtime.
+Prior calibration does not establish full-run power safety or accuracy superiority.
+Owned server/proxy/worker closed, native runners absent, idle dualmonitor safe.
+Preserve all13checkpoints/latch/evidence; no retry or threshold relaxation.
+
+Separate offline recovery prepared after incident plan: qwen14b-cpu-recovery-b8,
+GPU0/CPU8/batch8,f16KV/noFA,sameQwen14B/V4-resilient SQL path and existing budgets,
+600/360s bounds,60s cooldown,continuous monitoring and allresource thresholds.
+Native Windows launch now receives validated profile FA/KV arguments instead of
+hardcoded GPUcache settings. Mock HTTP/native-launch tests verify actual boundary
+options; PowerShell syntax checked. makecheck370passed/1Ollamadeselected,
+Ruff/format314files,mypy126sources,test45.90s. Offline preparation verified only;
+CPU model calibration,latency,RAM,accuracy andfullrun remain NOT RUN/pending explicit
+post-incident pilot approval. No new model run or GitHEADchange; candidate edits
+are uncommitted. Never append changedprofile/source to old12+1 checkpoints.
+Evidence/next gates:docs/evidence/v6_hybrid600_power_stop_20261016.md.
+
+**User-requested audit and return to V4 — 2026-10-16:**
+User disallows further feature coding absent latency/accuracy justification.
+Decision recorded in what_best_thing_to_do.md before restoration. Offline paired
+SQL re-execution validates expected-result hashes/old labels: fullprefixSpider
+V4 10/12 vsV6 9/12,0gains/1loss;Olist1/1both. Regression0098: identicalmodelSQL,
+newpolicyLIMIT200 changes230goldrows→200. Same12Spiderprompthashes,654tokens,
+1requesteach;service13.970→85.634s(6.13x),prefill1.920→58.347s,validationonly
+0.105→0.116s. Slowness is measured but no demonstrated accuracy benefit justifies
+the tradeoff. Selecteddiagnostic4Olistgains remain development evidence only.
+V6/CPUcandidate notpromoted; no newmodelrequest afterpowerstop.
+
+Activebranch v4_restored_after_v6_audit_20261016 atV4snapshot663879a;
+sourceb9f38c2260dece07a0b9f476ac284689a0b3e2e50a35aa65b367d2c785683193
+matches measuredV4 exactly. Runtime/scripts/tests/configs/lockdiffempty.
+makecheck260passed/1Ollamadeselected,43.75s;Ruff/format301files,mypy119sourcespass.
+Researchbranch0fba637 retained;WIPstash048df7cca2f823de9ee2f6e7f096469d4cfee563
+plusignoredpatch/tararchive preserved.11auditinputhashes+13userfilehashesunchanged.
+AGENTS/currentledger/researchdocs retained separately. No dataset/prediction/latch
+deleted or rewritten,nohardwarechange,nomodelrun/noautomaticretry,no remotepush.
+Only audit and exactsource restoration are verified; no newbenchmark or accuracy
+promotion. HistoricalV5/V6entriesabove are not currentruntime instructions.
+V4 oldmonitor lacks laterclock-driftfixes and active600MHzcapdoesnotmatch450profile;
+do not launch oldrun. Newresearch requires singlehypothesis/matchedcontrol,
+full-result semantics checks,pairedaccuracy/latency/resource evidence and heldout
+validation as specified in what_best_thing_to_do.md.
+
+**V4 incremental E0 offline VERIFIED:** makecheck269passed/1Ollamadeselected,
+Ruff/format304files,mypy120sources pass. Reviewed nonce-based WindowsmemoryRPC
++RAW elapsed deadline/cooldown and native Stopwatch/counter heartbeat. New fullGPU41/
+600MHz/batch16 profile tested through actual mocked HTTP; oldprofiles batch64
+unchanged. No LLM run/power calibration yet. E1 emptyrelation recovery IN_PROGRESS.
+
+**V4 E1 offline VERIFIED:** makecheck280passed/1Ollamadeselected, renamed/view/
+compositeFK/negative/overflow/provider-boundary tests pass. Saved259contexts:
+251promptbyte-identical toV4savedSHA,8Olistrecovered,maximum1724estimatedtokens;
+zero model requests. Emptyrelationcompletion optin,catalog provenance,no extra
+relation or silent truncation. E2 narrow derived-column false rejection IN_PROGRESS.
+
+**V4 E2 offline VERIFIED:** makecheck303passed/1Ollamadeselected,40.40stest,
+Ruff/format307files,mypy120sourcespass. Narrow named-output resolution optin;
+explicitCTEoutputlists abstain because pinnedSQLGlot drops them. Savedreplay:
+255policy evaluations,249oldallowedexactdecision/SQLpreserved,2newallowed(same1CTE),
+localcorrect539rows;old0098full230rows intact.251prompts identical,8recovered,
+max1724tokens,23evidencehashesunchanged,0modelrequests. Reproduction:
+python -m scripts.audit_v4_reliability. New branch v4_incremental_reliability_20261016;
+E3 calibration IN_PROGRESS,not accuracy/powercertified,no promotion.
+
+**V4 E3 initial pilots:** newsequence v4-smallfix600b16-20261016 reached clean
+PAUSED1Spider+1Olist,bothpilotsresourceverified,ownedPIDsnull. Offline2/2correct
+vsV4same2/2,0gain/loss,1requesteach;119guardsamples,67.76Wpeak,59C,600MHz,
+RAMmin16.388GiB. Service15.035/15.545s vs historical12.793/11.900s; no matched
+latencyclaim. SourceSHA582d2e7bff583e365ab8cf1dd8e7e2bd9d4b47aac700991f416721d81062d622
+unchanged. Additional3prefixbatches requested before full; E3 stillIN_PROGRESS.
+
+**V4 E3 five-iteration calibration complete; full IN_PROGRESS:** freshsequence
+v4-smallfix600b16-20261016 cleanPAUSED4Spider+1Olist;offline5/5correct vsV4same5/5,
+0gains/losses,1requesteach.294guardsamples,peak68.48W,temp59C,clock600MHz,
+RAMmin16.388GiB;cleanup/unload/cooldownverified,0sensor/resourceerrors. Source/HEAD
+unchanged. Requested resume withoutmaxbatches for sequentialSpider200+Olist60.
+No fullaccuracy claim/promotion;8recoveredcontexts/CTEutility stillneedsfullresults.
+Plan/evidence:accurate_real_problem_set_plan.md,docs/evidence/v4_smallfix_20261016.md.
+
+**Stability R0 offline VERIFIED:**311passed/1Ollamadeselected,Ruff/format308files,
+mypy120sourcespass,46.00stest;nativePSparsepass. CPU0 actualHTTP/options/native
+FA0/f16,900case/300request bounded,oldGPUdefaults unchanged;cleanupheartbeats
+960sverified.23incidentinputhashespreserved;6safeidle dualsamples. No modelrun.
+R1 truthfully persistent tmuxmonitor IN_PROGRESS.
+
+**Stability R1 VERIFIED:**317passed/1Ollamadeselected,42.17s,Ruff/format311files,
+mypy120sourcespass. Independent read-only monitor actualtmux integration confirmed
+RESOURCE_STOP/73.39W/checkpoint30+1 withpanealive;worker/incidentunchanged.
+Explicitwindowenumeration andboundedviewportfix verified. R2CPUcalibrationnext;
+no CUDAretry,resource/powerthresholds unchanged,no claim of fullstability.
+
+**R2 CPU initial pilots passed:** new v4-cpu600-stable-20261016 cleanPAUSED1+1;
+offline2/2correct vsV4same2/2,0gains/losses,1requesteach.460guardsamples,26.09W
+guard/27.75Wnativepeak,52C,VRAM1142MiB,RAMmin8.606GiB. ActualAPI size_vram0;
+runtime GPU0/CPU8/batch64/900case/300request verified;sourceb5e80887c0636c911119cc2feaf81f30cf881c52ea1109223205d6e886e60eab.
+Service80.138/109.529s;slowerCPUtradeoff explicit,nospeedup/fullaccuracyclaim.
+Additional3prefixbatchesrequested beforefullqualification. OldGPUincident23files
+remainpreserved,nohead/sourcechanges afterCPUlaunch.
+
+**R2 CPU five-iteration qualification passed; full IN_PROGRESS:**cleanPAUSED4Spider+1Olist,
+offline5/5correct vsV4same5/5,0gain/loss,1requesteach.1061guardsamples,max33.96W/52C,
+RAMmin8.606GiB,0resource/sensor/cleanuperrors;APIQwen14Bsize_vram0verified.
+CPUservice78–110s acknowledged. OfflinefullV4replay invariants unchanged.
+Requestedunbounded-batchcountresume(no model/token/requestlimitincrease)fororiginal
+Spider200+Olist60 sequentially;sourceb5e80887c0636c911119cc2feaf81f30cf881c52ea1109223205d6e886e60eab
+andHEAD663879a frozen. OldGPU30+1/latch remainsuntouched;no fullaccuracy/promotionclaim.
+
+**CPU livehandoff observed:**RUNNING5Spider+1Olist,6guardedbatches/1292samples,
+0resource/sensor/cleanuperrors,max33.96W,minRAM8.606GiB. Firstpostcalibrationfull
+case0499 checkpoint/unload/cooldown verified,nextcaseactive. Monitorpanealive,
+ownedPIDs alive,no resource/pause/cleanupmarkers,HEAD/source/23oldincidenthashes
+unchanged. Fivecalibrationcases5/5scored;fullaccuracy/completion stillIN_PROGRESS.
+Evidence docs/evidence/v4_cpu_stability_20261016.md and plan§11.

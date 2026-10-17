@@ -60,17 +60,21 @@ class Settings(BaseSettings):
         default="legacy", alias="TEXT2SQL_COMPUTE_POLICY"
     )
     deterministic_repair: bool = Field(default=False, alias="TEXT2SQL_DETERMINISTIC_REPAIR")
+    recover_empty_relations: bool = Field(default=False, alias="TEXT2SQL_RECOVER_EMPTY_RELATIONS")
+    resolve_derived_columns: bool = Field(default=False, alias="TEXT2SQL_RESOLVE_DERIVED_COLUMNS")
     repairability_routing: bool = Field(default=True, alias="TEXT2SQL_REPAIRABILITY_ROUTING")
     ollama_seed: int = Field(default=42, alias="TEXT2SQL_OLLAMA_SEED", ge=0)
     request_timeout_seconds: float = Field(
         default=120.0, alias="TEXT2SQL_REQUEST_TIMEOUT_SECONDS", gt=0
     )
     run_deadline_seconds: float = Field(
-        default=120.0, alias="TEXT2SQL_RUN_DEADLINE_SECONDS", ge=30, le=180
+        default=120.0, alias="TEXT2SQL_RUN_DEADLINE_SECONDS", ge=30, le=900
     )
 
     @model_validator(mode="after")
     def bound_context(self) -> Settings:
+        if self.run_deadline_seconds > 180 and self.ollama_num_gpu != 0:
+            raise ValueError("Deadlines above 180 seconds require explicit CPU-only offload")
         if self.input_token_budget + self.output_token_budget + 256 > 4096:
             raise ValueError("Input/output budgets must reserve 256 tokens in the 4096 context")
         return self

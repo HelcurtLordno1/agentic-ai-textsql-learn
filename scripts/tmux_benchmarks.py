@@ -132,7 +132,8 @@ class OwnedServer:
         self.location = directory(plan)
 
     def heartbeat(self) -> None:
-        (self.location / "server.heartbeat").touch()
+        with (self.location / "server.heartbeat").open("ab") as handle:
+            handle.write(b".")
 
     def start(self) -> int:
         child = self.plan.spider
@@ -186,6 +187,10 @@ class OwnedServer:
                 windows_path(self.location / "server.samples.jsonl"),
                 "-LimitsPath",
                 windows_path(limits_path),
+                "-FlashAttention",
+                "1" if PROFILES[self.plan.profile].flash_attention else "0",
+                "-KvCacheType",
+                PROFILES[self.plan.profile].kv_cache_type,
             ],
             cwd=ROOT,
             env=environment,
@@ -282,9 +287,11 @@ def verify_pilot(child: ExperimentPlan) -> None:
         raise ValueError("Pilot Windows RAM monitoring evidence is missing")
 
 
-def wait_worker_cleanup(process: subprocess.Popen[str], server: OwnedServer) -> None:
+def wait_worker_cleanup(
+    process: subprocess.Popen[str], server: OwnedServer, timeout_seconds: int = 200
+) -> None:
     """Keep the native owner alive while a wrapper finishes cleanup and cooldown."""
-    deadline = time.monotonic() + 200
+    deadline = time.monotonic() + timeout_seconds
     while process.poll() is None:
         server.heartbeat()
         try:
@@ -438,7 +445,15 @@ def execute(plan: SequencePlan, max_batches: int | None, recovery: bool) -> int:
                     finally:
                         if process.poll() is None:
                             process.send_signal(signal.SIGINT)  # Graceful boundary pause.
-                            wait_worker_cleanup(process, server)
+                            profile = PROFILES[plan.profile]
+                            wait_worker_cleanup(
+                                process,
+                                server,
+                                max(
+                                    200,
+                                    profile.run_deadline_seconds + profile.cooldown_seconds + 30,
+                                ),
+                            )
                         if process.stdout is not None:
                             process.stdout.close()
                     state.worker_pid = None
@@ -500,6 +515,34 @@ def execute(plan: SequencePlan, max_batches: int | None, recovery: bool) -> int:
                 raise RuntimeError(state.reason)
 
 
+def ensure_monitor(plan: SequencePlan) -> None:
+    """Keep an independently running, truthful status window as the attach target."""
+    target = f"{plan.name}:monitor.0"
+    command = "exec " + shlex.join(
+        [
+            plan.spider.python_executable,
+            "-m",
+            "scripts.benchmark_monitor",
+            "--plan",
+            str(directory(plan) / "sequence-plan.json"),
+        ]
+    )
+    # display-message may silently use the current pane for a missing target.
+    windows = tmux(
+        "list-windows", "-t", f"={plan.name}", "-F", "#{window_name}", capture=True
+    ).stdout.splitlines()
+    if "monitor" not in windows:
+        tmux("new-window", "-d", "-t", f"{plan.name}:", "-n", "monitor", "-c", str(ROOT), command)
+    else:
+        dead = tmux(
+            "display-message", "-p", "-t", target, "#{pane_dead}", capture=True
+        ).stdout.strip()
+        if dead == "1":
+            tmux("respawn-pane", "-t", target, "-c", str(ROOT), command)
+    tmux("set-option", "-w", "-t", f"{plan.name}:monitor", "automatic-rename", "off")
+    tmux("select-window", "-t", f"{plan.name}:monitor")
+
+
 def launch(plan: SequencePlan, max_batches: int | None, recovery: bool) -> None:
     ensure_no_latch(plan)
     frozen_environment(plan.spider)
@@ -522,6 +565,7 @@ def launch(plan: SequencePlan, max_batches: int | None, recovery: bool) -> None:
             tmux("display-message", "-p", "-t", target, "#{pane_dead}", capture=True).stdout.strip()
             != "1"
         ):
+            ensure_monitor(plan)
             print(f"Sequence already active: tmux attach -t {plan.name}")
             return
         (directory(plan) / "pause-request.json").unlink(missing_ok=True)
@@ -536,6 +580,7 @@ def launch(plan: SequencePlan, max_batches: int | None, recovery: bool) -> None:
         tmux("set-option", "-w", "-t", target, "remain-on-exit", "on")
         tmux("send-keys", "-t", target, "-l", shell_command)
         tmux("send-keys", "-t", target, "Enter")
+    ensure_monitor(plan)
     print(f"Started both benchmarks: tmux attach -t {plan.name}")
 
 
@@ -547,7 +592,12 @@ def main() -> None:
     run.add_argument("--variant", choices=VARIANTS, default="obligation-cpu")
     run.add_argument(
         "--profile",
-        choices=[ProfileName.CLOCK_CAPPED.value, ProfileName.QWEN_FULL_GPU.value],
+        choices=[
+            ProfileName.CLOCK_CAPPED.value,
+            ProfileName.QWEN_FULL_GPU.value,
+            ProfileName.QWEN_V4_600_B16.value,
+            ProfileName.QWEN_CPU_600_STABLE.value,
+        ],
         default=ProfileName.QWEN_FULL_GPU.value,
     )
     run.add_argument("--models-dir", type=Path, required=True)
@@ -556,7 +606,7 @@ def main() -> None:
     run.add_argument("--max-batches", type=int)
     run.add_argument("--manifest", type=Path, default=ROOT / "evals/configs/spider-laptop-200.json")
     run.add_argument("--cases", type=Path, default=ROOT / "evals/configs/olist-acceptance-60.jsonl")
-    for action in ("resume", "pause", "status", "attach"):
+    for action in ("resume", "pause", "status", "attach", "monitor"):
         child_parser = commands.add_parser(action)
         child_parser.add_argument("--name", required=True)
         if action == "resume":
@@ -627,7 +677,10 @@ def main() -> None:
             atomic_json(directory(plan) / "pause-request.json", {"pause": True})
             print("Pause requested for both benchmarks; wait for checkpoint, unload and cooldown")
         elif args.action == "attach":
+            ensure_monitor(plan)
             tmux("attach-session", "-t", f"={plan.name}")
+        elif args.action == "monitor":
+            ensure_monitor(plan)
         else:
             print((directory(plan) / "sequence-state.json").read_text())
 
