@@ -28,3 +28,10 @@ evals/failures/**
 !evals/reports/.gitkeep
 !evals/failures/.gitkeep
 
+# Public main publishes README only; internal notes remain local.
+*.[mM][dD]
+!/README.md
+/docs/
+/research_paper/
+/configs/experiments/
+
