@@ -2,6 +2,7 @@ $ErrorActionPreference = 'Stop'
 $text2sql_gpu_stream = $null
 $text2sql_gpu_pending = $null
 $text2sql_gpu_stderr = $null
+$text2sql_gpu_journal = $null
 function Start-Text2SqlGpuStream {
     $info = New-Object Diagnostics.ProcessStartInfo
     $info.FileName = (Get-Command nvidia-smi.exe -ErrorAction Stop).Source
@@ -41,6 +42,10 @@ function Read-Text2SqlGpuStream([bool]$Startup = $false) {
             if ($values[$index] -ne [Math]::Floor($values[$index])) { throw 'Invalid integral GPU sensor' }
         }
         if ($values[4] -gt 100) { throw 'Invalid GPU utilization' }
+        if ($null -ne $text2sql_gpu_journal) {
+            $frame = @{ received_at_ms = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds(); source = 'windows-nvidia-smi'; raw = $line.Trim(); power_average_w = $values[2]; power_instant_w = $values[3] }
+            [IO.File]::AppendAllText($text2sql_gpu_journal, (($frame | ConvertTo-Json -Compress) + "`n"), [Text.UTF8Encoding]::new($false))
+        }
         if ($null -eq $peak) { $peak = $values.Clone() }
         else { for ($index = 0; $index -lt 6; $index++) { $peak[$index] = [Math]::Max($peak[$index], $values[$index]) } }
         $frames += 1

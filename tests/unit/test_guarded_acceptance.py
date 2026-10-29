@@ -47,7 +47,11 @@ def test_v4_600_b16_changes_only_clock_and_prompt_batch_from_full_gpu() -> None:
         exclude={"maximum_gpu_clock_mhz"}
     )
     assert new.limits.maximum_gpu_clock_mhz == 600
-    assert all(p.prompt_batch_tokens == 64 for key, p in PROFILES.items() if key != new.name)
+    assert all(
+        p.prompt_batch_tokens == 64
+        for key, p in PROFILES.items()
+        if key not in {new.name, ProfileName.QWEN_GPU300_F16_B16}
+    )
 
     def respond(request: httpx.Request) -> httpx.Response:
         body = json.loads(request.content)

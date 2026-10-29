@@ -28,10 +28,18 @@ evals/failures/**
 !evals/reports/.gitkeep
 !evals/failures/.gitkeep
 
-# Public main publishes README only; internal notes remain local.
+# Publish README and the V6 reproduction allowlist; internal notes remain local.
 *.[mM][dD]
 !/README.md
 /docs/
 /research_paper/
 /configs/experiments/
 
+
+# Public V6 reproduction documentation/configuration only.
+!/docs/
+/docs/*
+!/docs/v6_reproduction.md
+!/configs/experiments/
+/configs/experiments/*
+!/configs/experiments/v6_contracts_cpu300.json

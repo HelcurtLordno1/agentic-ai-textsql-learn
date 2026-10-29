@@ -80,7 +80,7 @@ class RepairContract(BaseModel):
     evidence_ids: tuple[str, ...] = ()
     question_spans: tuple[str, ...] = ()
     target_codes: tuple[str, ...] = ()
-    allowed_fields: tuple[Literal["order", "limit"], ...] = ()
+    allowed_fields: tuple[Literal["order", "limit", "select", "from"], ...] = ()
     metric: str | None = None
     planned_sql: str | None = None
 

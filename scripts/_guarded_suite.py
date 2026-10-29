@@ -29,6 +29,16 @@ def count_predictions(path: Path) -> int:
     return sum(bool(line.strip()) for line in path.read_text().splitlines()) if path.exists() else 0
 
 
+def select_case_ids(ids: list[str], requested: list[str]) -> list[str]:
+    """Keep manifest order and fail before inference on an invalid selection."""
+    selected = set(requested)
+    if len(requested) != len(selected):
+        raise ValueError("Duplicate selected case IDs")
+    if unknown := selected - set(ids):
+        raise ValueError(f"Unknown selected case IDs: {', '.join(sorted(unknown))}")
+    return [case_id for case_id in ids if not selected or case_id in selected]
+
+
 def main(kind: str) -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -47,6 +57,7 @@ def main(kind: str) -> None:
     else:
         parser.add_argument("--cases", type=Path)
         parser.add_argument("--evaluation-id", default="olist-local-construction-v1")
+        parser.add_argument("--only-case-id", action="append", default=[])
     args = parser.parse_args()
     if args.batch_size != 1 or args.cooldown_seconds < 60:
         raise SystemExit("Require batch-size=1 and cooldown-seconds>=60")
@@ -69,6 +80,8 @@ def main(kind: str) -> None:
         ids = [json.loads(line)["id"] for line in manifest.read_text().splitlines() if line.strip()]
     if not ids or len(ids) != len(set(ids)):
         raise SystemExit("Suite must contain unique case IDs")
+    if kind == "olist":
+        ids = select_case_ids(ids, args.only_case_id)
     config = {
         "kind": kind,
         "manifest_sha256": file_sha256(manifest),
@@ -82,6 +95,8 @@ def main(kind: str) -> None:
         "cooldown": args.cooldown_seconds,
         "settings": settings.model_dump(mode="json", exclude={"guarded_run"}),
     }
+    if kind == "olist" and args.only_case_id:
+        config["selected_case_ids"] = ids
     identity = hashlib.sha256(json.dumps(config, sort_keys=True).encode()).hexdigest()
     state_path = args.report.with_suffix(".suite-state.json")
     stop_path = args.report.with_suffix(".resource-stop.json")
@@ -175,6 +190,8 @@ def main(kind: str) -> None:
                     command.append("--allow-dirty-source")
             else:
                 command.extend(["--cases", str(manifest), "--evaluation-id", args.evaluation_id])
+                for case_id in args.only_case_id:
+                    command.extend(["--only-case-id", case_id])
             batches = 0
 
             def spawned(pid: int) -> None:

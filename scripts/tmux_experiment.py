@@ -73,6 +73,12 @@ for _variant, _context, _scope in (
         "TEXT2SQL_RESOLVE_DERIVED_COLUMNS": _scope,
     }
 
+VARIANTS["v5-contracts"] = {
+    **VARIANTS["v4-reliability"],
+    "TEXT2SQL_BOUNDED_OUTPUT_CONTRACTS": "true",
+    "TEXT2SQL_OWNER_REPAIR_FEEDBACK": "true",
+}
+
 
 class ExperimentPlan(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
@@ -106,9 +112,13 @@ def create_plan(
     *,
     settings_overrides: dict[str, str] | None = None,
 ) -> ExperimentPlan:
+    if args.suite == "spider" and getattr(args, "only_case_id", []):
+        raise ValueError("Use a pinned Spider subset manifest, not --only-case-id")
     overrides = {
         "TEXT2SQL_RECOVER_EMPTY_RELATIONS": "false",
         "TEXT2SQL_RESOLVE_DERIVED_COLUMNS": "false",
+        "TEXT2SQL_BOUNDED_OUTPUT_CONTRACTS": "false",
+        "TEXT2SQL_OWNER_REPAIR_FEEDBACK": "false",
         "TEXT2SQL_COMPUTE_POLICY": "legacy",
         "TEXT2SQL_DETERMINISTIC_REPAIR": "false",
         "TEXT2SQL_REPAIRABILITY_ROUTING": "true",
@@ -155,6 +165,7 @@ def create_plan(
             "v4-grounding",
             "v4-scope",
             "v4-reliability",
+            "v5-contracts",
         }
         else "--no-correction",
     ]
@@ -167,6 +178,8 @@ def create_plan(
     else:
         cases = args.cases or ROOT / "evals/configs/olist-acceptance-60.jsonl"
         wrapper.extend(["--cases", str(cases.resolve()), "--evaluation-id", args.name])
+        for case_id in getattr(args, "only_case_id", []):
+            wrapper.extend(["--only-case-id", case_id])
     return ExperimentPlan(
         name=args.name,
         suite=args.suite,
@@ -317,6 +330,7 @@ def main() -> None:
     run.add_argument("--profile", choices=[p.value for p in ProfileName], default="acceptance-safe")
     run.add_argument("--manifest", type=Path)
     run.add_argument("--cases", type=Path)
+    run.add_argument("--only-case-id", action="append", default=[])
     run.add_argument("--predictions", type=Path, required=True)
     run.add_argument("--report", type=Path, required=True)
     run.add_argument("--allow-dirty-source", action="store_true")

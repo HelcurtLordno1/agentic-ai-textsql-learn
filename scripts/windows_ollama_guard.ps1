@@ -13,6 +13,7 @@ $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'windows_memory.ps1')
 . (Join-Path $PSScriptRoot 'windows_ollama_job.ps1')
 . (Join-Path $PSScriptRoot 'windows_gpu_stream.ps1')
+$text2sql_gpu_journal = $Journal + '.gpu-raw.jsonl'
 $text2sql_job = $null
 $text2sql_server = $null
 $text2sql_peak = $null
@@ -27,6 +28,8 @@ function Get-Text2SqlSample([bool]$Startup = $false) {
             swap_used_gib = [Text2SqlHostMemory]::PageFileUsedBytes() / 1073741824.0
             gpu_memory_mib = $values[0]
             gpu_temperature_c = $values[1]
+            gpu_power_average_w = $values[2]
+            gpu_power_instant_w = $values[3]
             gpu_power_w = [Math]::Max($values[2], $values[3])
             gpu_utilization_pct = $values[4]
             gpu_clock_mhz = $values[5]

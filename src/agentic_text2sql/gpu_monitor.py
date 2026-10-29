@@ -2,9 +2,13 @@
 
 from __future__ import annotations
 
+import json
 import subprocess
 import threading
+import time
 from dataclasses import replace
+from pathlib import Path
+from typing import TextIO
 
 from agentic_text2sql.clock import monotonic_seconds, sleep_seconds
 from agentic_text2sql.hardware import ResourceSample, parse_gpu_sample
@@ -19,6 +23,8 @@ GPU_QUERY = (
 
 class GpuMonitor:
     def __init__(self) -> None:
+        self.journal_path: Path | None = None
+        self.journal: TextIO | None = None
         self.process: subprocess.Popen[str] | None = None
         self.reader: threading.Thread | None = None
         self.stderr_reader: threading.Thread | None = None
@@ -32,6 +38,22 @@ class GpuMonitor:
     def _accept(self, line: str) -> None:
         sample = parse_gpu_sample(line)
         now = monotonic_seconds()
+        if self.journal is not None:
+            parts = line.strip().split(",")
+            self.journal.write(
+                json.dumps(
+                    {
+                        "received_at_ms": time.time_ns() // 1_000_000,
+                        "received_monotonic_seconds": now,
+                        "raw": line.strip(),
+                        "power_average_w": float(parts[2]),
+                        "power_instant_w": float(parts[3]),
+                        "source": "wsl-nvidia-smi",
+                    }
+                )
+                + "\n"
+            )
+            self.journal.flush()
         with self.lock:
             if self.latest_at is not None and now - self.latest_at > FRESH_SECONDS:
                 raise ValueError("GPU stream sampling gap exceeded 0.5 seconds")
@@ -74,6 +96,9 @@ class GpuMonitor:
                 self.stderr_tail = (self.stderr_tail + line)[-4096:]
 
     def __enter__(self) -> GpuMonitor:
+        if self.journal_path is not None:
+            self.journal_path.parent.mkdir(parents=True, exist_ok=True)
+            self.journal = self.journal_path.open("a", encoding="utf-8")
         self.process = subprocess.Popen(
             ["nvidia-smi", "--id=0", GPU_QUERY, "--format=csv,noheader,nounits", "--loop-ms=200"],
             stdout=subprocess.PIPE,
@@ -149,6 +174,9 @@ class GpuMonitor:
             for pipe in (process.stdout, process.stderr):
                 if pipe is not None:
                     pipe.close()
+
+        if self.journal is not None:
+            self.journal.close()
 
     def __exit__(self, *_: object) -> None:
         self.close()

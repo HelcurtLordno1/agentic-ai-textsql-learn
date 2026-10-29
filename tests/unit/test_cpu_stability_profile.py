@@ -32,12 +32,19 @@ def test_cpu_profile_preserves_safety_and_budgets_but_removes_cuda() -> None:
     assert settings.input_token_budget == 2800 and settings.output_token_budget == 768
     assert settings.a1_max_requests == 3
     for key, profile in PROFILES.items():
-        if key != ProfileName.QWEN_CPU_600_STABLE:
+        if key not in {
+            ProfileName.QWEN_CPU_600_STABLE,
+            ProfileName.QWEN_CPU_300_STABLE,
+            ProfileName.QWEN_GPU300_F16_B16,
+        }:
             assert profile.run_deadline_seconds <= 180 and profile.request_timeout_seconds == 120
 
 
-def test_cpu_generation_sends_gpu_zero_to_actual_http_boundary() -> None:
-    profile = PROFILES[ProfileName.QWEN_CPU_600_STABLE]
+@pytest.mark.parametrize(
+    "profile_name", [ProfileName.QWEN_CPU_600_STABLE, ProfileName.QWEN_CPU_300_STABLE]
+)
+def test_cpu_generation_sends_gpu_zero_to_actual_http_boundary(profile_name) -> None:
+    profile = PROFILES[profile_name]
 
     def respond(request: httpx.Request) -> httpx.Response:
         body = json.loads(request.content)
@@ -70,7 +77,12 @@ def test_long_deadline_cannot_silently_apply_to_gpu_or_be_unbounded(layers, dead
 
 @pytest.mark.parametrize(
     "profile_name,fa,kv",
-    [(ProfileName.QWEN_CPU_600_STABLE, "0", "f16"), (ProfileName.QWEN_V4_600_B16, "1", "q8_0")],
+    [
+        (ProfileName.QWEN_CPU_600_STABLE, "0", "f16"),
+        (ProfileName.QWEN_CPU_300_STABLE, "0", "f16"),
+        (ProfileName.QWEN_V4_600_B16, "1", "q8_0"),
+        (ProfileName.QWEN_GPU300_F16_B16, "0", "f16"),
+    ],
 )
 def test_owned_native_launcher_receives_profile_cache_options(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, profile_name, fa, kv

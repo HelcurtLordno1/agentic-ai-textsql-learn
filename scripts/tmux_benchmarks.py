@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Literal, TextIO
 
 import httpx
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from agentic_text2sql.hardware import PROFILES, ProfileName
 from agentic_text2sql.resource_guard import _stop, workload_lease
@@ -26,6 +26,7 @@ from agentic_text2sql_eval.suite_control import (
     process_group_alive,
     require_complete_report,
 )
+from scripts._guarded_suite import select_case_ids
 from scripts.tmux_experiment import (
     ROOT,
     VARIANTS,
@@ -50,9 +51,17 @@ class SequencePlan(BaseModel):
     server_port: int = Field(default=11435, ge=1024, le=65535)
     backend_port: int = Field(default=11436, ge=1024, le=65535)
 
+    suites: tuple[Literal["spider", "olist"], ...] = ("spider", "olist")
+
+    @model_validator(mode="after")
+    def validate_suites(self) -> SequencePlan:
+        if not self.suites or len(set(self.suites)) != len(self.suites):
+            raise ValueError("Choose at least one unique benchmark suite")
+        return self
+
     @property
-    def benchmarks(self) -> tuple[ExperimentPlan, ExperimentPlan]:
-        return self.spider, self.olist
+    def benchmarks(self) -> tuple[ExperimentPlan, ...]:
+        return tuple(child for child in (self.spider, self.olist) if child.suite in self.suites)
 
 
 class SequenceState(BaseModel):
@@ -86,7 +95,13 @@ def ids(plan: ExperimentPlan) -> list[str]:
         if plan.suite == "spider"
         else [json.loads(line) for line in content.splitlines() if line.strip()]
     )
-    return [case["id"] for case in cases]
+    result = [case["id"] for case in cases]
+    selected = [
+        plan.wrapper_args[index + 1]
+        for index, value in enumerate(plan.wrapper_args)
+        if value == "--only-case-id"
+    ]
+    return select_case_ids(result, selected)
 
 
 def checkpoint(plan: ExperimentPlan) -> int:
@@ -210,6 +225,8 @@ class OwnedServer:
                 gateway,
                 "--backend-port",
                 str(self.plan.backend_port),
+                "--request-timeout-seconds",
+                str(PROFILES[self.plan.profile].request_timeout_seconds),
             ],
             cwd=ROOT,
             stdout=self.handle,
@@ -372,12 +389,11 @@ def execute(plan: SequencePlan, max_batches: int | None, recovery: bool) -> int:
                         ensure_no_latch(plan)
                         state.phase, state.reason = "COMPLETE", "Both reports and cleanup validated"
                         save(plan, state)
-                        spider_total, olist_total = (len(ids(item)) for item in plan.benchmarks)
-                        emit(
-                            output,
-                            f"SUCCESS FINISH ALL: Spider {spider_total}/{spider_total} "
-                            f"+ Olist {olist_total}/{olist_total}",
+                        totals = " + ".join(
+                            f"{child.suite.title()} {len(ids(child))}/{len(ids(child))}"
+                            for child in plan.benchmarks
                         )
+                        emit(output, "SUCCESS FINISH ALL: " + totals)
                         return 0
                     if (
                         requested_pause
@@ -591,12 +607,17 @@ def main() -> None:
     run.add_argument("--name", required=True)
     run.add_argument("--variant", choices=VARIANTS, default="obligation-cpu")
     run.add_argument(
+        "--suites", nargs="+", choices=["spider", "olist"], default=["spider", "olist"]
+    )
+    run.add_argument(
         "--profile",
         choices=[
             ProfileName.CLOCK_CAPPED.value,
             ProfileName.QWEN_FULL_GPU.value,
             ProfileName.QWEN_V4_600_B16.value,
             ProfileName.QWEN_CPU_600_STABLE.value,
+            ProfileName.QWEN_CPU_300_STABLE.value,
+            ProfileName.QWEN_GPU300_F16_B16.value,
         ],
         default=ProfileName.QWEN_FULL_GPU.value,
     )
@@ -606,6 +627,7 @@ def main() -> None:
     run.add_argument("--max-batches", type=int)
     run.add_argument("--manifest", type=Path, default=ROOT / "evals/configs/spider-laptop-200.json")
     run.add_argument("--cases", type=Path, default=ROOT / "evals/configs/olist-acceptance-60.jsonl")
+    run.add_argument("--olist-case-id", action="append", default=[])
     for action in ("resume", "pause", "status", "attach", "monitor"):
         child_parser = commands.add_parser(action)
         child_parser.add_argument("--name", required=True)
@@ -639,6 +661,7 @@ def main() -> None:
                 predictions=ROOT / f"evals/predictions/{args.name}-{kind}.jsonl",
                 report=ROOT / f"evals/reports/{args.name}-{kind}.json",
                 allow_dirty_source=True,
+                only_case_id=args.olist_case_id if kind == "olist" else [],
             )
             child = create_plan(
                 namespace,
@@ -648,6 +671,7 @@ def main() -> None:
                     "TEXT2SQL_OLLAMA_NUM_THREAD": "8",
                 },
             )
+            ids(child)  # Validate selection before starting an owned backend.
             if Path(child.predictions).exists() or Path(child.report).exists():
                 raise SystemExit("New sequence requires unused prediction/report paths")
             children.append(child)
@@ -659,6 +683,7 @@ def main() -> None:
             profile=ProfileName(args.profile),
             server_port=args.server_port,
             backend_port=args.backend_port,
+            suites=tuple(args.suites),
         )
         atomic_json(target, plan.model_dump(mode="json"))
         launch(plan, args.max_batches, False)

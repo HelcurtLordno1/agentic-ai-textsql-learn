@@ -45,6 +45,8 @@ from agentic_text2sql.layer3_generation.sql_text_adapter import sql_text_candida
 from agentic_text2sql.layer4_validation.clause_critic import assess_clauses
 from agentic_text2sql.layer4_validation.critic_router import route_critic
 from agentic_text2sql.layer4_validation.executor import ReadOnlySQLiteExecutor
+from agentic_text2sql.layer4_validation.output_contract import compile_output_contract
+from agentic_text2sql.layer4_validation.owner_feedback import column_owner_feedback
 from agentic_text2sql.layer4_validation.parser import SQLParseError, parse_one
 from agentic_text2sql.layer4_validation.policy import SQLSafetyPolicy
 from agentic_text2sql.layer4_validation.repair_contract import (
@@ -223,13 +225,17 @@ class A1QueryService:
             record = self.normalizer.normalize(
                 candidate,
                 model_name=(
-                    "deterministic:rank-edit-contract-v1"
+                    "deterministic:" + trace.repair_contract.version
+                    if stage == "deterministic_repair" and trace.repair_contract
+                    else "deterministic:rank-edit-contract-v1"
                     if stage == "deterministic_repair"
                     else self.settings.ollama_model
                 ),
                 prompt_version=(
                     A1_PROMPT_VERSION
                     if stage == "draft"
+                    else trace.repair_contract.version
+                    if stage == "deterministic_repair" and trace.repair_contract
                     else "rank-edit-contract-v1"
                     if stage == "deterministic_repair"
                     else "a1-repair-v2"
@@ -240,6 +246,26 @@ class A1QueryService:
                 ),
             )
             checks = assess_clauses(question, record.normalized_sql, catalog)
+            if self.settings.bounded_output_contracts:
+                output = compile_output_contract(question, record.normalized_sql, catalog)
+                if output.eligible:
+                    checks = checks.model_copy(
+                        update={
+                            "semantic_status": "CONTRADICTION",
+                            "findings": checks.findings
+                            + tuple(
+                                ClauseFinding(
+                                    code=code,
+                                    clause="ORDER BY" if "RANKING" in code else "SELECT",
+                                    outcome=CheckOutcome.CONTRADICTION,
+                                    message=output.reason,
+                                    evidence_ids=output.evidence_ids,
+                                    question_span=question[:200],
+                                )
+                                for code in output.target_codes
+                            ),
+                        }
+                    )
         except SQLParseError:
             pass
         sql = record.normalized_sql if record is not None else candidate.sql
@@ -305,11 +331,12 @@ class A1QueryService:
         trace.model_findings = grounded_model_findings(critique, evidence, question)
         trace.discarded_model_findings = len(critique.findings) - len(trace.model_findings)
 
-    def _repair_prompt(self, prompt: str, draft: CandidateEvaluation, trace: A1Trace) -> str:
+    def _repair_prompt(
+        self, prompt: str, draft: CandidateEvaluation, trace: A1Trace, catalog: CatalogSnapshot
+    ) -> str:
+        feedback: dict[str, object]
         if self.settings.repair_feedback_mode == "generic":
-            feedback: object = {
-                "instruction": "Review the draft against the question and correct it"
-            }
+            feedback = {"instruction": "Review the draft against the question and correct it"}
         else:
             feedback = {
                 "validation": {
@@ -328,12 +355,32 @@ class A1QueryService:
                 if trace.repair_contract
                 else None,
             }
-        return (
-            prompt + "\nProduce one repaired SQL candidate. Preserve population, projection, "
-            "joins and predicates outside the identified error. Model critiques are hypotheses; "
-            "use the question and catalog as evidence.\n"
-            + json.dumps({"draft": draft.raw_sql, "feedback": feedback}, ensure_ascii=False)
-        )
+            if (
+                self.settings.owner_repair_feedback
+                and draft.validation.error_class is ErrorClass.UNKNOWN_COLUMN
+            ):
+                hints = column_owner_feedback(draft.validation.safe_message, catalog)
+                if hints:
+                    feedback["catalog_owner_facts"] = hints
+
+        def render() -> str:
+            return (
+                prompt + "\nProduce one repaired SQL candidate. Preserve population, projection, "
+                "joins and predicates outside the identified error. "
+                "Model critiques are hypotheses; "
+                "use the question and catalog as evidence.\n"
+                + json.dumps({"draft": draft.raw_sql, "feedback": feedback}, ensure_ascii=False)
+            )
+
+        repaired = render()
+        if "catalog_owner_facts" in feedback:
+            try:
+                enforce_prompt_budget(repaired, self.settings.input_token_budget)
+            except ValueError:
+                # Optional facts must never make a previously usable repair overflow.
+                feedback.pop("catalog_owner_facts")
+                repaired = render()
+        return repaired
 
     def run(self, question: str, database: Path, catalog: CatalogSnapshot) -> DirectRunResult:
         started = time.monotonic()
@@ -453,6 +500,14 @@ class A1QueryService:
                     catalog,
                     draft.checks,
                 )
+                if self.settings.bounded_output_contracts:
+                    output = compile_output_contract(
+                        question,
+                        draft.candidate.normalized_sql if draft.candidate else draft.raw_sql,
+                        catalog,
+                    )
+                    if output.eligible:
+                        trace.repair_contract = output
         trace.routing = route_critic(
             question,
             draft,
@@ -503,11 +558,11 @@ class A1QueryService:
                             response = SqlCandidate(
                                 sql=contract.planned_sql,
                                 confidence=0,
-                                assumptions=["Only the scoped ranking obligation is addressed"],
+                                assumptions=["Only the licensed question-bound edit is addressed"],
                             )
                             stage = "deterministic_repair"
                         else:
-                            repair_prompt = self._repair_prompt(prompt, draft, trace)
+                            repair_prompt = self._repair_prompt(prompt, draft, trace, catalog)
                             self._prompt(repair_prompt, "repair", trace)
                             trace.repair_attempted = True
                             trace.repair_source = "model"

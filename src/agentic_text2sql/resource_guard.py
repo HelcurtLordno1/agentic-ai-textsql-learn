@@ -192,6 +192,7 @@ def _guarded_process(
         else None
     )
     gpu_monitor = GpuMonitor()
+    gpu_monitor.journal_path = stop_path.with_suffix(".gpu-raw.jsonl")
     try:
         try:
             if host_monitor is not None:
